@@ -3,8 +3,9 @@ import notifee, {
   EventType,
   AndroidCategory,
 } from '@notifee/react-native';
-import { ParsedTransaction, ActiveTracker } from '../models/types';
+import { ParsedTransaction, ActiveTracker, TrackerType } from '../models/types';
 import { formatCurrency } from '../utils/helpers';
+import { saveTransaction, addGroupTransaction, getOrCreateUser } from './StorageService';
 
 const CHANNEL_ID = 'expense-tracker-transactions';
 
@@ -147,7 +148,31 @@ export async function handleNotificationEvent(
 
 export function registerBackgroundHandler(): void {
   notifee.onBackgroundEvent(async ({ type, detail }) => {
-    await handleNotificationEvent({ type, detail }, []);
+    if (type === EventType.ACTION_PRESS) {
+      const actionId = detail.pressAction?.id;
+
+      if (actionId === 'add_to_tracker' && detail.notification?.data) {
+        const data = detail.notification.data;
+        const parsed: ParsedTransaction = {
+          amount: Number(data.amount),
+          type: 'debit',
+          merchant: data.merchant || undefined,
+          bank: data.bank || undefined,
+          rawMessage: data.rawMessage,
+          timestamp: Number(data.timestamp),
+        };
+        const trackerType = data.trackerType as TrackerType;
+        const trackerId = data.trackerId;
+        const user = await getOrCreateUser();
+        if (trackerType === 'group') {
+          await addGroupTransaction(parsed, trackerId, user.id);
+        } else {
+          await saveTransaction(parsed, trackerType, user.id);
+        }
+      }
+
+      await notifee.cancelAllNotifications();
+    }
   });
 }
 

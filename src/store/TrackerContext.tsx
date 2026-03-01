@@ -3,6 +3,7 @@ import React, {
   useCallback, useRef, ReactNode,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import notifee from '@notifee/react-native';
 import { TrackerState, ParsedTransaction, ActiveTracker, Group, TrackerType } from '../models/types';
 import {
   requestSmsPermission, startSmsListener, stopSmsListener,
@@ -10,6 +11,7 @@ import {
 import {
   setupNotificationChannel, requestNotificationPermission,
   showTransactionNotification, registerNotificationCallbacks,
+  handleNotificationEvent,
 } from '../services/NotificationService';
 import { saveTransaction, addGroupTransaction } from '../services/StorageService';
 
@@ -49,6 +51,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   const groupsRef = useRef(groups);
   const userIdRef = useRef(userId);
   const trackerStateRef = useRef(trackerState);
+  const isListeningRef = useRef(false);
 
   useEffect(() => { groupsRef.current = groups; }, [groups]);
   useEffect(() => { userIdRef.current = userId; }, [userId]);
@@ -75,6 +78,14 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     );
   }, []);
 
+  // Foreground notification event listener
+  useEffect(() => {
+    const unsubscribe = notifee.onForegroundEvent(({ type, detail }) => {
+      handleNotificationEvent({ type, detail }, []);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Start/stop SMS listener based on tracker state
   useEffect(() => {
     const hasActiveTracker =
@@ -82,9 +93,11 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       trackerState.reimbursement ||
       trackerState.activeGroupIds.length > 0;
 
-    if (hasActiveTracker && !isListening) {
+    if (hasActiveTracker && !isListeningRef.current) {
+      isListeningRef.current = true;
       startListening();
-    } else if (!hasActiveTracker && isListening) {
+    } else if (!hasActiveTracker && isListeningRef.current) {
+      isListeningRef.current = false;
       stopSmsListener();
       setIsListening(false);
     }
@@ -92,7 +105,10 @@ export function TrackerProvider({ children, groups, userId }: Props) {
 
   const startListening = async () => {
     const granted = await requestSmsPermission();
-    if (!granted) return;
+    if (!granted) {
+      isListeningRef.current = false;
+      return;
+    }
     await requestNotificationPermission();
 
     startSmsListener(async (parsed) => {
