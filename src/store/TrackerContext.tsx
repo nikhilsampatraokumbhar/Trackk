@@ -57,12 +57,31 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   useEffect(() => { userIdRef.current = userId; }, [userId]);
   useEffect(() => { trackerStateRef.current = trackerState; }, [trackerState]);
 
-  // Load state on mount
+  // Load state on mount; also recover pending transaction if app was cold-launched
+  // from a "Choose Tracker" notification action
   useEffect(() => {
     (async () => {
       await setupNotificationChannel();
       const raw = await AsyncStorage.getItem(TRACKER_STATE_KEY);
       if (raw) setTrackerState(JSON.parse(raw));
+
+      // If the app was opened by tapping a notification action while backgrounded,
+      // notifee records the initial notification so we can restore state.
+      const initial = await notifee.getInitialNotification();
+      if (
+        initial?.pressAction?.id === 'choose_tracker' &&
+        initial?.notification?.data
+      ) {
+        const d = initial.notification.data as Record<string, string>;
+        setPendingTransaction({
+          amount: Number(d.amount),
+          type: 'debit',
+          merchant: d.merchant || undefined,
+          bank: d.bank || undefined,
+          rawMessage: d.rawMessage,
+          timestamp: Number(d.timestamp),
+        });
+      }
     })();
   }, []);
 

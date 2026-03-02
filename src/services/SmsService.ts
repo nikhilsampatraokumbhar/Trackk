@@ -40,6 +40,8 @@ function handleIncomingSms(message: { body: string; originatingAddress: string }
   if (!isBankSender(originatingAddress)) return;
   const parsed = parseTransactionSms(body, originatingAddress);
   if (parsed) {
+    // Mark this timestamp so the polling fallback skips this same SMS
+    lastSmsTimestamp = parsed.timestamp;
     activeCallback(parsed);
   }
 }
@@ -78,7 +80,7 @@ function startPollingFallback(callback: SmsCallback): void {
     } catch (e) {
       // Polling failed silently
     }
-  }, 30000);
+  }, 10000);
 }
 
 function stopPolling(): void {

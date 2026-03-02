@@ -33,7 +33,7 @@
     </activity>
 
     <!-- SMS Receiver for transaction detection -->
-    <receiver android:name="com.centaurwarchief.smslistener.SmsBroadcastReceiver"
+    <receiver android:name=".SmsReceiver"
       android:exported="true"
       android:permission="android.permission.BROADCAST_SMS">
       <intent-filter android:priority="1000">
