@@ -99,7 +99,11 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   // Foreground notification event listener
   useEffect(() => {
     const unsubscribe = notifee.onForegroundEvent(({ type, detail }) => {
-      handleNotificationEvent({ type, detail }, []);
+      const activeTrackers = getActiveTrackersFromState(
+        trackerStateRef.current,
+        groupsRef.current,
+      );
+      handleNotificationEvent({ type, detail }, activeTrackers);
     });
     return () => unsubscribe();
   }, []);
