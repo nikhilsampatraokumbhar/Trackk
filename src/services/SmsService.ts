@@ -35,12 +35,18 @@ export async function checkSmsPermission(): Promise<boolean> {
 }
 
 function handleIncomingSms(message: { body: string; originatingAddress: string }) {
-  if (!activeCallback) return;
+  console.log('[ExpenseTracker] SMS received from:', message.originatingAddress);
+  if (!activeCallback) {
+    console.log('[ExpenseTracker] No active callback - SMS ignored');
+    return;
+  }
   const { body, originatingAddress } = message;
-  if (!isBankSender(originatingAddress)) return;
+  const isBankMsg = isBankSender(originatingAddress);
+  console.log('[ExpenseTracker] Is bank sender:', isBankMsg);
+  if (!isBankMsg) return;
   const parsed = parseTransactionSms(body, originatingAddress);
+  console.log('[ExpenseTracker] Parsed:', parsed ? `Rs.${parsed.amount}` : 'null');
   if (parsed) {
-    // Mark this timestamp so the polling fallback skips this same SMS
     lastSmsTimestamp = parsed.timestamp;
     activeCallback(parsed);
   }
@@ -48,14 +54,20 @@ function handleIncomingSms(message: { body: string; originatingAddress: string }
 
 export function startSmsListener(callback: SmsCallback): void {
   activeCallback = callback;
+  console.log('[ExpenseTracker] Starting SMS listener...');
+  console.log('[ExpenseTracker] SmsListenerModule available:', !!NativeModules.SmsListenerModule);
+  console.log('[ExpenseTracker] SmsAndroid available:', !!NativeModules.SmsAndroid);
 
   try {
     if (NativeModules.SmsListenerModule) {
       const emitter = new NativeEventEmitter(NativeModules.SmsListenerModule);
       smsListener = emitter.addListener('onSmsReceived', handleIncomingSms);
+      console.log('[ExpenseTracker] Native SMS listener attached');
+    } else {
+      console.log('[ExpenseTracker] SmsListenerModule NOT found in NativeModules');
     }
-  } catch (e) {
-    console.log('SMS listener module not available, using polling fallback');
+  } catch (e: any) {
+    console.log('[ExpenseTracker] SMS listener error:', e.message);
   }
 
   startPollingFallback(callback);

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl,
+  TouchableOpacity, Alert, NativeModules,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -12,12 +13,14 @@ import { Transaction } from '../models/types';
 import TrackerToggle from '../components/TrackerToggle';
 import TransactionCard from '../components/TransactionCard';
 import { COLORS, formatCurrency } from '../utils/helpers';
+import { checkSmsPermission } from '../services/SmsService';
+import { showTransactionNotification, requestNotificationPermission } from '../services/NotificationService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function PersonalExpenseScreen() {
   const nav = useNavigation<Nav>();
-  const { trackerState, togglePersonal } = useTracker();
+  const { trackerState, togglePersonal, isListening } = useTracker();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,6 +72,55 @@ export default function PersonalExpenseScreen() {
             onToggle={togglePersonal}
             color={COLORS.personalColor}
           />
+
+          {/* Debug diagnostics */}
+          {trackerState.personal && (
+            <View style={styles.debugBox}>
+              <Text style={styles.debugTitle}>DIAGNOSTICS</Text>
+              <Text style={styles.debugText}>
+                Listener active: {isListening ? 'YES' : 'NO'}
+              </Text>
+              <Text style={styles.debugText}>
+                SmsListenerModule: {NativeModules.SmsListenerModule ? 'LOADED' : 'MISSING'}
+              </Text>
+              <Text style={styles.debugText}>
+                SmsAndroid (polling): {NativeModules.SmsAndroid ? 'LOADED' : 'MISSING'}
+              </Text>
+              <TouchableOpacity
+                style={styles.debugBtn}
+                onPress={async () => {
+                  const sms = await checkSmsPermission();
+                  const notif = await requestNotificationPermission();
+                  Alert.alert('Permissions', `SMS: ${sms ? 'GRANTED' : 'DENIED'}\nNotifications: ${notif ? 'GRANTED' : 'DENIED'}`);
+                }}
+              >
+                <Text style={styles.debugBtnText}>Check Permissions</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.debugBtn, { marginTop: 8 }]}
+                onPress={async () => {
+                  try {
+                    await showTransactionNotification(
+                      {
+                        amount: 1,
+                        type: 'debit',
+                        merchant: 'Test Merchant',
+                        bank: 'HDFC Bank',
+                        rawMessage: 'Test SMS message',
+                        timestamp: Date.now(),
+                      },
+                      [{ type: 'personal', id: 'personal', label: 'Personal' }],
+                    );
+                    Alert.alert('Success', 'Test notification sent! Check your notification bar.');
+                  } catch (e: any) {
+                    Alert.alert('Error', `Notification failed: ${e.message}`);
+                  }
+                }}
+              >
+                <Text style={styles.debugBtnText}>Send Test Notification</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Stats hero */}
           <LinearGradient
@@ -186,6 +238,39 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  debugBox: {
+    backgroundColor: COLORS.surfaceHigh,
+    borderRadius: 12,
+    padding: 14,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  debugTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.warning || '#FFA500',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  debugText: {
+    fontSize: 12,
+    color: COLORS.text,
+    marginBottom: 4,
+    fontFamily: 'monospace',
+  },
+  debugBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center' as const,
+    marginTop: 10,
+  },
+  debugBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
   },
   emptyEmoji: { fontSize: 26 },
   emptyText: {
