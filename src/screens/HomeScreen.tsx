@@ -6,6 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useGroups } from '../store/GroupContext';
@@ -22,6 +23,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function HomeScreen() {
   const nav = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { groups } = useGroups();
   const {
@@ -59,6 +61,9 @@ export default function HomeScreen() {
     return 'Good evening';
   };
 
+  const hasTransactions = recentTxns.length > 0;
+  const userInitial = (user?.displayName || 'U')[0].toUpperCase();
+
   return (
     <View style={styles.container}>
       <ActiveTrackerBanner
@@ -78,11 +83,40 @@ export default function HomeScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Greeting */}
+        {/* Header with greeting and profile button */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>{greeting()}</Text>
-          <Text style={styles.name}>{user?.displayName || 'User'}</Text>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greeting}>{greeting()}</Text>
+            <Text style={styles.name}>{user?.displayName || 'User'}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.profileBtn}
+            onPress={() => (nav as any).navigate('Profile')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.profileInitial}>{userInitial}</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* Privacy Shield Card */}
+        {!hasTransactions ? (
+          <View style={styles.privacyCard}>
+            <View style={styles.privacyHeader}>
+              <Text style={styles.privacyEmoji}>🛡️</Text>
+              <Text style={styles.privacyTitle}>Privacy Shield</Text>
+            </View>
+            <Text style={styles.privacyText}>
+              Your transactions are only tracked when you enable a tracker. SMS is read locally on your device - your data never leaves your phone. Switch off anytime.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.privacyCardMini}>
+            <Text style={styles.privacyEmojiMini}>🛡️</Text>
+            <Text style={styles.privacyTextMini}>
+              Data stays on your device. SMS is read locally. Switch off anytime.
+            </Text>
+          </View>
+        )}
 
         {/* Hero total card */}
         <LinearGradient
@@ -180,7 +214,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { padding: 16, paddingBottom: 32 },
 
-  header: { marginBottom: 20, marginTop: 4 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    marginTop: 4,
+  },
+  headerLeft: { flex: 1 },
   greeting: {
     fontSize: 13,
     color: COLORS.textSecondary,
@@ -192,6 +233,74 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginTop: 2,
     letterSpacing: -0.5,
+  },
+  profileBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: `${COLORS.primary}20`,
+    borderWidth: 1.5,
+    borderColor: `${COLORS.primary}50`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileInitial: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+
+  // Privacy card (full - shown when no transactions)
+  privacyCard: {
+    backgroundColor: `${COLORS.success}10`,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: `${COLORS.success}30`,
+  },
+  privacyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  privacyEmoji: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  privacyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.success,
+    letterSpacing: 0.3,
+  },
+  privacyText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 19,
+  },
+
+  // Privacy card (mini - shown when transactions exist)
+  privacyCardMini: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${COLORS.success}08`,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: `${COLORS.success}18`,
+  },
+  privacyEmojiMini: {
+    fontSize: 14,
+    marginRight: 8,
+  },
+  privacyTextMini: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    flex: 1,
+    lineHeight: 16,
   },
 
   heroCard: {

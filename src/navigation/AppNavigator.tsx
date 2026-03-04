@@ -12,6 +12,8 @@ import GroupDetailScreen from '../screens/GroupDetailScreen';
 import CreateGroupScreen from '../screens/CreateGroupScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
 import TrackerSettingsScreen from '../screens/TrackerSettingsScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import GoalsScreen from '../screens/GoalsScreen';
 
 import { COLORS } from '../utils/helpers';
 
@@ -21,31 +23,27 @@ export type RootStackParamList = {
   CreateGroup: undefined;
   TransactionDetail: { transactionId: string };
   TrackerSettings: undefined;
+  Reimbursement: undefined;
 };
 
 export type TabParamList = {
   Home: undefined;
   Personal: undefined;
   Groups: undefined;
-  Reimbursement: undefined;
+  Goals: undefined;
+  Profile: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
-const TAB_ICONS: Record<string, { icon: string; label: string }> = {
-  Home:         { icon: '⬡', label: 'Home' },
-  Personal:     { icon: '◈', label: 'Personal' },
-  Groups:       { icon: '⬡', label: 'Groups' },
-  Reimbursement:{ icon: '◈', label: 'Reimburse' },
-};
-
 // Simple emoji-based icons since we keep it dependency-light
 const EMOJI_ICONS: Record<string, string> = {
-  Home:          '🏠',
-  Personal:      '💳',
-  Groups:        '👥',
-  Reimbursement: '🧾',
+  Home:     '🏠',
+  Personal: '💳',
+  Groups:   '👥',
+  Goals:    '🎯',
+  Profile:  '👤',
 };
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
@@ -63,7 +61,8 @@ function MainTabs() {
     Home: 'Home',
     Personal: 'Personal',
     Groups: 'Groups',
-    Reimbursement: 'Reimburse',
+    Goals: 'Goals',
+    Profile: 'Profile',
   };
 
   return (
@@ -95,7 +94,8 @@ function MainTabs() {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Personal" component={PersonalExpenseScreen} />
       <Tab.Screen name="Groups" component={GroupListScreen} />
-      <Tab.Screen name="Reimbursement" component={ReimbursementScreen} />
+      <Tab.Screen name="Goals" component={GoalsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
@@ -156,6 +156,11 @@ export function AppNavigator() {
           name="TrackerSettings"
           component={TrackerSettingsScreen}
           options={{ title: 'Tracker Settings', presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="Reimbursement"
+          component={ReimbursementScreen}
+          options={{ title: 'Reimbursement', headerBackTitle: '' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

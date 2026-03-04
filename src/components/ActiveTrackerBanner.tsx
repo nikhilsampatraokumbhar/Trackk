@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActiveTracker } from '../models/types';
 import { COLORS } from '../utils/helpers';
 
@@ -9,11 +10,13 @@ interface Props {
 }
 
 export default function ActiveTrackerBanner({ activeTrackers, onManage }: Props) {
+  const insets = useSafeAreaInsets();
+
   if (activeTrackers.length === 0) return null;
 
   const names = activeTrackers.map(t => t.label).join(' · ');
   return (
-    <View style={styles.banner}>
+    <View style={[styles.banner, { paddingTop: insets.top + 11 }]}>
       <View style={styles.left}>
         <View style={styles.pulseWrap}>
           <View style={styles.pulseOuter} />

@@ -15,6 +15,7 @@ export default function CreateGroupScreen() {
   const [groupName, setGroupName] = useState('');
   const [members, setMembers] = useState([{ name: '', phone: '' }]);
   const [loading, setLoading] = useState(false);
+  const [isTrip, setIsTrip] = useState(false);
 
   const addMember = () => setMembers(prev => [...prev, { name: '', phone: '' }]);
 
@@ -44,6 +45,7 @@ export default function CreateGroupScreen() {
         groupName.trim(),
         validMembers.map(m => ({ displayName: m.name.trim(), phone: m.phone.trim() })),
         user?.id || 'local_user',
+        isTrip,
       );
       nav.goBack();
     } catch {
@@ -71,6 +73,37 @@ export default function CreateGroupScreen() {
           onChangeText={setGroupName}
           autoFocus
         />
+      </View>
+
+      {/* Trip Toggle */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.tripToggleRow}
+          onPress={() => setIsTrip(prev => !prev)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.tripToggleInfo}>
+            <Text style={styles.tripToggleLabel}>This is a trip</Text>
+            <Text style={styles.tripToggleSubtitle}>
+              Get a reminder to turn off tracking after 2–3 weeks
+            </Text>
+          </View>
+          <View style={[
+            styles.tripSwitch,
+            isTrip && styles.tripSwitchActive,
+          ]}>
+            <View style={[
+              styles.tripSwitchThumb,
+              isTrip && styles.tripSwitchThumbActive,
+            ]} />
+            <Text style={[
+              styles.tripSwitchText,
+              isTrip && styles.tripSwitchTextActive,
+            ]}>
+              {isTrip ? 'ON' : 'OFF'}
+            </Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Members */}
@@ -181,6 +214,71 @@ const styles = StyleSheet.create({
     padding: 14,
     fontSize: 15,
     color: COLORS.text,
+  },
+
+  /* ── Trip Toggle ──────────────────────────────────────────────── */
+  tripToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surfaceHigh,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  tripToggleInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  tripToggleLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  tripToggleSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 17,
+  },
+  tripSwitch: {
+    width: 56,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: COLORS.surfaceHigher,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  tripSwitchActive: {
+    backgroundColor: `${COLORS.primary}25`,
+    borderColor: `${COLORS.primary}50`,
+  },
+  tripSwitchThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.textSecondary,
+  },
+  tripSwitchThumbActive: {
+    backgroundColor: COLORS.primary,
+    transform: [{ translateX: 26 }],
+  },
+  tripSwitchText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: COLORS.textSecondary,
+    letterSpacing: 0.5,
+    position: 'absolute',
+    right: 7,
+  },
+  tripSwitchTextActive: {
+    color: COLORS.primary,
+    left: 6,
+    right: undefined,
   },
 
   memberRow: {

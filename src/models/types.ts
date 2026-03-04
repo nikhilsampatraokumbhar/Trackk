@@ -3,6 +3,7 @@ export interface User {
   displayName: string;
   phone: string;
   email?: string;
+  avatarColor?: string;
   createdAt: number;
 }
 
@@ -25,6 +26,7 @@ export interface Transaction {
   rawMessage?: string;
   trackerType: TrackerType;
   groupId?: string;
+  receiptUri?: string;
   timestamp: number;
   createdAt: number;
 }
@@ -41,6 +43,8 @@ export interface Group {
   members: GroupMember[];
   createdBy: string;
   createdAt: number;
+  isTrip?: boolean;
+  tripReminderSent?: boolean;
 }
 
 export interface Split {
@@ -84,4 +88,42 @@ export interface ActiveTracker {
   type: TrackerType;
   id: string;
   label: string;
+}
+
+// Savings Goal
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  targetDate: number;
+  salary: number;
+  emis: number;
+  expenses: number;
+  maintenance: number;
+  dailyBudget: number;
+  monthlyBudget: number;
+  streak: number;
+  lastStreakDate: string; // YYYY-MM-DD
+  createdAt: number;
+}
+
+// Daily spend tracking for goals
+export interface DailySpend {
+  date: string; // YYYY-MM-DD
+  spent: number;
+  budget: number;
+  withinBudget: boolean;
+}
+
+// Settlement record
+export interface Settlement {
+  id: string;
+  groupId: string;
+  fromUserId: string;
+  fromName: string;
+  toUserId: string;
+  toName: string;
+  amount: number;
+  method: 'upi' | 'cash';
+  timestamp: number;
 }
