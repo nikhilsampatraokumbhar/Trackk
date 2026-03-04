@@ -41,12 +41,6 @@
         {
           "iosSendMicrophoneRequest": false
         }
-      ],
-      [
-        "react-native-image-picker",
-        {
-          "cameraPermissionText": "Allow Expense Tracker to photograph your receipts"
-        }
       ]
     ]
   }
