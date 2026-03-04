@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Expense Tracker",
+    "slug": "expense-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "com.expensetracker",
+
+    "android": {
+      "package": "com.expensetracker",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.READ_SMS",
+        "android.permission.RECEIVE_SMS",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+
+    "ios": {
+      "bundleIdentifier": "com.expensetracker",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to photograph receipts for reimbursement tracking",
+        "NSPhotoLibraryUsageDescription": "Used to upload receipt images for reimbursement",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["com.expensetracker"]
+          }
+        ]
+      }
+    },
+
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      [
+        "react-native-permissions",
+        {
+          "iosSendMicrophoneRequest": false
+        }
+      ],
+      [
+        "react-native-image-picker",
+        {
+          "cameraPermissionText": "Allow Expense Tracker to photograph your receipts"
+        }
+      ]
+    ]
+  }
+}
