@@ -13,7 +13,7 @@ interface GroupContextType {
   groups: Group[];
   loading: boolean;
   refreshGroups: () => Promise<void>;
-  createGroup: (name: string, members: Array<{ displayName: string; phone: string }>, userId: string) => Promise<Group>;
+  createGroup: (name: string, members: Array<{ displayName: string; phone: string }>, userId: string, isTrip?: boolean) => Promise<Group>;
   activeGroupId: string | null;
   activeGroupTransactions: GroupTransaction[];
   activeGroupDebts: Debt[];
@@ -53,8 +53,9 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     name: string,
     members: Array<{ displayName: string; phone: string }>,
     userId: string,
+    isTrip?: boolean,
   ): Promise<Group> => {
-    const group = await createGroupStorage(name, members, userId);
+    const group = await createGroupStorage(name, members, userId, isTrip);
     setGroups(prev => [...prev, group]);
     return group;
   }, []);

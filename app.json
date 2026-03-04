@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "android": {
-      "package": "com.nikhil.expensetracker",
+      "package": "com.expensetrackerbuild",
       "permissions": [
         "android.permission.READ_SMS",
         "android.permission.RECEIVE_SMS",

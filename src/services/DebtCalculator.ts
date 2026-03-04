@@ -21,10 +21,10 @@ export function calculateDebts(transactions: GroupTransaction[]): Debt[] {
     }
   }
 
-  return simplifyDebts(balances);
+  return simplifyBalances(balances);
 }
 
-function simplifyDebts(
+function simplifyBalances(
   balances: Record<string, { name: string; balance: number }>
 ): Debt[] {
   const debts: Debt[] = [];
@@ -78,4 +78,20 @@ export function getUserDebtSummary(
   }
 
   return { totalOwed, totalOwing };
+}
+
+/**
+ * Takes an array of debts and returns a simplified (consolidated) version.
+ * If debts are already simplified (e.g. from calculateDebts), returns as-is.
+ */
+export function simplifyDebts(debts: Debt[]): Debt[] {
+  // Build net balances from the debt list
+  const balances: Record<string, { name: string; balance: number }> = {};
+  for (const d of debts) {
+    if (!balances[d.fromUserId]) balances[d.fromUserId] = { name: d.fromName, balance: 0 };
+    if (!balances[d.toUserId]) balances[d.toUserId] = { name: d.toName, balance: 0 };
+    balances[d.fromUserId].balance -= d.amount;
+    balances[d.toUserId].balance += d.amount;
+  }
+  return simplifyBalances(balances);
 }
