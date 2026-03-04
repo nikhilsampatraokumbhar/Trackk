@@ -34,6 +34,9 @@
       "eas": {
         "projectId": "3b510f74-fd1e-48db-8509-927da9be84c6"
       }
+    },
+    "ios": {
+      "bundleIdentifier": "com.expensetrackerbuild"
     }
   }
 }

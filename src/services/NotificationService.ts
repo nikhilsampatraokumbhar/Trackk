@@ -152,7 +152,7 @@ export function registerBackgroundHandler(): void {
       const actionId = detail.pressAction?.id;
 
       if (actionId === 'add_to_tracker' && detail.notification?.data) {
-        const data = detail.notification.data;
+        const data = detail.notification.data as Record<string, string>;
         const parsed: ParsedTransaction = {
           amount: Number(data.amount),
           type: 'debit',
