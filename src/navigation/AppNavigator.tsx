@@ -1,10 +1,12 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { RootStackParamList, MainTabParamList, AuthStackParamList } from '../models/types';
 import { COLORS } from '../utils/helpers';
 import { useAuth } from '../store/AuthContext';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 // Screens — Main app
 import { HomeScreen } from '../screens/HomeScreen';
@@ -12,6 +14,7 @@ import { PersonalExpenseScreen } from '../screens/PersonalExpenseScreen';
 import { GroupListScreen } from '../screens/GroupListScreen';
 import { ReimbursementScreen } from '../screens/ReimbursementScreen';
 import { GoalsScreen } from '../screens/GoalsScreen';
+import { ProfileScreen } from '../screens/ProfileScreen';
 import { GroupDetailScreen } from '../screens/GroupDetailScreen';
 import { CreateGroupScreen } from '../screens/CreateGroupScreen';
 import { TransactionDetailScreen } from '../screens/TransactionDetailScreen';
@@ -27,6 +30,45 @@ const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 
+// ── Avatar button rendered in every tab's headerRight ─────────────────────────
+// useNavigation inside a tab screen gives the tab nav; getParent() gives RootStack nav.
+function HeaderAvatarButton() {
+  const { user } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const initials = (user?.displayName ?? '?')
+    .split(' ')
+    .map((w: string) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  return (
+    <TouchableOpacity
+      style={avatarStyles.btn}
+      onPress={() => (navigation as any).getParent<NativeStackNavigationProp<RootStackParamList>>()?.navigate('Profile') ?? navigation.navigate('Profile')}
+      activeOpacity={0.75}>
+      <View style={avatarStyles.circle}>
+        <Text style={avatarStyles.text}>{initials}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const avatarStyles = StyleSheet.create({
+  btn: { marginRight: 12 },
+  circle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  text: { fontSize: 12, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },
+});
+
+// ── Auth navigator ─────────────────────────────────────────────────────────────
 function AuthNavigator() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
@@ -46,10 +88,13 @@ function AuthNavigator() {
   );
 }
 
+// ── Bottom tab navigator ───────────────────────────────────────────────────────
+const sharedHeaderRight = () => <HeaderAvatarButton />;
+
 function MainTabs() {
   return (
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textLight,
         tabBarStyle: {
@@ -57,14 +102,31 @@ function MainTabs() {
           borderTopColor: COLORS.border,
           borderTopWidth: 1,
           paddingBottom: 8,
-          paddingTop: 8,
-          height: 62,
+          paddingTop: 6,
+          height: 66,
         },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-        headerStyle: { backgroundColor: COLORS.surface, elevation: 0, shadowOpacity: 0, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4, marginTop: 2 },
+        headerStyle: {
+          backgroundColor: COLORS.surface,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 1,
+          borderBottomColor: COLORS.border,
+        },
         headerTintColor: COLORS.text,
         headerTitleStyle: { fontWeight: '800', fontSize: 16, letterSpacing: 0.2 },
-      }}>
+        headerRight: sharedHeaderRight,
+        tabBarIcon: ({ color, size }) => {
+          const iconMap: Record<string, string> = {
+            Home: 'home',
+            Personal: 'account-balance-wallet',
+            Groups: 'group',
+            Goals: 'flag',
+            Reimbursement: 'receipt',
+          };
+          return <Icon name={iconMap[route.name] ?? 'circle'} size={size} color={color} />;
+        },
+      })}>
       <Tab.Screen
         name="Home"
         component={HomeScreen}
@@ -94,6 +156,7 @@ function MainTabs() {
   );
 }
 
+// ── Root app navigator ─────────────────────────────────────────────────────────
 export function AppNavigator() {
   const { user, loading } = useAuth();
 
@@ -104,7 +167,13 @@ export function AppNavigator() {
       {user ? (
         <RootStack.Navigator
           screenOptions={{
-            headerStyle: { backgroundColor: COLORS.surface, elevation: 0, shadowOpacity: 0, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+            headerStyle: {
+              backgroundColor: COLORS.surface,
+              elevation: 0,
+              shadowOpacity: 0,
+              borderBottomWidth: 1,
+              borderBottomColor: COLORS.border,
+            },
             headerTintColor: COLORS.text,
             headerTitleStyle: { fontWeight: '800', fontSize: 16 },
           }}>
@@ -112,6 +181,11 @@ export function AppNavigator() {
             name="MainTabs"
             component={MainTabs}
             options={{ headerShown: false }}
+          />
+          <RootStack.Screen
+            name="Profile"
+            component={ProfileScreen}
+            options={{ headerTitle: 'My Profile' }}
           />
           <RootStack.Screen
             name="GroupDetail"

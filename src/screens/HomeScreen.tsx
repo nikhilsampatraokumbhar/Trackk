@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   StyleSheet,
-  StatusBar,
   TouchableOpacity,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -115,8 +114,6 @@ export function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor={COLORS.background} barStyle="light-content" />
-
       <FlatList
         data={recentTransactions}
         keyExtractor={item => item.id}

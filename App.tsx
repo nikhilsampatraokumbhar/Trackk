@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, View, Text, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from './src/store/AuthContext';
 import { GroupProvider, useGroups } from './src/store/GroupContext';
@@ -35,13 +36,15 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <GroupProvider>
-        <GoalsProvider>
-          <AppContent />
-        </GoalsProvider>
-      </GroupProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <GroupProvider>
+          <GoalsProvider>
+            <AppContent />
+          </GoalsProvider>
+        </GroupProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 

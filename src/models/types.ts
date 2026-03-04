@@ -142,6 +142,7 @@ export interface SavingsGoal {
 
 export type RootStackParamList = {
   MainTabs: undefined;
+  Profile: undefined;
   GroupDetail: { groupId: string };
   CreateGroup: undefined;
   TransactionDetail: { transactionId: string; trackerType: TrackerType };
