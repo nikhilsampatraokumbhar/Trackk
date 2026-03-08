@@ -88,9 +88,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.expensetrackerbuild"
+    namespace "com.trackk.app"
     defaultConfig {
-        applicationId "com.expensetrackerbuild"
+        applicationId "com.trackk.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
