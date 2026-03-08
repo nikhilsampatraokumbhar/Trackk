@@ -4,10 +4,17 @@ import React, {
 } from 'react';
 import { Group, GroupTransaction, Debt } from '../models/types';
 import {
-  getGroups, createGroup as createGroupStorage,
-  getGroupTransactions, settleSplit as settleSplitStorage,
+  createGroupCloud, getGroupsCloud,
+  getGroupTransactionsCloud, settleSplitCloud,
+  onGroupTransactionsChanged,
+} from '../services/SyncService';
+import {
+  getGroups as getGroupsLocal, createGroup as createGroupLocal,
+  getGroupTransactions as getGroupTransactionsLocal,
+  settleSplit as settleSplitLocal,
 } from '../services/StorageService';
 import { calculateDebts } from '../services/DebtCalculator';
+import { useAuth } from './AuthContext';
 
 interface GroupContextType {
   groups: Group[];
@@ -34,20 +41,41 @@ const GroupContext = createContext<GroupContextType>({
 });
 
 export function GroupProvider({ children }: { children: ReactNode }) {
+  const { user, isAuthenticated } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [activeGroupTransactions, setActiveGroupTransactions] = useState<GroupTransaction[]>([]);
   const [activeGroupDebts, setActiveGroupDebts] = useState<Debt[]>([]);
+  const [unsubscribe, setUnsubscribe] = useState<(() => void) | null>(null);
 
   const refreshGroups = useCallback(async () => {
-    const all = await getGroups();
-    setGroups(all);
-  }, []);
+    if (!user) return;
+
+    try {
+      if (isAuthenticated) {
+        // Fetch from Firestore - includes groups found by phone match
+        const cloudGroups = await getGroupsCloud(user.id, user.phone);
+        setGroups(cloudGroups);
+      } else {
+        // Fallback to local storage
+        const localGroups = await getGroupsLocal();
+        setGroups(localGroups);
+      }
+    } catch {
+      // Fallback to local
+      const localGroups = await getGroupsLocal();
+      setGroups(localGroups);
+    }
+  }, [user, isAuthenticated]);
 
   useEffect(() => {
-    refreshGroups().finally(() => setLoading(false));
-  }, []);
+    if (user) {
+      refreshGroups().finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, [user]);
 
   const createGroup = useCallback(async (
     name: string,
@@ -55,26 +83,74 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     userId: string,
     isTrip?: boolean,
   ): Promise<Group> => {
-    const group = await createGroupStorage(name, members, userId, isTrip);
-    setGroups(prev => [...prev, group]);
+    let group: Group;
+
+    if (isAuthenticated && user) {
+      // Create in Firestore (synced)
+      group = await createGroupCloud(name, members, userId, user.phone, isTrip);
+    } else {
+      // Create locally (offline fallback)
+      group = await createGroupLocal(name, members, userId, isTrip);
+    }
+
+    setGroups(prev => [group, ...prev]);
     return group;
-  }, []);
+  }, [isAuthenticated, user]);
 
   const loadGroupTransactions = useCallback(async (groupId: string) => {
+    // Cleanup previous listener
+    if (unsubscribe) {
+      unsubscribe();
+      setUnsubscribe(null);
+    }
+
     setActiveGroupId(groupId);
-    const txns = await getGroupTransactions(groupId);
-    setActiveGroupTransactions(txns);
-    setActiveGroupDebts(calculateDebts(txns));
-  }, []);
+
+    if (isAuthenticated) {
+      // Set up real-time listener for group transactions
+      const unsub = onGroupTransactionsChanged(groupId, (txns) => {
+        setActiveGroupTransactions(txns);
+        setActiveGroupDebts(calculateDebts(txns));
+      });
+      setUnsubscribe(() => unsub);
+
+      // Also do an initial fetch
+      try {
+        const txns = await getGroupTransactionsCloud(groupId);
+        setActiveGroupTransactions(txns);
+        setActiveGroupDebts(calculateDebts(txns));
+      } catch {
+        // Real-time listener will handle updates
+      }
+    } else {
+      // Local fallback
+      const txns = await getGroupTransactionsLocal(groupId);
+      setActiveGroupTransactions(txns);
+      setActiveGroupDebts(calculateDebts(txns));
+    }
+  }, [isAuthenticated, unsubscribe]);
+
+  // Cleanup listener on unmount
+  useEffect(() => {
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [unsubscribe]);
 
   const settleSplit = useCallback(async (
     groupId: string,
     transactionId: string,
     userId: string,
   ) => {
-    await settleSplitStorage(groupId, transactionId, userId);
-    await loadGroupTransactions(groupId);
-  }, [loadGroupTransactions]);
+    if (isAuthenticated) {
+      // Settle in Firestore (will trigger real-time update for all members)
+      await settleSplitCloud(groupId, transactionId, userId);
+    } else {
+      // Local fallback
+      await settleSplitLocal(groupId, transactionId, userId);
+      await loadGroupTransactions(groupId);
+    }
+  }, [isAuthenticated, loadGroupTransactions]);
 
   return (
     <GroupContext.Provider value={{

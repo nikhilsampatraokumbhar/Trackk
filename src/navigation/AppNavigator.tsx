@@ -16,10 +16,15 @@ import TrackerSettingsScreen from '../screens/TrackerSettingsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import GoalsScreen from '../screens/GoalsScreen';
 import IOSSetupScreen from '../screens/iOSSetupScreen';
+import PricingScreen from '../screens/PricingScreen';
+import ReferralScreen from '../screens/ReferralScreen';
+import LoginScreen from '../screens/LoginScreen';
 
 import { COLORS } from '../utils/helpers';
+import { useAuth } from '../store/AuthContext';
 
 export type RootStackParamList = {
+  Login: undefined;
   MainTabs: undefined;
   GroupDetail: { groupId: string };
   CreateGroup: undefined;
@@ -27,6 +32,8 @@ export type RootStackParamList = {
   TrackerSettings: undefined;
   Reimbursement: undefined;
   IOSSetup: undefined;
+  Pricing: undefined;
+  Referral: undefined;
 };
 
 export type TabParamList = {
@@ -104,6 +111,8 @@ function MainTabs() {
 }
 
 export function AppNavigator() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <NavigationContainer
       theme={{
@@ -139,40 +148,69 @@ export function AppNavigator() {
           contentStyle: { backgroundColor: COLORS.background },
         }}
       >
-        <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
-        <Stack.Screen
-          name="GroupDetail"
-          component={GroupDetailScreen}
-          options={{ title: 'Group', headerBackTitle: '' }}
-        />
-        <Stack.Screen
-          name="CreateGroup"
-          component={CreateGroupScreen}
-          options={{ title: 'New Group', presentation: 'modal' }}
-        />
-        <Stack.Screen
-          name="TransactionDetail"
-          component={TransactionDetailScreen}
-          options={{ title: 'Transaction', presentation: 'modal' }}
-        />
-        <Stack.Screen
-          name="TrackerSettings"
-          component={TrackerSettingsScreen}
-          options={{ title: 'Tracker Settings', presentation: 'modal' }}
-        />
-        <Stack.Screen
-          name="Reimbursement"
-          component={ReimbursementScreen}
-          options={{ title: 'Reimbursement', headerBackTitle: '' }}
-        />
-        {Platform.OS === 'ios' && (
+        {!isAuthenticated ? (
+          // Auth flow - Login screen
           <Stack.Screen
-            name="IOSSetup"
-            component={IOSSetupScreen}
-            options={{ title: 'iPhone Setup', presentation: 'modal' }}
-          />
+            name="Login"
+            options={{ headerShown: false }}
+          >
+            {() => <LoginScreenWrapper />}
+          </Stack.Screen>
+        ) : (
+          // Main app flow
+          <>
+            <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="GroupDetail"
+              component={GroupDetailScreen}
+              options={{ title: 'Group', headerBackTitle: '' }}
+            />
+            <Stack.Screen
+              name="CreateGroup"
+              component={CreateGroupScreen}
+              options={{ title: 'New Group', presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="TransactionDetail"
+              component={TransactionDetailScreen}
+              options={{ title: 'Transaction', presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="TrackerSettings"
+              component={TrackerSettingsScreen}
+              options={{ title: 'Tracker Settings', presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="Reimbursement"
+              component={ReimbursementScreen}
+              options={{ title: 'Reimbursement', headerBackTitle: '' }}
+            />
+            <Stack.Screen
+              name="Pricing"
+              component={PricingScreen}
+              options={{ title: 'Premium Plans', headerBackTitle: '' }}
+            />
+            <Stack.Screen
+              name="Referral"
+              component={ReferralScreen}
+              options={{ title: 'Refer & Earn', headerBackTitle: '' }}
+            />
+            {Platform.OS === 'ios' && (
+              <Stack.Screen
+                name="IOSSetup"
+                component={IOSSetupScreen}
+                options={{ title: 'iPhone Setup', presentation: 'modal' }}
+              />
+            )}
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
   );
+}
+
+/** Wrapper to connect LoginScreen to AuthContext */
+function LoginScreenWrapper() {
+  const { signIn } = useAuth();
+  return <LoginScreen onAuthSuccess={signIn} />;
 }

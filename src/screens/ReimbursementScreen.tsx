@@ -1,24 +1,21 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, RefreshControl,
-  TouchableOpacity, Alert, Modal,
+  TouchableOpacity, Alert, Modal, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import * as ImagePicker from 'expo-image-picker';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useTracker } from '../store/TrackerContext';
-import { getTransactions } from '../services/StorageService';
+import { getTransactions, updateTransaction } from '../services/StorageService';
 import { Transaction } from '../models/types';
 import TrackerToggle from '../components/TrackerToggle';
 import TransactionCard from '../components/TransactionCard';
 import { COLORS, formatCurrency } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-
-// NOTE: For production receipt capture, install react-native-image-picker:
-//   npm install react-native-image-picker
-// It is NOT currently in package.json, so we use a simulated approach below.
 
 export default function ReimbursementScreen() {
   const nav = useNavigation<Nav>();
@@ -60,22 +57,51 @@ export default function ReimbursementScreen() {
     setReceiptModalVisible(true);
   };
 
-  const handleReceiptOption = (option: 'camera' | 'gallery') => {
+  const handleReceiptOption = async (option: 'camera' | 'gallery') => {
     setReceiptModalVisible(false);
-    // NOTE: In production, use react-native-image-picker here:
-    //   import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
-    Alert.alert(
-      'Receipt Capture',
-      option === 'camera'
-        ? 'Camera capture coming soon. Install react-native-image-picker for production use.'
-        : 'Gallery picker coming soon. Install react-native-image-picker for production use.',
-    );
+    try {
+      let result: ImagePicker.ImagePickerResult;
+      if (option === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission needed', 'Camera access is required to capture receipts.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          quality: 0.8,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission needed', 'Gallery access is required to select receipts.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets[0] && selectedTransactionId) {
+        await updateTransaction(selectedTransactionId, { receiptUri: result.assets[0].uri });
+        await load();
+        Alert.alert('Receipt saved', 'Receipt attached to this expense.');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Could not capture receipt. Please try again.');
+    }
   };
 
   const handleDownloadAllReceipts = () => {
+    const withReceipts = transactions.filter(t => t.receiptUri);
+    if (withReceipts.length === 0) {
+      Alert.alert('No Receipts', 'No receipts have been attached to any expenses yet.');
+      return;
+    }
     Alert.alert(
-      'Download Receipts',
-      'Feature coming in next update. Actual file system access needs additional setup.',
+      'Receipts Summary',
+      `${withReceipts.length} receipt(s) saved locally on your device.\n\nCloud backup & export coming with Trackk Premium.`,
     );
   };
 
@@ -171,13 +197,12 @@ export default function ReimbursementScreen() {
                 onPress={() => nav.navigate('TransactionDetail', { transactionId: item.id })}
               />
             </View>
-            {/* Receipt upload icon */}
             <TouchableOpacity
-              style={styles.receiptBtn}
+              style={[styles.receiptBtn, item.receiptUri ? styles.receiptBtnAttached : null]}
               onPress={() => handleReceiptPress(item.id)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={styles.receiptBtnIcon}>📷</Text>
+              <Text style={styles.receiptBtnIcon}>{item.receiptUri ? '✅' : '📷'}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -399,6 +424,10 @@ const styles = StyleSheet.create({
   },
   receiptBtnIcon: {
     fontSize: 18,
+  },
+  receiptBtnAttached: {
+    borderColor: `${COLORS.success}50`,
+    backgroundColor: `${COLORS.success}15`,
   },
 
   /* ── Download All Receipts ────────────────────────────────────── */

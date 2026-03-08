@@ -39,6 +39,15 @@ export default function CreateGroupScreen() {
       Alert.alert('Missing Members', 'Please add at least one member');
       return;
     }
+    // Check that all members have phone numbers (required for syncing)
+    const missingPhone = validMembers.find(m => !m.phone.trim() || m.phone.replace(/\D/g, '').length < 10);
+    if (missingPhone) {
+      Alert.alert(
+        'Phone Number Required',
+        `Please enter a valid 10-digit phone number for ${missingPhone.name.trim()}. Phone numbers are used to sync group data between members.`,
+      );
+      return;
+    }
     setLoading(true);
     try {
       await createGroup(
@@ -129,7 +138,7 @@ export default function CreateGroupScreen() {
               />
               <TextInput
                 style={styles.input}
-                placeholder="Phone (optional)"
+                placeholder="Phone number (required for sync)"
                 value={m.phone}
                 onChangeText={v => updateMember(i, 'phone', v)}
                 keyboardType="phone-pad"

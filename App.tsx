@@ -4,6 +4,7 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { AuthProvider, useAuth } from './src/store/AuthContext';
 import { GroupProvider, useGroups } from './src/store/GroupContext';
 import { TrackerProvider } from './src/store/TrackerContext';
+import { PremiumProvider } from './src/store/PremiumContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { registerBackgroundHandler } from './src/services/NotificationService';
 import { COLORS } from './src/utils/helpers';
@@ -12,10 +13,10 @@ import { COLORS } from './src/utils/helpers';
 registerBackgroundHandler();
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
   const { groups } = useGroups();
 
-  if (loading || !user) {
+  if (loading) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -23,10 +24,17 @@ function AppContent() {
     );
   }
 
+  // If not authenticated, AppNavigator will show LoginScreen
+  if (!isAuthenticated || !user) {
+    return <AppNavigator />;
+  }
+
   return (
-    <TrackerProvider groups={groups} userId={user.id}>
-      <AppNavigator />
-    </TrackerProvider>
+    <PremiumProvider userId={user.id}>
+      <TrackerProvider groups={groups} userId={user.id}>
+        <AppNavigator />
+      </TrackerProvider>
+    </PremiumProvider>
   );
 }
 

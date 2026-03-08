@@ -115,6 +115,60 @@ export interface DailySpend {
   withinBudget: boolean;
 }
 
+// ─── Premium / Subscription ─────────────────────────────────────────────────
+
+export type PlanId = 'free' | 'premium_monthly' | 'premium_annual' | 'premium_lifetime' | 'family_monthly' | 'family_annual';
+
+export interface SubscriptionPlan {
+  id: PlanId;
+  name: string;
+  price: number;          // in INR
+  period: 'monthly' | 'annual' | 'lifetime' | 'free';
+  maxMembers: number;     // 1 for individual plans, 4 for family
+  tagline: string;        // clever persuasive copy
+  features: string[];
+  savings?: string;       // e.g. "Save 40%"
+  badge?: string;         // e.g. "MOST POPULAR"
+}
+
+export interface UserSubscription {
+  planId: PlanId;
+  status: 'active' | 'expired' | 'trial';
+  startDate: number;
+  endDate: number;        // -1 for lifetime
+  isFoundingMember: boolean;
+  promoCodeUsed?: string;
+  familyMembers?: string[];  // user IDs for family plan
+  referralCreditsMonths: number;  // free months earned via referrals (max 12)
+}
+
+export interface PromoCode {
+  code: string;
+  type: 'full_access' | 'trial_extend' | 'discount';
+  durationDays: number;
+  discountPercent?: number;
+}
+
+export interface Referral {
+  id: string;
+  referrerId: string;
+  refereePhone: string;
+  refereeInstalled: boolean;
+  refereeQualified: boolean;  // logged 10 expenses in 14 days
+  installDate?: number;
+  qualifiedDate?: number;
+  rewardClaimed: boolean;
+}
+
+export interface ReferralStats {
+  totalReferred: number;
+  qualified: number;
+  freeMonthsEarned: number;
+  freeMonthsUsed: number;
+  nextMilestone: number;    // referrals needed for next reward
+  milestoneReward: string;  // e.g. "6 months free"
+}
+
 // Settlement record
 export interface Settlement {
   id: string;

@@ -10,7 +10,11 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
 import { useAuth } from '../store/AuthContext';
-import { getGroup, addSettlement, getSettlements, removeSplitMember } from '../services/StorageService';
+import { getGroup } from '../services/StorageService';
+import {
+  addSettlementCloud, getSettlementsCloud, removeSplitMemberCloud,
+  onSettlementsChanged, onGroupChanged,
+} from '../services/SyncService';
 import { Group, Settlement, Debt } from '../models/types';
 import { simplifyDebts } from '../services/DebtCalculator';
 import TrackerToggle from '../components/TrackerToggle';
@@ -39,13 +43,37 @@ export default function GroupDetailScreen() {
   const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
 
+  const { isAuthenticated } = useAuth();
+
   const load = useCallback(async () => {
     const g = await getGroup(groupId);
     setGroup(g);
     await loadGroupTransactions(groupId);
-    const s = await getSettlements(groupId);
-    setSettlements(s.sort((a, b) => b.timestamp - a.timestamp));
+    try {
+      const s = await getSettlementsCloud(groupId);
+      setSettlements(s);
+    } catch {
+      // Fallback handled by real-time listener
+    }
   }, [groupId, loadGroupTransactions]);
+
+  // Real-time settlement listener - updates when other users settle
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const unsub = onSettlementsChanged(groupId, (s) => {
+      setSettlements(s);
+    });
+    return () => unsub();
+  }, [groupId, isAuthenticated]);
+
+  // Real-time group listener - updates when members change
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const unsub = onGroupChanged(groupId, (g) => {
+      if (g) setGroup(g);
+    });
+    return () => unsub();
+  }, [groupId, isAuthenticated]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -164,8 +192,8 @@ export default function GroupDetailScreen() {
       }
     }
 
-    // Record the settlement
-    await addSettlement({
+    // Record the settlement (synced to Firestore - other user sees it in real-time)
+    await addSettlementCloud({
       groupId,
       fromUserId: debt.fromUserId,
       fromName: debt.fromName,
@@ -196,7 +224,7 @@ export default function GroupDetailScreen() {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            await removeSplitMember(groupId, transactionId, memberUserId);
+            await removeSplitMemberCloud(groupId, transactionId, memberUserId);
             await load();
           },
         },

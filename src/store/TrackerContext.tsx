@@ -15,7 +15,8 @@ import {
   showTransactionNotification, registerNotificationCallbacks,
   handleNotificationEvent,
 } from '../services/NotificationService';
-import { saveTransaction, addGroupTransaction } from '../services/StorageService';
+import { saveTransaction, addGroupTransaction, getGroup } from '../services/StorageService';
+import { addGroupTransactionCloud } from '../services/SyncService';
 import { initDeepLinkListener } from '../services/DeepLinkService';
 
 const TRACKER_STATE_KEY = '@et_tracker_state';
@@ -243,7 +244,17 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   ) => {
     const uid = userIdRef.current;
     if (trackerType === 'group') {
-      await addGroupTransaction(parsed, trackerId, uid);
+      // Try cloud first, fallback to local
+      try {
+        const group = groupsRef.current.find(g => g.id === trackerId);
+        if (group) {
+          await addGroupTransactionCloud(parsed, trackerId, uid, group.members);
+        } else {
+          await addGroupTransaction(parsed, trackerId, uid);
+        }
+      } catch {
+        await addGroupTransaction(parsed, trackerId, uid);
+      }
     } else {
       await saveTransaction(parsed, trackerType, uid);
     }
