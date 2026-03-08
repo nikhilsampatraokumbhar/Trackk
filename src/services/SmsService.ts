@@ -9,6 +9,7 @@ let smsListener: any = null;
 let pollingInterval: ReturnType<typeof setInterval> | null = null;
 let lastSmsTimestamp = 0;
 let activeCallback: SmsCallback | null = null;
+let hasNativeListener = false;
 
 export async function requestSmsPermission(): Promise<boolean> {
   if (Platform.OS !== 'android') return false;
@@ -35,17 +36,17 @@ export async function checkSmsPermission(): Promise<boolean> {
 }
 
 function handleIncomingSms(message: { body: string; originatingAddress: string }) {
-  console.log('[ExpenseTracker] SMS received from:', message.originatingAddress);
+  console.log('[Trackk] SMS received from:', message.originatingAddress);
   if (!activeCallback) {
-    console.log('[ExpenseTracker] No active callback - SMS ignored');
+    console.log('[Trackk] No active callback - SMS ignored');
     return;
   }
   const { body, originatingAddress } = message;
   const isBankMsg = isBankSender(originatingAddress);
-  console.log('[ExpenseTracker] Is bank sender:', isBankMsg);
+  console.log('[Trackk] Is bank sender:', isBankMsg);
   if (!isBankMsg) return;
   const parsed = parseTransactionSms(body, originatingAddress);
-  console.log('[ExpenseTracker] Parsed:', parsed ? `Rs.${parsed.amount}` : 'null');
+  console.log('[Trackk] Parsed:', parsed ? `Rs.${parsed.amount}` : 'null');
   if (parsed) {
     lastSmsTimestamp = parsed.timestamp;
     activeCallback(parsed);
@@ -54,27 +55,39 @@ function handleIncomingSms(message: { body: string; originatingAddress: string }
 
 export function startSmsListener(callback: SmsCallback): void {
   activeCallback = callback;
-  console.log('[ExpenseTracker] Starting SMS listener...');
-  console.log('[ExpenseTracker] SmsListenerModule available:', !!NativeModules.SmsListenerModule);
-  console.log('[ExpenseTracker] SmsAndroid available:', !!NativeModules.SmsAndroid);
+  hasNativeListener = false;
+  console.log('[Trackk] Starting SMS listener...');
+  console.log('[Trackk] SmsListenerModule available:', !!NativeModules.SmsListenerModule);
+  console.log('[Trackk] SmsAndroid available:', !!NativeModules.SmsAndroid);
 
+  // Primary: native event-driven listener (zero battery cost — OS triggers callback)
   try {
     if (NativeModules.SmsListenerModule) {
       const emitter = new NativeEventEmitter(NativeModules.SmsListenerModule);
       smsListener = emitter.addListener('onSmsReceived', handleIncomingSms);
-      console.log('[ExpenseTracker] Native SMS listener attached');
+      hasNativeListener = true;
+      console.log('[Trackk] Native SMS listener attached (event-driven, low battery)');
     } else {
-      console.log('[ExpenseTracker] SmsListenerModule NOT found in NativeModules');
+      console.log('[Trackk] SmsListenerModule NOT found in NativeModules');
     }
   } catch (e: any) {
-    console.log('[ExpenseTracker] SMS listener error:', e.message);
+    console.log('[Trackk] SMS listener error:', e.message);
   }
 
-  startPollingFallback(callback);
+  // One-time catch-up: read any SMS that arrived while app was closed
+  // This does NOT repeat — it's a single read on startup
+  catchUpMissedSms(callback);
+
+  // Fallback: only use polling if native listener is NOT available
+  // Uses a conservative 60-second interval to minimize battery impact
+  if (!hasNativeListener) {
+    startPollingFallback(callback);
+  }
 }
 
 export function stopSmsListener(): void {
   activeCallback = null;
+  hasNativeListener = false;
   if (smsListener) {
     smsListener.remove();
     smsListener = null;
@@ -82,17 +95,34 @@ export function stopSmsListener(): void {
   stopPolling();
 }
 
+/**
+ * One-time read of recent SMS to catch transactions that arrived
+ * while the app was not running. Only runs once on listener start.
+ */
+async function catchUpMissedSms(callback: SmsCallback): Promise<void> {
+  lastSmsTimestamp = Date.now() - 60000; // check last 60s
+  try {
+    await readRecentSms(10, callback);
+  } catch (e) {
+    // Catch-up failed silently
+  }
+}
+
+/**
+ * Fallback polling — only used when native SmsListenerModule is unavailable.
+ * Uses 60-second interval (6x less frequent than before) to save battery.
+ */
 function startPollingFallback(callback: SmsCallback): void {
   if (pollingInterval) return;
-  lastSmsTimestamp = Date.now() - 60000; // check last 60s on first run
+  console.log('[Trackk] Using polling fallback (60s interval)');
 
   pollingInterval = setInterval(async () => {
     try {
-      await readRecentSms(20, callback);
+      await readRecentSms(10, callback);
     } catch (e) {
       // Polling failed silently
     }
-  }, 10000);
+  }, 60000); // 60 seconds instead of 10
 }
 
 function stopPolling(): void {
@@ -145,4 +175,12 @@ export async function readRecentSms(
       },
     );
   });
+}
+
+/**
+ * Returns whether the app is using the battery-efficient native listener
+ * vs the polling fallback.
+ */
+export function isUsingNativeListener(): boolean {
+  return hasNativeListener;
 }

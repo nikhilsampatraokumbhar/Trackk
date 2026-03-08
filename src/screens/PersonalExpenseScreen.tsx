@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl,
-  TouchableOpacity, Alert, NativeModules,
+  TouchableOpacity, Alert, NativeModules, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -73,8 +73,24 @@ export default function PersonalExpenseScreen() {
             color={COLORS.personalColor}
           />
 
+          {/* iOS Setup Banner */}
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity
+              style={styles.iosSetupBanner}
+              onPress={() => nav.navigate('IOSSetup' as any)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.iosSetupEmoji}>📱</Text>
+              <View style={styles.iosSetupContent}>
+                <Text style={styles.iosSetupTitle}>Set up iPhone automation</Text>
+                <Text style={styles.iosSetupSub}>Use iOS Shortcuts for automatic tracking</Text>
+              </View>
+              <Text style={styles.iosSetupArrow}>{'>'}</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Debug diagnostics */}
-          {trackerState.personal && (
+          {trackerState.personal && Platform.OS === 'android' && (
             <View style={styles.debugBox}>
               <Text style={styles.debugTitle}>DIAGNOSTICS</Text>
               <Text style={styles.debugText}>
@@ -277,5 +293,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+
+  iosSetupBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${COLORS.primary}12`,
+    borderRadius: 14,
+    padding: 14,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}30`,
+    gap: 12,
+  },
+  iosSetupEmoji: {
+    fontSize: 24,
+  },
+  iosSetupContent: {
+    flex: 1,
+  },
+  iosSetupTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  iosSetupSub: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  iosSetupArrow: {
+    fontSize: 18,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
   },
 });

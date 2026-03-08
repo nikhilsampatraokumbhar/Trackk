@@ -106,14 +106,14 @@ export default function HomeScreen() {
               <Text style={styles.privacyTitle}>Privacy Shield</Text>
             </View>
             <Text style={styles.privacyText}>
-              Your transactions are only tracked when you enable a tracker. SMS is read locally on your device - your data never leaves your phone. Switch off anytime.
+              Trackk only reads SMS when you enable a tracker. Event-driven detection means zero battery drain. Switch off anytime.
             </Text>
           </View>
         ) : (
           <View style={styles.privacyCardMini}>
             <Text style={styles.privacyEmojiMini}>🛡️</Text>
             <Text style={styles.privacyTextMini}>
-              Data stays on your device. SMS is read locally. Switch off anytime.
+              Low battery usage. Event-driven SMS detection. Switch off anytime.
             </Text>
           </View>
         )}

@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Expense Tracker",
-    "slug": "expense-tracker-sms",
+    "name": "Trackk",
+    "slug": "trackk",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "android": {
-      "package": "com.expensetrackerbuild",
+      "package": "com.trackk.app",
       "permissions": [
         "android.permission.READ_SMS",
         "android.permission.RECEIVE_SMS",
@@ -36,7 +36,15 @@
       }
     },
     "ios": {
-      "bundleIdentifier": "com.expensetrackerbuild"
-    }
+      "bundleIdentifier": "com.trackk.app",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["trackk"]
+          }
+        ]
+      }
+    },
+    "scheme": "trackk"
   }
 }

@@ -8,16 +8,16 @@ This is the easiest. GitHub builds the APK for you in the cloud.
 ```bash
 # On your Mac, in a terminal:
 cd ~/Desktop
-mkdir ExpenseTrackerBuild
+mkdir Trackk
 # Copy the project files here, then:
 git init
 git add -A
-git commit -m "Expense Tracker app"
-git remote add origin https://github.com/YOUR_USERNAME/expense-tracker.git
+git commit -m "Trackk app"
+git remote add origin https://github.com/YOUR_USERNAME/trackk.git
 git push -u origin main
 ```
 
-Or just drag the ExpenseTrackerBuild folder to GitHub Desktop and push.
+Or just drag the project folder to GitHub Desktop and push.
 
 ### Step 2: Wait for Build (~5-8 minutes)
 - Go to your repo on GitHub
@@ -25,9 +25,9 @@ Or just drag the ExpenseTrackerBuild folder to GitHub Desktop and push.
 - Watch "Build APK" workflow run
 
 ### Step 3: Download Your APK
-- When the build is green ✅, click on it
+- When the build is green, click on it
 - Scroll down to **Artifacts**
-- Download **ExpenseTracker-Debug-APK**
+- Download **Trackk-Debug-APK**
 - Extract the zip → you have your `.apk` file!
 
 ### Step 4: Install on Your Android Phone
@@ -59,13 +59,13 @@ eas build --platform android --profile preview
 
 ---
 
-## What This App Does
+## What Trackk Does
 
 ### Automatic Transaction Detection
 - When you enable a tracker, the app reads incoming bank SMS
 - After a UPI/card transaction, you'll get a notification:
-  - **1 tracker ON** → "✅ Add to Personal" button in notification
-  - **2+ trackers ON** → "📋 Choose Tracker" button opens app
+  - **1 tracker ON** → "Add to Personal" button in notification
+  - **2+ trackers ON** → "Choose Tracker" button opens app
 - Tap the notification action to save instantly — no manual entry!
 
 ### Trackers Available
@@ -92,7 +92,5 @@ Grant both for full functionality.
 
 ## Technical Details
 
-- **No Firebase required** — all data stored locally on device
-- **No internet needed** — works offline
-- **No login** — anonymous local storage
+- **Low battery usage** — event-driven SMS detection, no background polling
 - Banks supported: HDFC, SBI, ICICI, Axis, Kotak, PNB, Paytm, PhonePe, GPay, 20+ more

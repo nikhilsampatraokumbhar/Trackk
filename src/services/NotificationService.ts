@@ -7,7 +7,7 @@ import { ParsedTransaction, ActiveTracker, TrackerType } from '../models/types';
 import { formatCurrency } from '../utils/helpers';
 import { saveTransaction, addGroupTransaction, getOrCreateUser } from './StorageService';
 
-const CHANNEL_ID = 'expense-tracker-transactions';
+const CHANNEL_ID = 'trackk-transactions';
 
 let addToTrackerCallback: ((parsed: ParsedTransaction, tracker: ActiveTracker) => void) | null = null;
 let chooseTrackerCallback: ((parsed: ParsedTransaction) => void) | null = null;

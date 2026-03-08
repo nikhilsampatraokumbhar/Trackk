@@ -6,6 +6,7 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import notifee from '@notifee/react-native';
 import { TrackerState, ParsedTransaction, ActiveTracker, Group, TrackerType } from '../models/types';
+import { Platform } from 'react-native';
 import {
   requestSmsPermission, startSmsListener, stopSmsListener,
 } from '../services/SmsService';
@@ -15,6 +16,7 @@ import {
   handleNotificationEvent,
 } from '../services/NotificationService';
 import { saveTransaction, addGroupTransaction } from '../services/StorageService';
+import { initDeepLinkListener } from '../services/DeepLinkService';
 
 const TRACKER_STATE_KEY = '@et_tracker_state';
 
@@ -108,8 +110,23 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     return () => unsubscribe();
   }, []);
 
-  // Start/stop SMS listener based on tracker state
+  // Initialize deep link listener for iOS (and as fallback on Android)
   useEffect(() => {
+    const cleanup = initDeepLinkListener(async (parsed) => {
+      const currentState = trackerStateRef.current;
+      const currentGroups = groupsRef.current;
+      const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
+      if (activeTrackers.length > 0) {
+        await showTransactionNotification(parsed, activeTrackers);
+      }
+    });
+    return cleanup;
+  }, []);
+
+  // Start/stop SMS listener based on tracker state (Android only)
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
     const hasActiveTracker =
       trackerState.personal ||
       trackerState.reimbursement ||

@@ -120,18 +120,16 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.privacyDivider} />
           <Text style={styles.privacyText}>
-            Your data never leaves your device. We only read bank SMS when you
-            explicitly enable a tracker. You can switch off tracking anytime.
+            Trackk uses event-driven SMS detection — it only wakes up when a
+            new bank SMS arrives. No background polling, no battery drain. You
+            can switch off tracking anytime.
           </Text>
           <View style={styles.privacyBadgeRow}>
             <View style={styles.privacyBadge}>
-              <Text style={styles.privacyBadgeText}>Local Only</Text>
+              <Text style={styles.privacyBadgeText}>Low Battery Usage</Text>
             </View>
             <View style={styles.privacyBadge}>
-              <Text style={styles.privacyBadgeText}>No Cloud</Text>
-            </View>
-            <View style={styles.privacyBadge}>
-              <Text style={styles.privacyBadgeText}>No Ads</Text>
+              <Text style={styles.privacyBadgeText}>SMS Only When Active</Text>
             </View>
           </View>
         </View>

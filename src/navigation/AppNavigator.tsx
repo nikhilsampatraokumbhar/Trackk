@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View } from 'react-native';
 
+import { Platform } from 'react-native';
 import HomeScreen from '../screens/HomeScreen';
 import PersonalExpenseScreen from '../screens/PersonalExpenseScreen';
 import ReimbursementScreen from '../screens/ReimbursementScreen';
@@ -14,6 +15,7 @@ import TransactionDetailScreen from '../screens/TransactionDetailScreen';
 import TrackerSettingsScreen from '../screens/TrackerSettingsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import GoalsScreen from '../screens/GoalsScreen';
+import IOSSetupScreen from '../screens/iOSSetupScreen';
 
 import { COLORS } from '../utils/helpers';
 
@@ -24,6 +26,7 @@ export type RootStackParamList = {
   TransactionDetail: { transactionId: string };
   TrackerSettings: undefined;
   Reimbursement: undefined;
+  IOSSetup: undefined;
 };
 
 export type TabParamList = {
@@ -162,6 +165,13 @@ export function AppNavigator() {
           component={ReimbursementScreen}
           options={{ title: 'Reimbursement', headerBackTitle: '' }}
         />
+        {Platform.OS === 'ios' && (
+          <Stack.Screen
+            name="IOSSetup"
+            component={IOSSetupScreen}
+            options={{ title: 'iPhone Setup', presentation: 'modal' }}
+          />
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );
