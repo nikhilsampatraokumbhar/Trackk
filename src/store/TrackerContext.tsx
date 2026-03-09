@@ -1,6 +1,6 @@
 import React, {
   createContext, useContext, useState, useEffect,
-  useCallback, useRef, ReactNode,
+  useCallback, useRef, useMemo, ReactNode,
 } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,9 +15,10 @@ import {
   showTransactionNotification, registerNotificationCallbacks,
   handleNotificationEvent,
 } from '../services/NotificationService';
-import { saveTransaction, addGroupTransaction, getGroup } from '../services/StorageService';
-import { addGroupTransactionCloud } from '../services/SyncService';
+import { saveTransaction, addGroupTransaction, getGroup, getGoals, getOrCreateTodaySpend } from '../services/StorageService';
+import { addGroupTransactionCloud, getGroupCloud } from '../services/SyncService';
 import { initDeepLinkListener } from '../services/DeepLinkService';
+import { useGroups } from './GroupContext';
 
 const TRACKER_STATE_KEY = '@et_tracker_state';
 
@@ -52,22 +53,48 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   const [isListening, setIsListening] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState<ParsedTransaction | null>(null);
 
+  const { loadGroupTransactions, activeGroupId } = useGroups();
+
   const groupsRef = useRef(groups);
   const userIdRef = useRef(userId);
   const trackerStateRef = useRef(trackerState);
   const isListeningRef = useRef(false);
+  const loadGroupTransactionsRef = useRef(loadGroupTransactions);
+  const activeGroupIdRef = useRef(activeGroupId);
 
   useEffect(() => { groupsRef.current = groups; }, [groups]);
   useEffect(() => { userIdRef.current = userId; }, [userId]);
   useEffect(() => { trackerStateRef.current = trackerState; }, [trackerState]);
+  useEffect(() => { loadGroupTransactionsRef.current = loadGroupTransactions; }, [loadGroupTransactions]);
+  useEffect(() => { activeGroupIdRef.current = activeGroupId; }, [activeGroupId]);
 
   // Load state on mount; also recover pending transaction if app was cold-launched
   // from a "Choose Tracker" notification action
+  // Also auto-enable personal tracking if a goal exists
   useEffect(() => {
     (async () => {
       await setupNotificationChannel();
       const raw = await AsyncStorage.getItem(TRACKER_STATE_KEY);
-      if (raw) setTrackerState(JSON.parse(raw));
+      if (raw) {
+        const state: TrackerState = JSON.parse(raw);
+        // Auto-enable personal tracking if goals exist and personal is off
+        if (!state.personal) {
+          const goals = await getGoals();
+          if (goals.length > 0) {
+            state.personal = true;
+            await AsyncStorage.setItem(TRACKER_STATE_KEY, JSON.stringify(state));
+          }
+        }
+        setTrackerState(state);
+      } else {
+        // First launch — check for goals
+        const goals = await getGoals();
+        if (goals.length > 0) {
+          const state = { ...DEFAULT_STATE, personal: true };
+          await AsyncStorage.setItem(TRACKER_STATE_KEY, JSON.stringify(state));
+          setTrackerState(state);
+        }
+      }
 
       const initial = await notifee.getInitialNotification();
       if (
@@ -237,6 +264,21 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     return getActiveTrackersFromState(trackerState, gs);
   }, [trackerState]);
 
+  /** After any personal/group expense, sync with active goal's daily budget */
+  const syncGoalDailyBudget = useCallback(async () => {
+    try {
+      const goals = await getGoals();
+      if (goals.length === 0) return;
+      // Use the first active goal for daily budget tracking
+      const goal = goals[0];
+      if (goal.dailyBudget > 0) {
+        await getOrCreateTodaySpend(goal.dailyBudget);
+      }
+    } catch {
+      // Silent fail — goal sync is best-effort
+    }
+  }, []);
+
   const addTransactionToTracker = useCallback(async (
     parsed: ParsedTransaction,
     trackerType: TrackerType,
@@ -246,7 +288,13 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     if (trackerType === 'group') {
       // Try cloud first, fallback to local
       try {
-        const group = groupsRef.current.find(g => g.id === trackerId);
+        let group = groupsRef.current.find(g => g.id === trackerId);
+        // If group not in local cache (e.g. app was cold-started from notification),
+        // fetch it from Firestore directly
+        if (!group) {
+          const cloudGroup = await getGroupCloud(trackerId);
+          if (cloudGroup) group = cloudGroup;
+        }
         if (group) {
           await addGroupTransactionCloud(parsed, trackerId, uid, group.members);
         } else {
@@ -255,8 +303,22 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       } catch {
         await addGroupTransaction(parsed, trackerId, uid);
       }
+
+      // Refresh the active group transactions so the UI updates immediately
+      // without requiring a manual pull-to-refresh
+      if (activeGroupIdRef.current === trackerId) {
+        loadGroupTransactionsRef.current(trackerId);
+      }
+
+      // Group split saved to personal → sync goal budget
+      await syncGoalDailyBudget();
+    } else if (trackerType === 'reimbursement') {
+      await saveTransaction(parsed, trackerType, uid);
+      // Reimbursements do NOT affect goal budget
     } else {
       await saveTransaction(parsed, trackerType, uid);
+      // Personal expense → sync goal budget
+      await syncGoalDailyBudget();
     }
   }, []);
 
@@ -264,18 +326,20 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     setPendingTransaction(null);
   }, []);
 
+  const value = useMemo(() => ({
+    trackerState,
+    isListening,
+    togglePersonal,
+    toggleReimbursement,
+    toggleGroup,
+    getActiveTrackers,
+    pendingTransaction,
+    clearPendingTransaction,
+    addTransactionToTracker,
+  }), [trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup, getActiveTrackers, pendingTransaction, clearPendingTransaction, addTransactionToTracker]);
+
   return (
-    <TrackerContext.Provider value={{
-      trackerState,
-      isListening,
-      togglePersonal,
-      toggleReimbursement,
-      toggleGroup,
-      getActiveTrackers,
-      pendingTransaction,
-      clearPendingTransaction,
-      addTransactionToTracker,
-    }}>
+    <TrackerContext.Provider value={value}>
       {children}
     </TrackerContext.Provider>
   );

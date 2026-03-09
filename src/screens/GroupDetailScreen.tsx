@@ -10,10 +10,10 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
 import { useAuth } from '../store/AuthContext';
-import { getGroup } from '../services/StorageService';
+import { getGroup as getGroupLocal } from '../services/StorageService';
 import {
   addSettlementCloud, getSettlementsCloud, removeSplitMemberCloud,
-  onSettlementsChanged, onGroupChanged,
+  onSettlementsChanged, onGroupChanged, getGroupCloud,
 } from '../services/SyncService';
 import { Group, Settlement, Debt } from '../models/types';
 import { simplifyDebts } from '../services/DebtCalculator';
@@ -46,16 +46,30 @@ export default function GroupDetailScreen() {
   const { isAuthenticated } = useAuth();
 
   const load = useCallback(async () => {
-    const g = await getGroup(groupId);
+    // Try local first, then cloud if not found
+    let g = await getGroupLocal(groupId);
+    if (!g && isAuthenticated) {
+      try {
+        g = await getGroupCloud(groupId);
+      } catch {
+        // Will be handled by real-time listener
+      }
+    }
     setGroup(g);
     await loadGroupTransactions(groupId);
-    try {
-      const s = await getSettlementsCloud(groupId);
+    if (isAuthenticated) {
+      try {
+        const s = await getSettlementsCloud(groupId);
+        setSettlements(s);
+      } catch {
+        // Fallback handled by real-time listener
+      }
+    } else {
+      const { getSettlements } = require('../services/StorageService');
+      const s = await getSettlements(groupId);
       setSettlements(s);
-    } catch {
-      // Fallback handled by real-time listener
     }
-  }, [groupId, loadGroupTransactions]);
+  }, [groupId, loadGroupTransactions, isAuthenticated]);
 
   // Real-time settlement listener - updates when other users settle
   useEffect(() => {
@@ -193,15 +207,29 @@ export default function GroupDetailScreen() {
     }
 
     // Record the settlement (synced to Firestore - other user sees it in real-time)
-    await addSettlementCloud({
-      groupId,
-      fromUserId: debt.fromUserId,
-      fromName: debt.fromName,
-      toUserId: debt.toUserId,
-      toName: debt.toName,
-      amount: debt.amount,
-      method,
-    });
+    // Falls back to local storage if not authenticated
+    if (isAuthenticated) {
+      await addSettlementCloud({
+        groupId,
+        fromUserId: debt.fromUserId,
+        fromName: debt.fromName,
+        toUserId: debt.toUserId,
+        toName: debt.toName,
+        amount: debt.amount,
+        method,
+      });
+    } else {
+      const { addSettlement } = require('../services/StorageService');
+      await addSettlement({
+        groupId,
+        fromUserId: debt.fromUserId,
+        fromName: debt.fromName,
+        toUserId: debt.toUserId,
+        toName: debt.toName,
+        amount: debt.amount,
+        method,
+      });
+    }
 
     setSettleModalVisible(false);
     setSettleTarget(null);
@@ -224,7 +252,12 @@ export default function GroupDetailScreen() {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            await removeSplitMemberCloud(groupId, transactionId, memberUserId);
+            if (isAuthenticated) {
+              await removeSplitMemberCloud(groupId, transactionId, memberUserId);
+            } else {
+              const { removeSplitMember } = require('../services/StorageService');
+              await removeSplitMember(groupId, transactionId, memberUserId);
+            }
             await load();
           },
         },
@@ -255,7 +288,7 @@ export default function GroupDetailScreen() {
         >
           <View style={[styles.groupIcon, { backgroundColor: `${groupColor}30` }]}>
             <Text style={[styles.groupInitial, { color: groupColor }]}>
-              {group.name[0].toUpperCase()}
+              {(group.name || 'G')[0].toUpperCase()}
             </Text>
           </View>
           <Text style={styles.groupName}>{group.name}</Text>
@@ -509,8 +542,18 @@ export default function GroupDetailScreen() {
           </>
         )}
 
-        <View style={{ height: 20 }} />
+        <View style={{ height: 80 }} />
       </ScrollView>
+
+      {/* Add Expense FAB */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => nav.navigate('SplitEditor', { groupId, isManual: true })}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabIcon}>+</Text>
+        <Text style={styles.fabText}>Add Expense</Text>
+      </TouchableOpacity>
 
       {/* Settlement Modal - Bottom Sheet */}
       <Modal
@@ -883,8 +926,8 @@ const styles = StyleSheet.create({
   },
   settleBtn: {
     backgroundColor: COLORS.surfaceHigher,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: `${COLORS.primary}40`,
@@ -909,8 +952,8 @@ const styles = StyleSheet.create({
   },
   removeBtn: {
     backgroundColor: `${COLORS.danger}12`,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: `${COLORS.danger}25`,
@@ -1069,5 +1112,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.textSecondary,
+  },
+
+  // FAB
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 30,
+    elevation: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  fabIcon: {
+    color: '#0A0A0F',
+    fontSize: 20,
+    fontWeight: '800',
+    marginRight: 6,
+  },
+  fabText: {
+    color: '#0A0A0F',
+    fontWeight: '800',
+    fontSize: 14,
+    letterSpacing: 0.3,
   },
 });

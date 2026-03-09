@@ -48,10 +48,10 @@ export default function GroupListScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={() => (
+        ListHeaderComponent={
           <Text style={styles.sectionTitle}>YOUR GROUPS</Text>
-        )}
-        ListEmptyComponent={() => (
+        }
+        ListEmptyComponent={
           <View style={styles.empty}>
             <View style={styles.emptyIcon}>
               <Text style={styles.emptyEmoji}>👥</Text>
@@ -61,7 +61,7 @@ export default function GroupListScreen() {
               Create a group to split expenses with friends
             </Text>
           </View>
-        )}
+        }
         data={groups}
         keyExtractor={item => item.id}
         renderItem={({ item }) => {
@@ -77,7 +77,7 @@ export default function GroupListScreen() {
               >
                 <View style={[styles.groupIcon, { backgroundColor: `${color}22` }]}>
                   <Text style={[styles.groupInitial, { color }]}>
-                    {item.name[0].toUpperCase()}
+                    {(item.name || 'G')[0].toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.groupTextWrap}>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Share } from 'react-native';
 import {
@@ -21,8 +21,10 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
       'Unlimited expense entries',
       'SMS auto-detection',
       'Up to 3 groups',
-      'Basic spending insights',
-      '7-day transaction history export',
+      'This month\'s insights (top 3 categories)',
+      '1 savings goal',
+      'Notes on recent transactions (30 days)',
+      '1 overall budget',
     ],
   },
   premium_monthly: {
@@ -31,17 +33,31 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 99,
     period: 'monthly',
     maxMembers: 1,
-    tagline: 'Less than your morning chai',
+    tagline: '\u20B91.6/day \u2014 your piggy bank charges more in guilt',
     features: [
       'Everything in Free',
       'Cloud backup & sync',
       'Unlimited groups & goals',
-      'Advanced analytics & trends',
+      'Full insights, all categories & trends',
+      'Per-category budgets',
+      'Notes on all transactions',
       'Unlimited export (CSV, PDF)',
-      'Receipt scanning & storage',
       'Priority support',
     ],
     badge: 'POPULAR',
+  },
+  premium_half_yearly: {
+    id: 'premium_half_yearly',
+    name: 'Premium 6 Months',
+    price: 399,
+    period: 'half_yearly',
+    maxMembers: 1,
+    tagline: '\u20B966/mo \u2014 cheaper than your chai habit',
+    features: [
+      'Everything in Premium',
+      '1 month free vs monthly',
+    ],
+    savings: 'Save \u20B9195',
   },
   premium_annual: {
     id: 'premium_annual',
@@ -49,21 +65,21 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 699,
     period: 'annual',
     maxMembers: 1,
-    tagline: '₹58/month — cheaper than one auto ride',
+    tagline: '\u20B933/month as founding member \u2014 that\'s literally 1 samosa',
     features: [
       'Everything in Premium',
-      '2 months free vs monthly',
+      '3 months free vs monthly',
     ],
-    savings: 'Save ₹489/year',
+    savings: 'Save \u20B9489/year',
     badge: 'BEST VALUE',
   },
   premium_lifetime: {
     id: 'premium_lifetime',
     name: 'Premium Lifetime',
-    price: 1499,
+    price: 1999,
     period: 'lifetime',
     maxMembers: 1,
-    tagline: 'Pay once, track forever — less than one fancy dinner',
+    tagline: 'Pay once, track forever \u2014 your gym membership costs more. And you don\'t even go.',
     features: [
       'Everything in Premium',
       'Lifetime access, no renewals',
@@ -77,7 +93,7 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 149,
     period: 'monthly',
     maxMembers: 4,
-    tagline: '₹37/person — less than a samosa per day',
+    tagline: '\u20B937/person \u2014 less than a samosa per day',
     features: [
       'Everything in Premium',
       'Up to 4 family members',
@@ -93,12 +109,12 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 999,
     period: 'annual',
     maxMembers: 4,
-    tagline: '₹21/person/month — less than a packet of chips',
+    tagline: '\u20B921/person/month \u2014 less than a packet of chips',
     features: [
       'Everything in Family',
       '3 months free vs monthly',
     ],
-    savings: 'Save ₹789/year',
+    savings: 'Save \u20B9789/year',
   },
 };
 
@@ -106,6 +122,7 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
 
 export const FOUNDING_PRICES: Partial<Record<PlanId, number>> = {
   premium_monthly: 49,
+  premium_half_yearly: 199,
   premium_annual: 399,
   family_monthly: 99,
   family_annual: 599,
@@ -113,13 +130,22 @@ export const FOUNDING_PRICES: Partial<Record<PlanId, number>> = {
 
 // ─── Built-in Promo Codes ───────────────────────────────────────────────────
 
+// Promo codes — in production, validate these server-side via Firebase Cloud Functions.
+// Remove test codes before public release.
 const PROMO_CODES: Record<string, PromoCode> = {
-  'TRACKK_BETA': { code: 'TRACKK_BETA', type: 'full_access', durationDays: 365 },
-  'TRACKK_TEST': { code: 'TRACKK_TEST', type: 'full_access', durationDays: 30 },
-  'TRACKK_DEV':  { code: 'TRACKK_DEV', type: 'full_access', durationDays: 9999 },
   'LAUNCH50':    { code: 'LAUNCH50', type: 'discount', durationDays: 30, discountPercent: 50 },
   'FOUNDING':    { code: 'FOUNDING', type: 'full_access', durationDays: 90 },
+  'NKTEST2026':  { code: 'NKTEST2026', type: 'full_access', durationDays: 9999 }, // REMOVE BEFORE LAUNCH
 };
+
+// DEV-ONLY promo codes — stripped in production builds via __DEV__ flag
+if (__DEV__) {
+  Object.assign(PROMO_CODES, {
+    'TRACKK_BETA': { code: 'TRACKK_BETA', type: 'full_access', durationDays: 365 },
+    'TRACKK_TEST': { code: 'TRACKK_TEST', type: 'full_access', durationDays: 30 },
+    'TRACKK_DEV':  { code: 'TRACKK_DEV', type: 'full_access', durationDays: 9999 },
+  });
+}
 
 // ─── Storage Keys ───────────────────────────────────────────────────────────
 
@@ -157,7 +183,11 @@ interface PremiumContextType {
 export type PremiumFeature =
   | 'cloud_backup'
   | 'unlimited_groups'
+  | 'unlimited_goals'
   | 'advanced_analytics'
+  | 'full_insights'
+  | 'category_budgets'
+  | 'unlimited_notes'
   | 'unlimited_export'
   | 'receipt_storage'
   | 'family_dashboard'
@@ -254,16 +284,37 @@ export function PremiumProvider({ children, userId }: { children: ReactNode; use
     };
   }, [subscription]);
 
-  // ── Subscribe to plan (Razorpay placeholder) ──────────────────────────
+  // ── Subscribe to plan ──────────────────────────────────────────────────
   const subscribeToPlan = useCallback(async (planId: PlanId): Promise<{ success: boolean; orderId?: string }> => {
-    // In production, this triggers Razorpay checkout
-    // For now, simulate success
+    const { initiatePayment, verifyPaymentServer } = require('../services/PaymentService');
+
+    // Step 1: Initiate payment (Razorpay checkout or simulated)
+    const payResult = await initiatePayment(planId, '', '', '');
+    if (!payResult.success) {
+      return { success: false };
+    }
+
+    // Step 2: Verify payment server-side (activates subscription in Firestore)
+    if (payResult.signature && payResult.signature !== 'simulated') {
+      const verifyResult = await verifyPaymentServer(
+        payResult.paymentId, payResult.orderId, payResult.signature, planId
+      );
+      if (verifyResult.success && verifyResult.subscription) {
+        // Server activated — cache locally
+        await AsyncStorage.setItem(KEYS.SUBSCRIPTION, JSON.stringify(verifyResult.subscription));
+        setSubscription(verifyResult.subscription);
+        return { success: true, orderId: payResult.orderId };
+      }
+    }
+
+    // Dev/simulated mode — activate locally
     const now = Date.now();
     const plan = PLANS[planId];
     let endDate: number;
 
     switch (plan.period) {
       case 'monthly': endDate = now + 30 * 24 * 60 * 60 * 1000; break;
+      case 'half_yearly': endDate = now + 182 * 24 * 60 * 60 * 1000; break;
       case 'annual': endDate = now + 365 * 24 * 60 * 60 * 1000; break;
       case 'lifetime': endDate = -1; break;
       default: endDate = now + 30 * 24 * 60 * 60 * 1000;
@@ -274,14 +325,14 @@ export function PremiumProvider({ children, userId }: { children: ReactNode; use
       status: 'active',
       startDate: now,
       endDate,
-      isFoundingMember: !subscription,
+      isFoundingMember: subscription?.isFoundingMember || !subscription,
       referralCreditsMonths: subscription?.referralCreditsMonths || 0,
     };
 
     await AsyncStorage.setItem(KEYS.SUBSCRIPTION, JSON.stringify(newSub));
     setSubscription(newSub);
 
-    return { success: true, orderId: `order_${generateId()}` };
+    return { success: true, orderId: payResult.orderId };
   }, [subscription]);
 
   // ── Cancel ────────────────────────────────────────────────────────────
@@ -380,17 +431,17 @@ export function PremiumProvider({ children, userId }: { children: ReactNode; use
     }
   }, []);
 
+  const value = useMemo(() => ({
+    subscription, isPremium, isFamily, isTrial, currentPlan,
+    referralCode, referralStats, referrals,
+    activatePromoCode, subscribeToPlan, cancelSubscription,
+    addFamilyMember, removeFamilyMember,
+    shareReferralLink, addReferral, qualifyReferral,
+    checkFeatureAccess, refreshSubscription,
+  }), [subscription, isPremium, isFamily, isTrial, currentPlan, referralCode, referralStats, referrals, activatePromoCode, subscribeToPlan, cancelSubscription, addFamilyMember, removeFamilyMember, shareReferralLink, addReferral, qualifyReferral, checkFeatureAccess, refreshSubscription]);
+
   return (
-    <PremiumContext.Provider
-      value={{
-        subscription, isPremium, isFamily, isTrial, currentPlan,
-        referralCode, referralStats, referrals,
-        activatePromoCode, subscribeToPlan, cancelSubscription,
-        addFamilyMember, removeFamilyMember,
-        shareReferralLink, addReferral, qualifyReferral,
-        checkFeatureAccess, refreshSubscription,
-      }}
-    >
+    <PremiumContext.Provider value={value}>
       {children}
     </PremiumContext.Provider>
   );

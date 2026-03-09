@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { Transaction } from '../models/types';
 import { formatCurrency, formatDate, COLORS } from '../utils/helpers';
@@ -21,7 +21,7 @@ const TRACKER_LABELS: Record<string, string> = {
   group: 'Group',
 };
 
-export default function TransactionCard({ transaction, onPress, showBadge }: Props) {
+function TransactionCardInner({ transaction, onPress, showBadge }: Props) {
   const color = TRACKER_COLORS[transaction.trackerType] || COLORS.primary;
   const initial = (transaction.merchant || transaction.description)[0].toUpperCase();
 
@@ -36,6 +36,21 @@ export default function TransactionCard({ transaction, onPress, showBadge }: Pro
       <View style={styles.info}>
         <Text style={styles.desc} numberOfLines={1}>{transaction.description}</Text>
         <Text style={styles.date}>{formatDate(transaction.timestamp)}</Text>
+        {transaction.note ? (
+          <Text style={styles.note} numberOfLines={1}>{transaction.note}</Text>
+        ) : null}
+        {transaction.tags && transaction.tags.length > 0 && (
+          <View style={styles.tagRow}>
+            {transaction.tags.slice(0, 3).map(tag => (
+              <View key={tag} style={styles.tagMini}>
+                <Text style={styles.tagMiniText}>{tag}</Text>
+              </View>
+            ))}
+            {transaction.tags.length > 3 && (
+              <Text style={styles.tagMore}>+{transaction.tags.length - 3}</Text>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Right side */}
@@ -84,6 +99,34 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 3,
   },
+  note: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  tagRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 4,
+    alignItems: 'center',
+  },
+  tagMini: {
+    backgroundColor: `${COLORS.primary}12`,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  tagMiniText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  tagMore: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
   right: { alignItems: 'flex-end', gap: 4 },
   amount: {
     fontSize: 15,
@@ -102,3 +145,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
+
+const TransactionCard = memo(TransactionCardInner);
+export default TransactionCard;

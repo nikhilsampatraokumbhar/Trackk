@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl,
+  RefreshControl, Modal, TextInput, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -11,8 +11,9 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
-import { getTransactions } from '../services/StorageService';
-import { Transaction } from '../models/types';
+import { getTransactions, getGoals, computeTodaySpendFromTransactions } from '../services/StorageService';
+import { getOverallBudget, getBudgetStatus, setBudget, deleteBudget, BudgetStatus } from '../services/BudgetService';
+import { Transaction, SavingsGoal } from '../models/types';
 import TransactionCard from '../components/TransactionCard';
 import ActiveTrackerBanner from '../components/ActiveTrackerBanner';
 import TrackerSelectionDialog from '../components/TrackerSelectionDialog';
@@ -33,15 +34,49 @@ export default function HomeScreen() {
 
   const [recentTxns, setRecentTxns] = useState<Transaction[]>([]);
   const [totalSpent, setTotalSpent] = useState(0);
+  const [monthSpent, setMonthSpent] = useState(0);
+  const [budgetStatus, setBudgetStatusState] = useState<BudgetStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Budget editing modal
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetInput, setBudgetInput] = useState('');
+
+  // Goal daily budget display
+  const [activeGoal, setActiveGoal] = useState<SavingsGoal | null>(null);
+  const [todaySpend, setTodaySpend] = useState(0);
 
   const activeTrackers = getActiveTrackers(groups);
 
   const loadTransactions = useCallback(async () => {
     const all = await getTransactions();
+    const personalOnly = all.filter(t => !t.groupId);
     const sorted = all.sort((a, b) => b.timestamp - a.timestamp).slice(0, 20);
     setRecentTxns(sorted);
-    setTotalSpent(all.reduce((s, t) => s + t.amount, 0));
+    setTotalSpent(personalOnly.reduce((s, t) => s + t.amount, 0));
+
+    // Calculate this month's spend for budget
+    const now = new Date();
+    const thisMonth = personalOnly.filter(t => {
+      const d = new Date(t.timestamp);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const ms = thisMonth.reduce((s, t) => s + t.amount, 0);
+    setMonthSpent(ms);
+
+    // Budget status
+    const budget = await getOverallBudget();
+    setBudgetStatusState(budget ? getBudgetStatus(budget, ms) : null);
+
+    // Load active goal for daily budget display
+    const goals = await getGoals();
+    if (goals.length > 0) {
+      setActiveGoal(goals[0]);
+      const ts = await computeTodaySpendFromTransactions();
+      setTodaySpend(ts);
+    } else {
+      setActiveGoal(null);
+    }
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -52,6 +87,43 @@ export default function HomeScreen() {
     setRefreshing(true);
     await loadTransactions();
     setRefreshing(false);
+  };
+
+  const handleSaveBudget = async () => {
+    const amount = parseFloat(budgetInput);
+    if (!amount || amount <= 0) {
+      Alert.alert('Invalid', 'Please enter a valid amount.');
+      return;
+    }
+    await setBudget('overall', amount);
+    setShowBudgetModal(false);
+    setBudgetInput('');
+    await loadTransactions();
+  };
+
+  const handleDeleteBudget = async () => {
+    Alert.alert('Remove Budget', 'Are you sure you want to remove your monthly budget?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteBudget('overall');
+          setShowBudgetModal(false);
+          setBudgetInput('');
+          await loadTransactions();
+        },
+      },
+    ]);
+  };
+
+  const openBudgetModal = () => {
+    if (budgetStatus) {
+      setBudgetInput(String(budgetStatus.budget.amount));
+    } else {
+      setBudgetInput('');
+    }
+    setShowBudgetModal(true);
   };
 
   const greeting = () => {
@@ -98,8 +170,8 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Privacy Shield Card */}
-        {!hasTransactions ? (
+        {/* Privacy Shield — only shown for brand-new users (no transactions) */}
+        {!hasTransactions && (
           <View style={styles.privacyCard}>
             <View style={styles.privacyHeader}>
               <Text style={styles.privacyEmoji}>🛡️</Text>
@@ -109,16 +181,9 @@ export default function HomeScreen() {
               Trackk only reads SMS when you enable a tracker. Event-driven detection means zero battery drain. Switch off anytime.
             </Text>
           </View>
-        ) : (
-          <View style={styles.privacyCardMini}>
-            <Text style={styles.privacyEmojiMini}>🛡️</Text>
-            <Text style={styles.privacyTextMini}>
-              Low battery usage. Event-driven SMS detection. Switch off anytime.
-            </Text>
-          </View>
         )}
 
-        {/* Hero total card */}
+        {/* Hero card — total spent + budget progress merged */}
         <LinearGradient
           colors={['#1C1708', '#0E0C04', COLORS.background]}
           start={{ x: 0, y: 0 }}
@@ -130,10 +195,71 @@ export default function HomeScreen() {
           <Text style={styles.heroAmount}>{formatCurrency(totalSpent)}</Text>
           <Text style={styles.heroSub}>
             {recentTxns.length > 0
-              ? `Across ${recentTxns.length} recent transactions`
+              ? `Across ${recentTxns.filter(t => !t.groupId).length} personal transactions`
               : 'No transactions yet'}
           </Text>
+
+          {/* Budget progress — inline within hero (tap to edit) */}
+          {budgetStatus ? (
+            <TouchableOpacity onPress={openBudgetModal} activeOpacity={0.7}>
+              <View style={styles.budgetInline}>
+                <View style={styles.budgetRow}>
+                  <Text style={[styles.budgetMessage, { color: budgetStatus.color }]}>
+                    {budgetStatus.message}
+                  </Text>
+                  <Text style={styles.budgetDetail}>
+                    {formatCurrency(Math.max(budgetStatus.budget.amount - budgetStatus.spent, 0))} left
+                  </Text>
+                </View>
+                <View style={styles.budgetTrack}>
+                  <View
+                    style={[
+                      styles.budgetFill,
+                      {
+                        width: `${Math.min(budgetStatus.percentage, 100)}%`,
+                        backgroundColor: budgetStatus.color,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.budgetEditHint}>Tap to edit budget</Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={openBudgetModal} activeOpacity={0.7}>
+              <View style={styles.budgetInline}>
+                <Text style={styles.setBudgetText}>+ Set monthly budget</Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </LinearGradient>
+
+        {/* Today's Goal Budget — quick glance card */}
+        {activeGoal && (
+          <TouchableOpacity
+            style={styles.goalBudgetCard}
+            onPress={() => nav.navigate('Goals')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.goalBudgetLeft}>
+              <Text style={styles.goalBudgetLabel}>TODAY'S BUDGET</Text>
+              <Text style={styles.goalBudgetName}>{activeGoal.name}</Text>
+            </View>
+            <View style={styles.goalBudgetRight}>
+              <Text
+                style={[
+                  styles.goalBudgetAmount,
+                  todaySpend > activeGoal.dailyBudget && { color: COLORS.danger },
+                ]}
+              >
+                {formatCurrency(Math.max(activeGoal.dailyBudget - todaySpend, 0))}
+              </Text>
+              <Text style={styles.goalBudgetSub}>
+                {formatCurrency(todaySpend)} / {formatCurrency(activeGoal.dailyBudget)}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Quick Trackers */}
         <View style={styles.sectionHeader}>
@@ -192,6 +318,44 @@ export default function HomeScreen() {
         <View style={{ height: 20 }} />
       </ScrollView>
 
+      {/* Budget editing modal */}
+      <Modal visible={showBudgetModal} animationType="slide" transparent onRequestClose={() => setShowBudgetModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.budgetModalOverlay}>
+          <View style={styles.budgetModalContainer}>
+            <View style={styles.budgetModalHandle} />
+            <Text style={styles.budgetModalTitle}>{budgetStatus ? 'Edit Monthly Budget' : 'Set Monthly Budget'}</Text>
+            <Text style={styles.budgetModalSub}>How much do you want to spend per month?</Text>
+
+            <TextInput
+              style={styles.budgetModalInput}
+              value={budgetInput}
+              onChangeText={setBudgetInput}
+              placeholder="e.g. 30000"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="numeric"
+              autoFocus
+              selectionColor={COLORS.primary}
+            />
+
+            <TouchableOpacity style={styles.budgetModalSaveBtn} onPress={handleSaveBudget} activeOpacity={0.8}>
+              <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.budgetModalSaveBtnGradient}>
+                <Text style={styles.budgetModalSaveBtnText}>{budgetStatus ? 'Update Budget' : 'Set Budget'}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {budgetStatus && (
+              <TouchableOpacity style={styles.budgetModalDeleteBtn} onPress={handleDeleteBudget} activeOpacity={0.7}>
+                <Text style={styles.budgetModalDeleteBtnText}>Remove Budget</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={styles.budgetModalCancelBtn} onPress={() => setShowBudgetModal(false)}>
+              <Text style={styles.budgetModalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* Tracker selection dialog */}
       <TrackerSelectionDialog
         visible={!!pendingTransaction}
@@ -199,9 +363,21 @@ export default function HomeScreen() {
         trackers={activeTrackers}
         onSelect={async tracker => {
           if (pendingTransaction) {
-            await addTransactionToTracker(pendingTransaction, tracker.type, tracker.id);
-            clearPendingTransaction();
-            await loadTransactions();
+            if (tracker.type === 'group') {
+              clearPendingTransaction();
+              nav.navigate('SplitEditor', {
+                groupId: tracker.id,
+                amount: pendingTransaction.amount,
+                description: pendingTransaction.merchant
+                  ? `Payment at ${pendingTransaction.merchant}`
+                  : undefined,
+                merchant: pendingTransaction.merchant || undefined,
+              });
+            } else {
+              await addTransactionToTracker(pendingTransaction, tracker.type, tracker.id);
+              clearPendingTransaction();
+              await loadTransactions();
+            }
           }
         }}
         onIgnore={clearPendingTransaction}
@@ -250,7 +426,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
 
-  // Privacy card (full - shown when no transactions)
+  // Privacy card (only for new users)
   privacyCard: {
     backgroundColor: `${COLORS.success}10`,
     borderRadius: 16,
@@ -278,29 +454,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
     lineHeight: 19,
-  },
-
-  // Privacy card (mini - shown when transactions exist)
-  privacyCardMini: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${COLORS.success}08`,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: `${COLORS.success}18`,
-  },
-  privacyEmojiMini: {
-    fontSize: 14,
-    marginRight: 8,
-  },
-  privacyTextMini: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    flex: 1,
-    lineHeight: 16,
   },
 
   heroCard: {
@@ -339,6 +492,182 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 6,
+  },
+
+  // Budget inline within hero card
+  budgetInline: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: `${COLORS.primary}15`,
+  },
+  budgetRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  budgetMessage: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  budgetDetail: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  budgetTrack: {
+    height: 4,
+    backgroundColor: `${COLORS.primary}15`,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  budgetFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  budgetEditHint: {
+    fontSize: 10,
+    color: COLORS.textLight,
+    marginTop: 6,
+    textAlign: 'right',
+  },
+  setBudgetText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+    textAlign: 'center',
+    paddingVertical: 4,
+  },
+
+  /* ── Goal Budget Card ─────────────────────────────────────────────── */
+  goalBudgetCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surfaceHigh,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: `${COLORS.success}25`,
+  },
+  goalBudgetLeft: {
+    flex: 1,
+  },
+  goalBudgetLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
+  goalBudgetName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  goalBudgetRight: {
+    alignItems: 'flex-end',
+  },
+  goalBudgetAmount: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.success,
+    letterSpacing: -0.5,
+  },
+  goalBudgetSub: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+
+  /* ── Budget Modal ──────────────────────────────────────────────────── */
+  budgetModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  budgetModalContainer: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderBottomWidth: 0,
+  },
+  budgetModalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.surfaceHigher,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  budgetModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  budgetModalSub: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  budgetModalInput: {
+    backgroundColor: COLORS.surfaceHigh,
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.text,
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 20,
+  },
+  budgetModalSaveBtn: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  budgetModalSaveBtnGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRadius: 14,
+  },
+  budgetModalSaveBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.background,
+  },
+  budgetModalDeleteBtn: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: `${COLORS.danger}30`,
+    backgroundColor: `${COLORS.danger}08`,
+    marginBottom: 8,
+  },
+  budgetModalDeleteBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.danger,
+  },
+  budgetModalCancelBtn: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  budgetModalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
   },
 
   sectionHeader: {

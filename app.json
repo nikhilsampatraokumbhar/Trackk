@@ -18,6 +18,8 @@
       "versionCode": 1
     },
     "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
       [
         "react-native-permissions",
         {

@@ -118,7 +118,7 @@ export default function ReimbursementScreen() {
             colors={[COLORS.primary]}
           />
         }
-        ListHeaderComponent={() => (
+        ListHeaderComponent={
           <>
             <TrackerToggle
               label="Reimbursement"
@@ -186,7 +186,7 @@ export default function ReimbursementScreen() {
               </View>
             )}
           </>
-        )}
+        }
         data={transactions}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
@@ -206,7 +206,7 @@ export default function ReimbursementScreen() {
             </TouchableOpacity>
           </View>
         )}
-        ListFooterComponent={() =>
+        ListFooterComponent={
           transactions.length > 0 ? (
             <TouchableOpacity
               style={styles.downloadBtn}

@@ -27,7 +27,19 @@ export interface Transaction {
   trackerType: TrackerType;
   groupId?: string;
   receiptUri?: string;
+  note?: string;
+  tags?: string[];
   timestamp: number;
+  createdAt: number;
+}
+
+// ─── Budget ──────────────────────────────────────────────────────────────────
+
+export interface Budget {
+  id: string;
+  category: string; // 'overall' for total budget, or a category name
+  amount: number;
+  period: 'monthly';
   createdAt: number;
 }
 
@@ -104,26 +116,38 @@ export interface SavingsGoal {
   monthlyBudget: number;
   streak: number;
   lastStreakDate: string; // YYYY-MM-DD
+  savingsJar: number;    // accumulated uncommitted savings
+  totalSaved: number;    // lifetime "I invested this" amount
   createdAt: number;
 }
 
-// Daily spend tracking for goals
+// Daily spend tracking for goals (auto-computed from transactions)
 export interface DailySpend {
   date: string; // YYYY-MM-DD
   spent: number;
-  budget: number;
-  withinBudget: boolean;
+  baseBudget: number;       // goal's daily budget
+  carryover: number;        // leftover carried from previous day
+  effectiveBudget: number;  // baseBudget + carryover
+  leftover: number;         // effectiveBudget - spent (end of day)
+  leftoverAction: 'carry' | 'save' | 'pending'; // what user chose
+}
+
+// Savings jar for accumulated leftover savings
+export interface SavingsJarEntry {
+  date: string;       // YYYY-MM-DD
+  amount: number;
+  goalId: string;
 }
 
 // ─── Premium / Subscription ─────────────────────────────────────────────────
 
-export type PlanId = 'free' | 'premium_monthly' | 'premium_annual' | 'premium_lifetime' | 'family_monthly' | 'family_annual';
+export type PlanId = 'free' | 'premium_monthly' | 'premium_half_yearly' | 'premium_annual' | 'premium_lifetime' | 'family_monthly' | 'family_annual';
 
 export interface SubscriptionPlan {
   id: PlanId;
   name: string;
   price: number;          // in INR
-  period: 'monthly' | 'annual' | 'lifetime' | 'free';
+  period: 'monthly' | 'half_yearly' | 'annual' | 'lifetime' | 'free';
   maxMembers: number;     // 1 for individual plans, 4 for family
   tagline: string;        // clever persuasive copy
   features: string[];

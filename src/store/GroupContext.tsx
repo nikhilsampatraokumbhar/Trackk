@@ -1,7 +1,8 @@
 import React, {
   createContext, useContext, useState, useEffect,
-  useCallback, ReactNode,
+  useCallback, useMemo, ReactNode,
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Group, GroupTransaction, Debt } from '../models/types';
 import {
   createGroupCloud, getGroupsCloud,
@@ -15,6 +16,12 @@ import {
 } from '../services/StorageService';
 import { calculateDebts } from '../services/DebtCalculator';
 import { useAuth } from './AuthContext';
+
+// Cache keys for instant load
+const CACHE_KEYS = {
+  GROUPS: '@et_cache_groups',
+  GROUP_TXNS: (id: string) => `@et_cache_gtxns_${id}`,
+};
 
 interface GroupContextType {
   groups: Group[];
@@ -57,6 +64,8 @@ export function GroupProvider({ children }: { children: ReactNode }) {
         // Fetch from Firestore - includes groups found by phone match
         const cloudGroups = await getGroupsCloud(user.id, user.phone);
         setGroups(cloudGroups);
+        // Persist to cache for next instant load
+        AsyncStorage.setItem(CACHE_KEYS.GROUPS, JSON.stringify(cloudGroups)).catch(() => {});
       } else {
         // Fallback to local storage
         const localGroups = await getGroupsLocal();
@@ -69,12 +78,38 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     }
   }, [user, isAuthenticated]);
 
+  // Load cached groups instantly on mount, THEN refresh from cloud
   useEffect(() => {
-    if (user) {
-      refreshGroups().finally(() => setLoading(false));
-    } else {
+    if (!user) {
       setLoading(false);
+      return;
     }
+
+    let cancelled = false;
+
+    (async () => {
+      // Step 1: Load from cache instantly (no spinner)
+      try {
+        const cached = await AsyncStorage.getItem(CACHE_KEYS.GROUPS);
+        if (cached && !cancelled) {
+          const cachedGroups: Group[] = JSON.parse(cached);
+          if (cachedGroups.length > 0) {
+            setGroups(cachedGroups);
+            setLoading(false); // User sees data immediately
+          }
+        }
+      } catch {
+        // Cache miss is fine, will fetch from cloud
+      }
+
+      // Step 2: Refresh from cloud silently in background
+      if (!cancelled) {
+        await refreshGroups();
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [user]);
 
   const createGroup = useCallback(async (
@@ -93,7 +128,12 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       group = await createGroupLocal(name, members, userId, isTrip);
     }
 
-    setGroups(prev => [group, ...prev]);
+    setGroups(prev => {
+      const updated = [group, ...prev];
+      // Update cache
+      AsyncStorage.setItem(CACHE_KEYS.GROUPS, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
     return group;
   }, [isAuthenticated, user]);
 
@@ -106,11 +146,28 @@ export function GroupProvider({ children }: { children: ReactNode }) {
 
     setActiveGroupId(groupId);
 
+    // Step 1: Load cached transactions instantly
+    try {
+      const cached = await AsyncStorage.getItem(CACHE_KEYS.GROUP_TXNS(groupId));
+      if (cached) {
+        const cachedTxns: GroupTransaction[] = JSON.parse(cached);
+        if (cachedTxns.length > 0) {
+          setActiveGroupTransactions(cachedTxns);
+          setActiveGroupDebts(calculateDebts(cachedTxns));
+        }
+      }
+    } catch {
+      // Cache miss is fine
+    }
+
+    // Step 2: Set up real-time listener / fetch fresh data
     if (isAuthenticated) {
       // Set up real-time listener for group transactions
       const unsub = onGroupTransactionsChanged(groupId, (txns) => {
         setActiveGroupTransactions(txns);
         setActiveGroupDebts(calculateDebts(txns));
+        // Update cache on every real-time update
+        AsyncStorage.setItem(CACHE_KEYS.GROUP_TXNS(groupId), JSON.stringify(txns)).catch(() => {});
       });
       setUnsubscribe(() => unsub);
 
@@ -119,6 +176,8 @@ export function GroupProvider({ children }: { children: ReactNode }) {
         const txns = await getGroupTransactionsCloud(groupId);
         setActiveGroupTransactions(txns);
         setActiveGroupDebts(calculateDebts(txns));
+        // Cache the result
+        AsyncStorage.setItem(CACHE_KEYS.GROUP_TXNS(groupId), JSON.stringify(txns)).catch(() => {});
       } catch {
         // Real-time listener will handle updates
       }
@@ -152,18 +211,20 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, loadGroupTransactions]);
 
+  const value = useMemo(() => ({
+    groups,
+    loading,
+    refreshGroups,
+    createGroup,
+    activeGroupId,
+    activeGroupTransactions,
+    activeGroupDebts,
+    loadGroupTransactions,
+    settleSplit,
+  }), [groups, loading, refreshGroups, createGroup, activeGroupId, activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit]);
+
   return (
-    <GroupContext.Provider value={{
-      groups,
-      loading,
-      refreshGroups,
-      createGroup,
-      activeGroupId,
-      activeGroupTransactions,
-      activeGroupDebts,
-      loadGroupTransactions,
-      settleSplit,
-    }}>
+    <GroupContext.Provider value={value}>
       {children}
     </GroupContext.Provider>
   );

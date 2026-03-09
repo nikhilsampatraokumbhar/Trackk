@@ -15,9 +15,11 @@ import TransactionDetailScreen from '../screens/TransactionDetailScreen';
 import TrackerSettingsScreen from '../screens/TrackerSettingsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import GoalsScreen from '../screens/GoalsScreen';
+import InsightsScreen from '../screens/InsightsScreen';
 import IOSSetupScreen from '../screens/iOSSetupScreen';
 import PricingScreen from '../screens/PricingScreen';
 import ReferralScreen from '../screens/ReferralScreen';
+import SplitEditorScreen from '../screens/SplitEditorScreen';
 import LoginScreen from '../screens/LoginScreen';
 
 import { COLORS } from '../utils/helpers';
@@ -25,7 +27,15 @@ import { useAuth } from '../store/AuthContext';
 
 export type RootStackParamList = {
   Login: undefined;
+  SplitEditor: {
+    groupId: string;
+    amount?: number;
+    description?: string;
+    merchant?: string;
+    isManual?: boolean;
+  };
   MainTabs: undefined;
+  Goals: undefined;
   GroupDetail: { groupId: string };
   CreateGroup: undefined;
   TransactionDetail: { transactionId: string };
@@ -40,7 +50,7 @@ export type TabParamList = {
   Home: undefined;
   Personal: undefined;
   Groups: undefined;
-  Goals: undefined;
+  Insights: undefined;
   Profile: undefined;
 };
 
@@ -52,6 +62,7 @@ const EMOJI_ICONS: Record<string, string> = {
   Home:     '🏠',
   Personal: '💳',
   Groups:   '👥',
+  Insights: '📊',
   Goals:    '🎯',
   Profile:  '👤',
 };
@@ -71,7 +82,7 @@ function MainTabs() {
     Home: 'Home',
     Personal: 'Personal',
     Groups: 'Groups',
-    Goals: 'Goals',
+    Insights: 'Insights',
     Profile: 'Profile',
   };
 
@@ -104,7 +115,7 @@ function MainTabs() {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Personal" component={PersonalExpenseScreen} />
       <Tab.Screen name="Groups" component={GroupListScreen} />
-      <Tab.Screen name="Goals" component={GoalsScreen} />
+      <Tab.Screen name="Insights" component={InsightsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -161,6 +172,11 @@ export function AppNavigator() {
           <>
             <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
             <Stack.Screen
+              name="Goals"
+              component={GoalsScreen}
+              options={{ title: 'Savings Goals', headerBackTitle: '' }}
+            />
+            <Stack.Screen
               name="GroupDetail"
               component={GroupDetailScreen}
               options={{ title: 'Group', headerBackTitle: '' }}
@@ -194,6 +210,11 @@ export function AppNavigator() {
               name="Referral"
               component={ReferralScreen}
               options={{ title: 'Refer & Earn', headerBackTitle: '' }}
+            />
+            <Stack.Screen
+              name="SplitEditor"
+              component={SplitEditorScreen}
+              options={{ title: 'Split Expense', presentation: 'modal' }}
             />
             {Platform.OS === 'ios' && (
               <Stack.Screen

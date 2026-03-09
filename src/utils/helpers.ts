@@ -14,8 +14,8 @@ export const COLORS = {
 
   // Text
   text: '#EEEEF6',
-  textSecondary: '#6A6A8E',
-  textLight: '#2E2E50',
+  textSecondary: '#8A8AAE',
+  textLight: '#5A5A7E',
 
   // Borders
   border: '#1E1E38',
@@ -82,5 +82,5 @@ export function getColorForId(id: string): string {
 }
 
 export function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 11);
 }

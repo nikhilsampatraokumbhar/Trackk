@@ -20,19 +20,25 @@
 // rules_version = '2';
 // service cloud.firestore {
 //   match /databases/{database}/documents {
-//     // Users can read/write their own profile
+//     // Users can only read/write their own profile
 //     match /users/{userId} {
 //       allow read, write: if request.auth != null && request.auth.uid == userId;
-//       allow read: if request.auth != null;
 //     }
-//     // Group members can read/write group data
+//     // User lookup by phone (read-only, limited fields)
+//     match /users/{userId} {
+//       allow read: if request.auth != null
+//         && resource.data.keys().hasOnly(['displayName', 'phone', 'uid']);
+//     }
+//     // Group access restricted to members only
 //     match /groups/{groupId} {
 //       allow read, write: if request.auth != null
 //         && request.auth.uid in resource.data.memberIds;
 //       allow create: if request.auth != null;
 //     }
+//     // Group subcollections restricted to group members
 //     match /groups/{groupId}/{sub=**} {
-//       allow read, write: if request.auth != null;
+//       allow read, write: if request.auth != null
+//         && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
 //     }
 //   }
 // }

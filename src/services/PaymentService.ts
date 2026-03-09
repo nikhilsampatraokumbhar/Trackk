@@ -1,116 +1,61 @@
 /**
- * Razorpay Payment Service
+ * Payment Service — Client-side payment flow
  *
- * Setup instructions:
- * 1. Create a Razorpay account at https://razorpay.com
- * 2. Complete KYC with: PAN card, Aadhaar, bank account details
- * 3. Get your API keys from Dashboard > Settings > API Keys
- * 4. Replace the placeholder keys below
+ * Production flow:
+ * 1. Client calls createOrder Cloud Function → gets orderId + keyId
+ * 2. Client opens Razorpay checkout with orderId
+ * 3. On success, client calls verifyPayment Cloud Function with signature
+ * 4. Server verifies signature and activates subscription
  *
- * Required npm package (install when ready for production):
- *   npx expo install react-native-razorpay
- *
- * For now, this service simulates payment flow and returns mock responses.
+ * Development flow:
+ * Simulates payment with Alert dialog. Use promo codes for testing.
  */
 
 import { Alert } from 'react-native';
 import { PlanId } from '../models/types';
-import { PLANS, FOUNDING_PRICES } from '../store/PremiumContext';
+import { PLANS } from '../store/PremiumContext';
 
-// ─── Razorpay Configuration ─────────────────────────────────────────────────
-// Replace these with your actual Razorpay keys
-const RAZORPAY_CONFIG = {
-  key_id: 'rzp_test_PLACEHOLDER_KEY',    // Test key - replace with live key for production
-  key_secret: 'PLACEHOLDER_SECRET',       // Never expose in production client code
-  currency: 'INR',
-  company_name: 'Trackk',
-  company_logo: '', // URL to your logo
-  theme_color: '#C9A84C',
-};
-
-// ─── Plan to Razorpay Plan ID mapping ───────────────────────────────────────
-// Create these plans in your Razorpay dashboard
-const RAZORPAY_PLAN_IDS: Partial<Record<PlanId, string>> = {
-  premium_monthly: 'plan_PLACEHOLDER_premium_monthly',
-  premium_annual:  'plan_PLACEHOLDER_premium_annual',
-  family_monthly:  'plan_PLACEHOLDER_family_monthly',
-  family_annual:   'plan_PLACEHOLDER_family_annual',
-};
+// Set to true when Razorpay is set up and Cloud Functions are deployed
+const USE_PRODUCTION_PAYMENT = false;
 
 export interface PaymentResult {
   success: boolean;
   orderId?: string;
   paymentId?: string;
+  signature?: string;
   error?: string;
 }
 
 /**
- * Initiate a Razorpay checkout for a subscription plan.
- *
- * In production, you would:
- * 1. Call your backend to create a Razorpay order
- * 2. Open Razorpay checkout with the order ID
- * 3. Handle the payment response
- * 4. Verify payment on your backend
+ * Initiate payment for a subscription plan.
+ * In production: calls Cloud Function to create order, then opens Razorpay checkout.
+ * In development: shows a simulated payment dialog.
  */
 export async function initiatePayment(
   planId: PlanId,
-  userEmail: string,
+  _userEmail: string,
   userPhone: string,
   userName: string,
 ): Promise<PaymentResult> {
   const plan = PLANS[planId];
-  const price = FOUNDING_PRICES[planId] || plan.price;
 
-  if (price === 0) {
+  if (plan.price === 0) {
     return { success: true, orderId: 'free' };
   }
 
-  // ── Production Razorpay flow (uncomment when razorpay is installed) ──
-  /*
-  try {
-    const RazorpayCheckout = require('react-native-razorpay').default;
-
-    const options = {
-      description: `Trackk ${plan.name} Subscription`,
-      image: RAZORPAY_CONFIG.company_logo,
-      currency: RAZORPAY_CONFIG.currency,
-      key: RAZORPAY_CONFIG.key_id,
-      amount: price * 100, // Razorpay expects amount in paise
-      name: RAZORPAY_CONFIG.company_name,
-      prefill: {
-        email: userEmail,
-        contact: userPhone,
-        name: userName,
-      },
-      theme: { color: RAZORPAY_CONFIG.theme_color },
-      // For subscriptions, use subscription_id instead of amount:
-      // subscription_id: RAZORPAY_PLAN_IDS[planId],
-    };
-
-    const data = await RazorpayCheckout.open(options);
-    return {
-      success: true,
-      paymentId: data.razorpay_payment_id,
-      orderId: data.razorpay_order_id,
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error?.description || error?.message || 'Payment failed',
-    };
+  if (USE_PRODUCTION_PAYMENT) {
+    return initiateProductionPayment(planId, userPhone, userName);
   }
-  */
 
-  // ── Simulated payment (for development/testing) ───────────────────────
+  // ── Development: Simulated payment ────────────────────────────────────
   return new Promise((resolve) => {
     Alert.alert(
       'Payment Gateway',
       `Razorpay checkout will open here in production.\n\n` +
       `Plan: ${plan.name}\n` +
-      `Amount: ₹${price}\n` +
+      `Amount: ₹${plan.price}\n` +
       `Period: ${plan.period}\n\n` +
-      `For testing, use promo code TRACKK_DEV for unlimited premium access.`,
+      `For testing, use a promo code to activate premium.`,
       [
         { text: 'Cancel', onPress: () => resolve({ success: false, error: 'Cancelled' }) },
         {
@@ -119,6 +64,7 @@ export async function initiatePayment(
             success: true,
             orderId: `order_sim_${Date.now()}`,
             paymentId: `pay_sim_${Date.now()}`,
+            signature: 'simulated',
           }),
         },
       ],
@@ -127,64 +73,125 @@ export async function initiatePayment(
 }
 
 /**
- * Verify a payment with the backend.
- * In production, send the payment details to your server for verification.
+ * Production payment flow using Cloud Functions + Razorpay SDK.
  */
-export async function verifyPayment(
-  paymentId: string,
-  orderId: string,
-): Promise<boolean> {
-  // In production:
-  // const response = await fetch('https://your-backend.com/api/verify-payment', {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ paymentId, orderId }),
-  // });
-  // return response.ok;
+async function initiateProductionPayment(
+  planId: PlanId,
+  userPhone: string,
+  userName: string,
+): Promise<PaymentResult> {
+  try {
+    // Step 1: Create order via Cloud Function
+    const { firestore } = require('../services/FirebaseConfig');
+    const functions = require('@react-native-firebase/functions').default;
+    const createOrderFn = functions().httpsCallable('createOrder');
+    const orderResult = await createOrderFn({ planId });
+    const { orderId, amount, keyId } = orderResult.data;
 
-  // Simulated verification
-  return true;
+    // Step 2: Open Razorpay checkout
+    const RazorpayCheckout = require('react-native-razorpay').default;
+
+    const options = {
+      description: `Trackk Premium`,
+      currency: 'INR',
+      key: keyId,
+      amount: amount * 100,
+      name: 'Trackk',
+      order_id: orderId,
+      prefill: {
+        contact: userPhone,
+        name: userName,
+      },
+      theme: { color: '#C9A84C' },
+    };
+
+    const data = await RazorpayCheckout.open(options);
+
+    return {
+      success: true,
+      orderId: data.razorpay_order_id,
+      paymentId: data.razorpay_payment_id,
+      signature: data.razorpay_signature,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.description || error?.message || 'Payment failed',
+    };
+  }
 }
 
 /**
- * Get Razorpay setup instructions for the developer.
+ * Verify payment via Cloud Function.
+ * Server verifies Razorpay signature and activates the subscription in Firestore.
  */
-export function getRazorpaySetupInstructions(): string {
-  return `
-Razorpay Setup Guide for Trackk:
+export async function verifyPaymentServer(
+  paymentId: string,
+  orderId: string,
+  signature: string,
+  planId: PlanId,
+): Promise<{ success: boolean; subscription?: any }> {
+  if (!USE_PRODUCTION_PAYMENT) {
+    // Dev mode — always succeed
+    return { success: true };
+  }
 
-1. ACCOUNT SETUP:
-   - Go to https://razorpay.com and create an account
-   - Complete KYC verification:
-     • PAN Card (Individual or Business)
-     • Bank Account (Account number + IFSC)
-     • Aadhaar for identity verification
-     • GST Number (optional, but reduces TDS)
+  try {
+    const functions = require('@react-native-firebase/functions').default;
+    const verifyFn = functions().httpsCallable('verifyPayment');
+    const result = await verifyFn({
+      razorpayOrderId: orderId,
+      razorpayPaymentId: paymentId,
+      razorpaySignature: signature,
+      planId,
+    });
+    return result.data;
+  } catch (error: any) {
+    return { success: false };
+  }
+}
 
-2. API KEYS:
-   - Dashboard → Settings → API Keys → Generate Key
-   - Test keys start with 'rzp_test_'
-   - Live keys start with 'rzp_live_'
+/**
+ * Check subscription status from server.
+ */
+export async function checkSubscriptionServer(): Promise<{
+  isPremium: boolean;
+  subscription: any | null;
+}> {
+  if (!USE_PRODUCTION_PAYMENT) {
+    return { isPremium: false, subscription: null };
+  }
 
-3. INSTALL SDK:
-   npx expo install react-native-razorpay
+  try {
+    const functions = require('@react-native-firebase/functions').default;
+    const validateFn = functions().httpsCallable('validateSubscription');
+    const result = await validateFn({});
+    return result.data;
+  } catch {
+    return { isPremium: false, subscription: null };
+  }
+}
 
-4. CREATE SUBSCRIPTION PLANS:
-   Dashboard → Subscriptions → Plans → Create Plan
-   Create these plans:
-   - Premium Monthly: ₹99/month (founding: ₹49)
-   - Premium Annual: ₹699/year (founding: ₹399)
-   - Family Monthly: ₹149/month (founding: ₹99)
-   - Family Annual: ₹999/year (founding: ₹599)
-   - Premium Lifetime: ₹1,499 one-time
+/**
+ * Redeem promo code via Cloud Function.
+ */
+export async function redeemPromoCodeServer(
+  code: string,
+): Promise<{ success: boolean; message?: string; subscription?: any; type?: string; discountPercent?: number }> {
+  if (!USE_PRODUCTION_PAYMENT) {
+    // In dev mode, fall back to client-side promo handling
+    return { success: false, message: 'Server promo validation disabled in dev mode' };
+  }
 
-5. WEBHOOK (for auto-renewal):
-   Dashboard → Settings → Webhooks
-   URL: https://your-backend.com/api/razorpay-webhook
-   Events: payment.captured, subscription.charged, subscription.cancelled
-
-6. UPDATE THIS FILE:
-   Replace RAZORPAY_CONFIG keys with your actual keys
-   Replace RAZORPAY_PLAN_IDS with your created plan IDs
-`;
+  try {
+    const functions = require('@react-native-firebase/functions').default;
+    const redeemFn = functions().httpsCallable('redeemPromoCode');
+    const result = await redeemFn({ code });
+    return result.data;
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error?.message || 'Invalid promo code',
+    };
+  }
 }

@@ -4,19 +4,27 @@ export function calculateDebts(transactions: GroupTransaction[]): Debt[] {
   const balances: Record<string, { name: string; balance: number }> = {};
 
   for (const txn of transactions) {
+    // Ensure payer exists in balances
+    const payerSplit = txn.splits.find(s => s.userId === txn.addedBy);
+    if (payerSplit) {
+      if (!balances[txn.addedBy]) {
+        balances[txn.addedBy] = { name: payerSplit.displayName, balance: 0 };
+      }
+    }
+
     for (const split of txn.splits) {
       if (!balances[split.userId]) {
         balances[split.userId] = { name: split.displayName, balance: 0 };
       }
 
+      // Skip payer's own split (they paid, so their portion is settled)
+      if (split.userId === txn.addedBy) continue;
+
       if (!split.settled) {
-        // Person who paid (addedBy) gets credited, others get debited
-        if (split.userId === txn.addedBy) {
-          // Payer is settled for their own split; net them out from others
-          balances[split.userId].balance += (txn.amount - split.amount);
-        } else {
-          balances[split.userId].balance -= split.amount;
-        }
+        // Non-payer owes this amount
+        balances[split.userId].balance -= split.amount;
+        // Payer is owed this amount
+        balances[txn.addedBy].balance += split.amount;
       }
     }
   }
