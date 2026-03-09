@@ -21,7 +21,7 @@ import { PLANS, FOUNDING_PRICES } from '../store/PremiumContext';
 // Replace these with your actual Razorpay keys
 const RAZORPAY_CONFIG = {
   key_id: 'rzp_test_PLACEHOLDER_KEY',    // Test key - replace with live key for production
-  key_secret: 'PLACEHOLDER_SECRET',       // Never expose in production client code
+  // IMPORTANT: key_secret must NEVER be in client code. Use a backend server for order creation & verification.
   currency: 'INR',
   company_name: 'Trackk',
   company_logo: '', // URL to your logo

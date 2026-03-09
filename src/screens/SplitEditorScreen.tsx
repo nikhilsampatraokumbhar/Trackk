@@ -682,9 +682,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 7,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: COLORS.border,
     alignItems: 'center',

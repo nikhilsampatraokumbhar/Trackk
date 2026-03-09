@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { Transaction } from '../models/types';
 import { formatCurrency, formatDate, COLORS } from '../utils/helpers';
@@ -21,7 +21,7 @@ const TRACKER_LABELS: Record<string, string> = {
   group: 'Group',
 };
 
-export default function TransactionCard({ transaction, onPress, showBadge }: Props) {
+function TransactionCardInner({ transaction, onPress, showBadge }: Props) {
   const color = TRACKER_COLORS[transaction.trackerType] || COLORS.primary;
   const initial = (transaction.merchant || transaction.description)[0].toUpperCase();
 
@@ -145,3 +145,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
+
+const TransactionCard = memo(TransactionCardInner);
+export default TransactionCard;

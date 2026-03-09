@@ -505,5 +505,5 @@ export async function clearAllData(): Promise<void> {
     '@et_referral_code',
     '@et_budgets',
   ];
-  for (const key of keys) await AsyncStorage.removeItem(key);
+  await Promise.all(keys.map(key => AsyncStorage.removeItem(key)));
 }

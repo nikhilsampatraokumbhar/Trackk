@@ -926,8 +926,8 @@ const styles = StyleSheet.create({
   },
   settleBtn: {
     backgroundColor: COLORS.surfaceHigher,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: `${COLORS.primary}40`,
@@ -952,8 +952,8 @@ const styles = StyleSheet.create({
   },
   removeBtn: {
     backgroundColor: `${COLORS.danger}12`,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: `${COLORS.danger}25`,

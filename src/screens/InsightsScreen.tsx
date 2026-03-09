@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -70,11 +70,13 @@ export default function InsightsScreen() {
   const { isPremium } = usePremium();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'all'>('month');
 
   const load = useCallback(async () => {
     const all = await getTransactions();
     setTransactions(all.filter(t => !t.groupId));
+    setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -134,6 +136,14 @@ export default function InsightsScreen() {
   // Average daily
   const daysInMonth = now.getDate();
   const avgDaily = daysInMonth > 0 ? thisMonthTotal / daysInMonth : 0;
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView

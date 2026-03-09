@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../models/types';
 import { onAuthStateChanged, signOut as firebaseSignOut, getCurrentUser } from '../services/FirebaseConfig';
@@ -134,15 +134,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
+  const value = useMemo(() => ({
+    user,
+    loading,
+    isAuthenticated,
+    signIn,
+    signOut: signOutUser,
+    updateProfile,
+  }), [user, loading, isAuthenticated, signIn, signOutUser, updateProfile]);
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      loading,
-      isAuthenticated,
-      signIn,
-      signOut: signOutUser,
-      updateProfile,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

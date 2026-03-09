@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Share } from 'react-native';
 import {
@@ -130,13 +130,21 @@ export const FOUNDING_PRICES: Partial<Record<PlanId, number>> = {
 
 // ─── Built-in Promo Codes ───────────────────────────────────────────────────
 
+// Promo codes — in production, validate these server-side via Firebase Cloud Functions.
+// Remove test codes before public release.
 const PROMO_CODES: Record<string, PromoCode> = {
-  'TRACKK_BETA': { code: 'TRACKK_BETA', type: 'full_access', durationDays: 365 },
-  'TRACKK_TEST': { code: 'TRACKK_TEST', type: 'full_access', durationDays: 30 },
-  'TRACKK_DEV':  { code: 'TRACKK_DEV', type: 'full_access', durationDays: 9999 },
   'LAUNCH50':    { code: 'LAUNCH50', type: 'discount', durationDays: 30, discountPercent: 50 },
   'FOUNDING':    { code: 'FOUNDING', type: 'full_access', durationDays: 90 },
 };
+
+// DEV-ONLY promo codes — stripped in production builds via __DEV__ flag
+if (__DEV__) {
+  Object.assign(PROMO_CODES, {
+    'TRACKK_BETA': { code: 'TRACKK_BETA', type: 'full_access', durationDays: 365 },
+    'TRACKK_TEST': { code: 'TRACKK_TEST', type: 'full_access', durationDays: 30 },
+    'TRACKK_DEV':  { code: 'TRACKK_DEV', type: 'full_access', durationDays: 9999 },
+  });
+}
 
 // ─── Storage Keys ───────────────────────────────────────────────────────────
 
@@ -402,17 +410,17 @@ export function PremiumProvider({ children, userId }: { children: ReactNode; use
     }
   }, []);
 
+  const value = useMemo(() => ({
+    subscription, isPremium, isFamily, isTrial, currentPlan,
+    referralCode, referralStats, referrals,
+    activatePromoCode, subscribeToPlan, cancelSubscription,
+    addFamilyMember, removeFamilyMember,
+    shareReferralLink, addReferral, qualifyReferral,
+    checkFeatureAccess, refreshSubscription,
+  }), [subscription, isPremium, isFamily, isTrial, currentPlan, referralCode, referralStats, referrals, activatePromoCode, subscribeToPlan, cancelSubscription, addFamilyMember, removeFamilyMember, shareReferralLink, addReferral, qualifyReferral, checkFeatureAccess, refreshSubscription]);
+
   return (
-    <PremiumContext.Provider
-      value={{
-        subscription, isPremium, isFamily, isTrial, currentPlan,
-        referralCode, referralStats, referrals,
-        activatePromoCode, subscribeToPlan, cancelSubscription,
-        addFamilyMember, removeFamilyMember,
-        shareReferralLink, addReferral, qualifyReferral,
-        checkFeatureAccess, refreshSubscription,
-      }}
-    >
+    <PremiumContext.Provider value={value}>
       {children}
     </PremiumContext.Provider>
   );

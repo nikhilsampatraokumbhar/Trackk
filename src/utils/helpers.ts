@@ -14,8 +14,8 @@ export const COLORS = {
 
   // Text
   text: '#EEEEF6',
-  textSecondary: '#6A6A8E',
-  textLight: '#2E2E50',
+  textSecondary: '#8A8AAE',
+  textLight: '#5A5A7E',
 
   // Borders
   border: '#1E1E38',

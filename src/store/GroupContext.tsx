@@ -1,6 +1,6 @@
 import React, {
   createContext, useContext, useState, useEffect,
-  useCallback, ReactNode,
+  useCallback, useMemo, ReactNode,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Group, GroupTransaction, Debt } from '../models/types';
@@ -211,18 +211,20 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, loadGroupTransactions]);
 
+  const value = useMemo(() => ({
+    groups,
+    loading,
+    refreshGroups,
+    createGroup,
+    activeGroupId,
+    activeGroupTransactions,
+    activeGroupDebts,
+    loadGroupTransactions,
+    settleSplit,
+  }), [groups, loading, refreshGroups, createGroup, activeGroupId, activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit]);
+
   return (
-    <GroupContext.Provider value={{
-      groups,
-      loading,
-      refreshGroups,
-      createGroup,
-      activeGroupId,
-      activeGroupTransactions,
-      activeGroupDebts,
-      loadGroupTransactions,
-      settleSplit,
-    }}>
+    <GroupContext.Provider value={value}>
       {children}
     </GroupContext.Provider>
   );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, ActivityIndicator,
 } from 'react-native';
 
 import { LinearGradient } from 'expo-linear-gradient';
@@ -94,7 +94,11 @@ export default function TransactionDetailScreen() {
     );
   };
 
-  if (!txn) return null;
+  if (!txn) return (
+    <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <ActivityIndicator size="large" color={COLORS.primary} />
+    </View>
+  );
 
   const accentColor = TRACKER_COLORS[txn.trackerType] || COLORS.primary;
 
@@ -465,8 +469,8 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   tagAddBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,

@@ -1,6 +1,6 @@
 import React, {
   createContext, useContext, useState, useEffect,
-  useCallback, useRef, ReactNode,
+  useCallback, useRef, useMemo, ReactNode,
 } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -326,18 +326,20 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     setPendingTransaction(null);
   }, []);
 
+  const value = useMemo(() => ({
+    trackerState,
+    isListening,
+    togglePersonal,
+    toggleReimbursement,
+    toggleGroup,
+    getActiveTrackers,
+    pendingTransaction,
+    clearPendingTransaction,
+    addTransactionToTracker,
+  }), [trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup, getActiveTrackers, pendingTransaction, clearPendingTransaction, addTransactionToTracker]);
+
   return (
-    <TrackerContext.Provider value={{
-      trackerState,
-      isListening,
-      togglePersonal,
-      toggleReimbursement,
-      toggleGroup,
-      getActiveTrackers,
-      pendingTransaction,
-      clearPendingTransaction,
-      addTransactionToTracker,
-    }}>
+    <TrackerContext.Provider value={value}>
       {children}
     </TrackerContext.Provider>
   );

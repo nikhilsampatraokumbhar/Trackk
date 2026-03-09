@@ -62,7 +62,7 @@ export default function PersonalExpenseScreen() {
           colors={[COLORS.primary]}
         />
       }
-      ListHeaderComponent={() => (
+      ListHeaderComponent={
         <>
           {/* Toggle */}
           <TrackerToggle
@@ -181,7 +181,7 @@ export default function PersonalExpenseScreen() {
             </View>
           )}
         </>
-      )}
+      }
       data={transactions}
       keyExtractor={item => item.id}
       renderItem={({ item }) => (
