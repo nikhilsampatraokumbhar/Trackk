@@ -53,7 +53,12 @@ export default function PricingScreen() {
     // In production, this opens Razorpay checkout
     Alert.alert(
       'Confirm Subscription',
-      `Subscribe to ${PLANS[planId].name} for ${formatCurrency(FOUNDING_PRICES[planId] || PLANS[planId].price)}${PLANS[planId].period === 'monthly' ? '/month' : PLANS[planId].period === 'annual' ? '/year' : ''}?`,
+      `Subscribe to ${PLANS[planId].name} for ${formatCurrency(FOUNDING_PRICES[planId] || PLANS[planId].price)}${
+        PLANS[planId].period === 'monthly' ? '/month'
+        : PLANS[planId].period === 'half_yearly' ? '/6 months'
+        : PLANS[planId].period === 'annual' ? '/year'
+        : ''
+      }?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -103,7 +108,9 @@ export default function PricingScreen() {
             </Text>
           )}
           {plan.period !== 'free' && plan.period !== 'lifetime' && (
-            <Text style={styles.pricePeriod}>/{plan.period === 'monthly' ? 'mo' : 'yr'}</Text>
+            <Text style={styles.pricePeriod}>
+              /{plan.period === 'monthly' ? 'mo' : plan.period === 'half_yearly' ? '6mo' : 'yr'}
+            </Text>
           )}
         </View>
 
@@ -197,6 +204,7 @@ export default function PricingScreen() {
             <>
               {renderPlanCard('free')}
               {renderPlanCard('premium_monthly')}
+              {renderPlanCard('premium_half_yearly')}
               {renderPlanCard('premium_annual')}
               {renderPlanCard('premium_lifetime')}
             </>

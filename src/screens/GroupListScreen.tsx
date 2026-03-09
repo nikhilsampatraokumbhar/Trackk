@@ -77,7 +77,7 @@ export default function GroupListScreen() {
               >
                 <View style={[styles.groupIcon, { backgroundColor: `${color}22` }]}>
                   <Text style={[styles.groupInitial, { color }]}>
-                    {item.name[0].toUpperCase()}
+                    {(item.name || 'G')[0].toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.groupTextWrap}>

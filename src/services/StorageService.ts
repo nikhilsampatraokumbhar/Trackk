@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   User, Transaction, Group, GroupTransaction, Split,
   TrackerType, ParsedTransaction, SavingsGoal, DailySpend, Settlement,
+  SavingsJarEntry,
 } from '../models/types';
 import { generateId } from '../utils/helpers';
 import { buildDescription } from './TransactionParser';
@@ -13,6 +14,7 @@ const KEYS = {
   GROUP_TRANSACTIONS: (groupId: string) => `@et_group_txns_${groupId}`,
   GOALS: '@et_goals',
   DAILY_SPENDS: '@et_daily_spends',
+  SAVINGS_JAR: '@et_savings_jar',
   SETTLEMENTS: (groupId: string) => `@et_settlements_${groupId}`,
 };
 
@@ -176,11 +178,14 @@ export async function addGroupTransaction(
   if (!group) throw new Error('Group not found');
 
   const splitAmount = Math.round((parsed.amount / group.members.length) * 100) / 100;
+  // Last person absorbs rounding difference so splits always sum to exact amount
+  const totalFromSplits = splitAmount * group.members.length;
+  const roundingDiff = Math.round((parsed.amount - totalFromSplits) * 100) / 100;
 
-  const splits: Split[] = group.members.map(member => ({
+  const splits: Split[] = group.members.map((member, index) => ({
     userId: member.userId,
     displayName: member.userId === userId ? 'You' : member.displayName,
-    amount: splitAmount,
+    amount: index === group.members.length - 1 ? splitAmount + roundingDiff : splitAmount,
     settled: member.userId === userId,
   }));
 
@@ -220,7 +225,12 @@ export async function removeSplitMember(
   if (newSplits.length === 0) return;
 
   const perPerson = Math.round((txn.amount / newSplits.length) * 100) / 100;
-  txn.splits = newSplits.map(s => ({ ...s, amount: perPerson }));
+  const totalFromSplits = perPerson * newSplits.length;
+  const roundingDiff = Math.round((txn.amount - totalFromSplits) * 100) / 100;
+  txn.splits = newSplits.map((s, i) => ({
+    ...s,
+    amount: i === newSplits.length - 1 ? perPerson + roundingDiff : perPerson,
+  }));
   all[idx] = txn;
   await saveGroupTransactions(groupId, all);
 }
@@ -284,34 +294,198 @@ export async function deleteGoal(goalId: string): Promise<void> {
   await AsyncStorage.setItem(KEYS.GOALS, JSON.stringify(all.filter(g => g.id !== goalId)));
 }
 
-// ─── Daily Spend Tracking ────────────────────────────────────────────────────
+// ─── Daily Spend Tracking (auto-computed from transactions) ──────────────────
 
 export async function getDailySpends(): Promise<DailySpend[]> {
   const raw = await AsyncStorage.getItem(KEYS.DAILY_SPENDS);
   return raw ? JSON.parse(raw) : [];
 }
 
-export async function updateDailySpend(date: string, amount: number, budget: number): Promise<void> {
-  const all = await getDailySpends();
-  const idx = all.findIndex(d => d.date === date);
-  const spent = idx !== -1 ? all[idx].spent + amount : amount;
-  const entry: DailySpend = { date, spent, budget, withinBudget: spent <= budget };
-  if (idx !== -1) all[idx] = entry;
-  else all.push(entry);
-  await AsyncStorage.setItem(KEYS.DAILY_SPENDS, JSON.stringify(all));
+async function saveDailySpends(spends: DailySpend[]): Promise<void> {
+  await AsyncStorage.setItem(KEYS.DAILY_SPENDS, JSON.stringify(spends));
 }
 
-export async function getTodaySpend(): Promise<number> {
+/** Compute today's spend directly from personal + group-split transactions */
+export async function computeTodaySpendFromTransactions(): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10);
+  const all = await getAllTransactions();
+  return all
+    .filter(t => {
+      if (t.trackerType === 'reimbursement') return false; // reimbursements don't count
+      const txDate = new Date(t.timestamp).toISOString().slice(0, 10);
+      return txDate === today;
+    })
+    .reduce((s, t) => s + t.amount, 0);
+}
+
+/** Compute month's spend directly from personal + group-split transactions */
+export async function computeMonthSpendFromTransactions(): Promise<number> {
+  const now = new Date();
+  const all = await getAllTransactions();
+  return all
+    .filter(t => {
+      if (t.trackerType === 'reimbursement') return false;
+      const d = new Date(t.timestamp);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    })
+    .reduce((s, t) => s + t.amount, 0);
+}
+
+/** Get or create today's DailySpend entry with carryover from previous day */
+export async function getOrCreateTodaySpend(dailyBudget: number): Promise<DailySpend> {
   const today = new Date().toISOString().slice(0, 10);
   const all = await getDailySpends();
-  return all.find(d => d.date === today)?.spent || 0;
+  const existing = all.find(d => d.date === today);
+
+  if (existing) {
+    // Update spent from real transactions
+    const spent = await computeTodaySpendFromTransactions();
+    existing.spent = spent;
+    existing.leftover = existing.effectiveBudget - spent;
+    await saveDailySpends(all);
+    return existing;
+  }
+
+  // New day — resolve yesterday's carryover
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  const yesterdayEntry = all.find(d => d.date === yesterdayStr);
+
+  let carryover = 0;
+  if (yesterdayEntry && yesterdayEntry.leftover > 0) {
+    // Default: auto-carry if user hasn't decided
+    if (yesterdayEntry.leftoverAction === 'pending' || yesterdayEntry.leftoverAction === 'carry') {
+      carryover = yesterdayEntry.leftover;
+      yesterdayEntry.leftoverAction = 'carry';
+    }
+    // If 'save', carryover stays 0 (jar was already credited)
+  }
+
+  const spent = await computeTodaySpendFromTransactions();
+  const effectiveBudget = dailyBudget + carryover;
+
+  const entry: DailySpend = {
+    date: today,
+    spent,
+    baseBudget: dailyBudget,
+    carryover,
+    effectiveBudget,
+    leftover: effectiveBudget - spent,
+    leftoverAction: 'pending',
+  };
+  all.push(entry);
+  await saveDailySpends(all);
+  return entry;
+}
+
+/** Set yesterday's leftover action to 'save' and credit savings jar */
+export async function saveLeftoverToJar(goalId: string): Promise<number> {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+  const all = await getDailySpends();
+  const entry = all.find(d => d.date === yesterdayStr);
+  if (!entry || entry.leftover <= 0 || entry.leftoverAction === 'save') return 0;
+
+  const amount = entry.leftover;
+  entry.leftoverAction = 'save';
+  await saveDailySpends(all);
+
+  // Remove carryover from today's entry since user chose to save instead
+  const today = new Date().toISOString().slice(0, 10);
+  const todayEntry = all.find(d => d.date === today);
+  if (todayEntry && todayEntry.carryover > 0) {
+    todayEntry.carryover = 0;
+    todayEntry.effectiveBudget = todayEntry.baseBudget;
+    todayEntry.leftover = todayEntry.effectiveBudget - todayEntry.spent;
+    await saveDailySpends(all);
+  }
+
+  // Credit the savings jar
+  await addToSavingsJar(goalId, yesterdayStr, amount);
+
+  // Update goal's savingsJar field
+  const goals = await getGoals();
+  const goal = goals.find(g => g.id === goalId);
+  if (goal) {
+    goal.savingsJar = (goal.savingsJar || 0) + amount;
+    await saveGoal(goal);
+  }
+
+  return amount;
+}
+
+/** Carry forward yesterday's leftover explicitly */
+export async function carryForwardLeftover(): Promise<number> {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+  const all = await getDailySpends();
+  const entry = all.find(d => d.date === yesterdayStr);
+  if (!entry || entry.leftover <= 0 || entry.leftoverAction !== 'pending') return 0;
+
+  entry.leftoverAction = 'carry';
+  await saveDailySpends(all);
+  return entry.leftover;
+}
+
+/** Check if yesterday has pending leftover decision */
+export async function getYesterdayLeftover(): Promise<{ amount: number; action: string } | null> {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+  const all = await getDailySpends();
+  const entry = all.find(d => d.date === yesterdayStr);
+  if (!entry || entry.leftover <= 0) return null;
+  return { amount: entry.leftover, action: entry.leftoverAction };
+}
+
+// Keep legacy functions for backward compat
+export async function getTodaySpend(): Promise<number> {
+  return computeTodaySpendFromTransactions();
 }
 
 export async function getMonthSpend(): Promise<number> {
-  const now = new Date();
-  const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const all = await getDailySpends();
-  return all.filter(d => d.date.startsWith(prefix)).reduce((s, d) => s + d.spent, 0);
+  return computeMonthSpendFromTransactions();
+}
+
+// ─── Savings Jar ────────────────────────────────────────────────────────────
+
+export async function getSavingsJarEntries(goalId: string): Promise<SavingsJarEntry[]> {
+  const raw = await AsyncStorage.getItem(KEYS.SAVINGS_JAR);
+  const all: SavingsJarEntry[] = raw ? JSON.parse(raw) : [];
+  return all.filter(e => e.goalId === goalId);
+}
+
+async function addToSavingsJar(goalId: string, date: string, amount: number): Promise<void> {
+  const raw = await AsyncStorage.getItem(KEYS.SAVINGS_JAR);
+  const all: SavingsJarEntry[] = raw ? JSON.parse(raw) : [];
+  all.push({ date, amount, goalId });
+  await AsyncStorage.setItem(KEYS.SAVINGS_JAR, JSON.stringify(all));
+}
+
+/** User tapped "I invested this" — reset jar, add to totalSaved */
+export async function emptyJar(goalId: string): Promise<number> {
+  const goals = await getGoals();
+  const goal = goals.find(g => g.id === goalId);
+  if (!goal) return 0;
+
+  const jarAmount = goal.savingsJar || 0;
+  goal.totalSaved = (goal.totalSaved || 0) + jarAmount;
+  goal.savingsJar = 0;
+  await saveGoal(goal);
+
+  // Clear jar entries for this goal
+  const raw = await AsyncStorage.getItem(KEYS.SAVINGS_JAR);
+  const all: SavingsJarEntry[] = raw ? JSON.parse(raw) : [];
+  const remaining = all.filter(e => e.goalId !== goalId);
+  await AsyncStorage.setItem(KEYS.SAVINGS_JAR, JSON.stringify(remaining));
+
+  return jarAmount;
 }
 
 // ─── Clear all data ──────────────────────────────────────────────────────────
@@ -319,9 +493,17 @@ export async function getMonthSpend(): Promise<number> {
 export async function clearAllData(): Promise<void> {
   const groups = await getGroups();
   const keys = [
-    KEYS.USER, KEYS.TRANSACTIONS, KEYS.GROUPS, KEYS.GOALS, KEYS.DAILY_SPENDS,
+    KEYS.USER, KEYS.TRANSACTIONS, KEYS.GROUPS, KEYS.GOALS, KEYS.DAILY_SPENDS, KEYS.SAVINGS_JAR,
     ...groups.map(g => KEYS.GROUP_TRANSACTIONS(g.id)),
     ...groups.map(g => KEYS.SETTLEMENTS(g.id)),
+    // Also clear cache, tracker state, and premium data
+    '@et_cache_groups',
+    ...groups.map(g => `@et_cache_gtxns_${g.id}`),
+    '@et_tracker_state',
+    '@et_subscription',
+    '@et_referrals',
+    '@et_referral_code',
+    '@et_budgets',
   ];
   for (const key of keys) await AsyncStorage.removeItem(key);
 }

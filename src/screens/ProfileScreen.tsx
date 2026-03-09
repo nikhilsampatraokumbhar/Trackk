@@ -10,7 +10,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { usePremium } from '../store/PremiumContext';
-import { clearAllData } from '../services/StorageService';
 import { COLORS } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -34,24 +33,6 @@ export default function ProfileScreen() {
     }
     await updateProfile(trimmed, user?.phone || '');
     setIsEditingName(false);
-  };
-
-  const handleClearData = () => {
-    Alert.alert(
-      'Clear All Data',
-      'This will permanently delete all your transactions, groups, goals, and settings. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear Everything',
-          style: 'destructive',
-          onPress: async () => {
-            await clearAllData();
-            Alert.alert('Done', 'All data has been cleared. Please restart the app.');
-          },
-        },
-      ],
-    );
   };
 
   return (
@@ -199,6 +180,24 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Savings Goals */}
+        <TouchableOpacity
+          style={styles.referralCard}
+          onPress={() => nav.navigate('Goals')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.premiumRow}>
+            <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.success}18`, borderColor: `${COLORS.success}30` }]}>
+              <Text style={styles.premiumIcon}>🎯</Text>
+            </View>
+            <View style={styles.premiumInfo}>
+              <Text style={styles.premiumTitle}>Savings Goals</Text>
+              <Text style={styles.premiumSubtitle}>Set targets and track daily budgets</Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Privacy & Data Section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>PRIVACY & DATA</Text>
@@ -263,11 +262,6 @@ export default function ProfileScreen() {
           activeOpacity={0.8}
         >
           <Text style={styles.signOutBtnText}>Sign Out</Text>
-        </TouchableOpacity>
-
-        {/* Clear Data */}
-        <TouchableOpacity style={styles.clearBtn} onPress={handleClearData}>
-          <Text style={styles.clearBtnText}>Clear All Data</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -601,22 +595,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.border,
     marginVertical: 12,
-  },
-
-  /* ── Clear Data Button ───────────────────────────────────────── */
-  clearBtn: {
-    backgroundColor: `${COLORS.danger}15`,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: `${COLORS.danger}30`,
-  },
-  clearBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.danger,
-    letterSpacing: 0.3,
   },
 
   signOutBtn: {

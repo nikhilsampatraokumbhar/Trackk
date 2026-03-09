@@ -197,6 +197,21 @@ export function onGroupChanged(
   });
 }
 
+/** Fetch a single group from Firestore by ID */
+export async function getGroupCloud(groupId: string): Promise<Group | null> {
+  const snapshot = await db.group(groupId).get();
+  if (!snapshot.exists) return null;
+  const data = snapshot.data()!;
+  return {
+    id: data.id,
+    name: data.name,
+    members: data.members,
+    createdBy: data.createdBy,
+    createdAt: data.createdAt,
+    isTrip: data.isTrip,
+  };
+}
+
 // ─── Group Transactions Sync ────────────────────────────────────────────────
 
 /** Add a group transaction to Firestore */
@@ -207,11 +222,14 @@ export async function addGroupTransactionCloud(
   members: GroupMember[],
 ): Promise<GroupTransaction> {
   const splitAmount = Math.round((parsed.amount / members.length) * 100) / 100;
+  // Last person absorbs rounding difference so splits always sum to exact amount
+  const totalFromSplits = splitAmount * members.length;
+  const roundingDiff = Math.round((parsed.amount - totalFromSplits) * 100) / 100;
 
-  const splits: Split[] = members.map(member => ({
+  const splits: Split[] = members.map((member, index) => ({
     userId: member.userId,
     displayName: member.userId === userId ? 'You' : member.displayName,
-    amount: splitAmount,
+    amount: index === members.length - 1 ? splitAmount + roundingDiff : splitAmount,
     settled: member.userId === userId, // payer is auto-settled
   }));
 
@@ -285,7 +303,12 @@ export async function removeSplitMemberCloud(
   if (newSplits.length === 0) return;
 
   const perPerson = Math.round((txn.amount / newSplits.length) * 100) / 100;
-  const updatedSplits = newSplits.map(s => ({ ...s, amount: perPerson }));
+  const totalFromSplits = perPerson * newSplits.length;
+  const roundingDiff = Math.round((txn.amount - totalFromSplits) * 100) / 100;
+  const updatedSplits = newSplits.map((s, i) => ({
+    ...s,
+    amount: i === newSplits.length - 1 ? perPerson + roundingDiff : perPerson,
+  }));
 
   await docRef.update({ splits: updatedSplits });
 }

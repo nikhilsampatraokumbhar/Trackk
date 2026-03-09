@@ -21,8 +21,10 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
       'Unlimited expense entries',
       'SMS auto-detection',
       'Up to 3 groups',
-      'Basic spending insights',
-      '7-day transaction history export',
+      'This month\'s insights (top 3 categories)',
+      '1 savings goal',
+      'Notes on recent transactions (30 days)',
+      '1 overall budget',
     ],
   },
   premium_monthly: {
@@ -31,17 +33,31 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 99,
     period: 'monthly',
     maxMembers: 1,
-    tagline: 'Less than your morning chai',
+    tagline: '\u20B91.6/day \u2014 your piggy bank charges more in guilt',
     features: [
       'Everything in Free',
       'Cloud backup & sync',
       'Unlimited groups & goals',
-      'Advanced analytics & trends',
+      'Full insights, all categories & trends',
+      'Per-category budgets',
+      'Notes on all transactions',
       'Unlimited export (CSV, PDF)',
-      'Receipt scanning & storage',
       'Priority support',
     ],
     badge: 'POPULAR',
+  },
+  premium_half_yearly: {
+    id: 'premium_half_yearly',
+    name: 'Premium 6 Months',
+    price: 399,
+    period: 'half_yearly',
+    maxMembers: 1,
+    tagline: '\u20B966/mo \u2014 cheaper than your chai habit',
+    features: [
+      'Everything in Premium',
+      '1 month free vs monthly',
+    ],
+    savings: 'Save \u20B9195',
   },
   premium_annual: {
     id: 'premium_annual',
@@ -49,21 +65,21 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 699,
     period: 'annual',
     maxMembers: 1,
-    tagline: '₹58/month — cheaper than one auto ride',
+    tagline: '\u20B933/month as founding member \u2014 that\'s literally 1 samosa',
     features: [
       'Everything in Premium',
-      '2 months free vs monthly',
+      '3 months free vs monthly',
     ],
-    savings: 'Save ₹489/year',
+    savings: 'Save \u20B9489/year',
     badge: 'BEST VALUE',
   },
   premium_lifetime: {
     id: 'premium_lifetime',
     name: 'Premium Lifetime',
-    price: 1499,
+    price: 1999,
     period: 'lifetime',
     maxMembers: 1,
-    tagline: 'Pay once, track forever — less than one fancy dinner',
+    tagline: 'Pay once, track forever \u2014 your gym membership costs more. And you don\'t even go.',
     features: [
       'Everything in Premium',
       'Lifetime access, no renewals',
@@ -77,7 +93,7 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 149,
     period: 'monthly',
     maxMembers: 4,
-    tagline: '₹37/person — less than a samosa per day',
+    tagline: '\u20B937/person \u2014 less than a samosa per day',
     features: [
       'Everything in Premium',
       'Up to 4 family members',
@@ -93,12 +109,12 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 999,
     period: 'annual',
     maxMembers: 4,
-    tagline: '₹21/person/month — less than a packet of chips',
+    tagline: '\u20B921/person/month \u2014 less than a packet of chips',
     features: [
       'Everything in Family',
       '3 months free vs monthly',
     ],
-    savings: 'Save ₹789/year',
+    savings: 'Save \u20B9789/year',
   },
 };
 
@@ -106,6 +122,7 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
 
 export const FOUNDING_PRICES: Partial<Record<PlanId, number>> = {
   premium_monthly: 49,
+  premium_half_yearly: 199,
   premium_annual: 399,
   family_monthly: 99,
   family_annual: 599,
@@ -157,7 +174,11 @@ interface PremiumContextType {
 export type PremiumFeature =
   | 'cloud_backup'
   | 'unlimited_groups'
+  | 'unlimited_goals'
   | 'advanced_analytics'
+  | 'full_insights'
+  | 'category_budgets'
+  | 'unlimited_notes'
   | 'unlimited_export'
   | 'receipt_storage'
   | 'family_dashboard'
@@ -264,6 +285,7 @@ export function PremiumProvider({ children, userId }: { children: ReactNode; use
 
     switch (plan.period) {
       case 'monthly': endDate = now + 30 * 24 * 60 * 60 * 1000; break;
+      case 'half_yearly': endDate = now + 182 * 24 * 60 * 60 * 1000; break;
       case 'annual': endDate = now + 365 * 24 * 60 * 60 * 1000; break;
       case 'lifetime': endDate = -1; break;
       default: endDate = now + 30 * 24 * 60 * 60 * 1000;
@@ -274,7 +296,7 @@ export function PremiumProvider({ children, userId }: { children: ReactNode; use
       status: 'active',
       startDate: now,
       endDate,
-      isFoundingMember: !subscription,
+      isFoundingMember: subscription?.isFoundingMember || !subscription,
       referralCreditsMonths: subscription?.referralCreditsMonths || 0,
     };
 

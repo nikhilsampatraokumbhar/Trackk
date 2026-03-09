@@ -6,9 +6,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
 import { SavingsGoal, DailySpend } from '../models/types';
-import { getGoals, saveGoal, deleteGoal, getDailySpends, getTodaySpend, getMonthSpend } from '../services/StorageService';
+import {
+  getGoals, saveGoal, deleteGoal,
+  computeTodaySpendFromTransactions, computeMonthSpendFromTransactions,
+  getOrCreateTodaySpend, getYesterdayLeftover,
+  saveLeftoverToJar, carryForwardLeftover, emptyJar,
+} from '../services/StorageService';
+import { usePremium } from '../store/PremiumContext';
+import { useTracker } from '../store/TrackerContext';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -57,11 +66,21 @@ function getStreakTier(streak: number): { label: string; color: string; emoji: s
 
 /* ── Component ───────────────────────────────────────────────────────── */
 
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+const FREE_GOAL_LIMIT = 1;
+
 export default function GoalsScreen() {
+  const nav = useNavigation<Nav>();
+  const { isPremium } = usePremium();
+  const { trackerState, togglePersonal } = useTracker();
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [todaySpend, setTodaySpend] = useState(0);
   const [monthSpend, setMonthSpend] = useState(0);
+  const [todayDailySpend, setTodayDailySpend] = useState<DailySpend | null>(null);
+  const [yesterdayLeftover, setYesterdayLeftover] = useState<{ amount: number; action: string } | null>(null);
+  const [showLeftoverSheet, setShowLeftoverSheet] = useState(false);
 
   // Form fields
   const [goalName, setGoalName] = useState('');
@@ -87,12 +106,28 @@ export default function GoalsScreen() {
   const loadData = useCallback(async () => {
     const [g, ts, ms] = await Promise.all([
       getGoals(),
-      getTodaySpend(),
-      getMonthSpend(),
+      computeTodaySpendFromTransactions(),
+      computeMonthSpendFromTransactions(),
     ]);
     setGoals(g);
     setTodaySpend(ts);
     setMonthSpend(ms);
+
+    // Load daily spend entry with carryover info
+    if (g.length > 0) {
+      const dailyEntry = await getOrCreateTodaySpend(g[0].dailyBudget);
+      setTodayDailySpend(dailyEntry);
+
+      // Check for yesterday's pending leftover
+      const leftover = await getYesterdayLeftover();
+      if (leftover && leftover.action === 'pending' && leftover.amount > 0) {
+        setYesterdayLeftover(leftover);
+        setShowLeftoverSheet(true);
+      } else {
+        setYesterdayLeftover(null);
+        setShowLeftoverSheet(false);
+      }
+    }
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -198,9 +233,17 @@ export default function GoalsScreen() {
       monthlyBudget,
       streak: 0,
       lastStreakDate: '',
+      savingsJar: 0,
+      totalSaved: 0,
       createdAt: Date.now(),
     };
     await saveGoal(goal);
+
+    // Auto-enable personal tracking if not already on
+    if (!trackerState.personal) {
+      await togglePersonal();
+    }
+
     resetForm();
     await loadData();
   };
@@ -235,9 +278,11 @@ export default function GoalsScreen() {
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().slice(0, 10);
 
+    // Use effective budget (includes carryover) for streak check
+    const effectiveBudget = todayDailySpend?.effectiveBudget || goal.dailyBudget;
     let newStreak = goal.streak;
 
-    if (todaySpend <= goal.dailyBudget) {
+    if (todaySpend <= effectiveBudget) {
       if (goal.lastStreakDate === yesterdayStr || goal.lastStreakDate === '') {
         newStreak = goal.streak + 1;
       } else {
@@ -268,13 +313,12 @@ export default function GoalsScreen() {
 
   /* ── Computed Values ──────────────────────────────────────────────── */
 
-  const getDailyBudgetRemaining = (goal: SavingsGoal): number => {
-    return Math.max(goal.dailyBudget - todaySpend, 0);
+  const getEffectiveDailyBudget = (goal: SavingsGoal): number => {
+    return todayDailySpend?.effectiveBudget || goal.dailyBudget;
   };
 
-  const getMonthlyBudgetRemaining = (goal: SavingsGoal): number => {
-    const monthlySavings = goal.salary - goal.emis - goal.expenses - goal.maintenance;
-    return Math.max(monthlySavings - monthSpend, 0);
+  const getDailyBudgetRemaining = (goal: SavingsGoal): number => {
+    return getEffectiveDailyBudget(goal) - todaySpend;
   };
 
   const getProgressFraction = (goal: SavingsGoal): number => {
@@ -319,6 +363,44 @@ export default function GoalsScreen() {
 
   const preview = getLivePreview();
 
+  /* ── Leftover Actions ───────────────────────────────────────────── */
+
+  const handleSaveToJar = async (goalId: string) => {
+    const amount = await saveLeftoverToJar(goalId);
+    if (amount > 0) {
+      setShowLeftoverSheet(false);
+      setYesterdayLeftover(null);
+      await loadData();
+      Alert.alert('Saved!', `${formatCurrency(amount)} added to your Savings Jar`);
+    }
+  };
+
+  const handleCarryForward = async () => {
+    await carryForwardLeftover();
+    setShowLeftoverSheet(false);
+    setYesterdayLeftover(null);
+    await loadData();
+  };
+
+  const handleEmptyJar = async (goal: SavingsGoal) => {
+    if (!goal.savingsJar || goal.savingsJar <= 0) return;
+    Alert.alert(
+      'Mark as Saved',
+      `Mark ${formatCurrency(goal.savingsJar)} as invested/saved? This resets the jar.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, I saved it!',
+          onPress: async () => {
+            const amount = await emptyJar(goal.id);
+            await loadData();
+            Alert.alert('Awesome!', `${formatCurrency(amount)} marked as saved. Total lifetime savings: ${formatCurrency((goal.totalSaved || 0) + amount)}`);
+          },
+        },
+      ],
+    );
+  };
+
   /* ── Render: Empty State ──────────────────────────────────────────── */
 
   const renderEmptyState = () => (
@@ -337,6 +419,9 @@ export default function GoalsScreen() {
         <Text style={styles.emptySubtitle}>
           Define a savings target, track your daily spending against it,
           and build streaks to stay disciplined. Every day counts.
+        </Text>
+        <Text style={styles.emptyAutoSync}>
+          Your personal expenses auto-sync with goals — zero manual work.
         </Text>
         <TouchableOpacity
           style={styles.createBtnPrimary}
@@ -630,17 +715,97 @@ export default function GoalsScreen() {
     );
   };
 
+  /* ── Render: Leftover Bottom Sheet ─────────────────────────────────── */
+
+  const renderLeftoverSheet = () => {
+    if (!showLeftoverSheet || !yesterdayLeftover || goals.length === 0) return null;
+    const goal = goals[0];
+
+    return (
+      <Modal visible={showLeftoverSheet} animationType="slide" transparent onRequestClose={() => setShowLeftoverSheet(false)}>
+        <View style={styles.sheetOverlay}>
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Yesterday's Leftover</Text>
+            <Text style={styles.sheetAmount}>{formatCurrency(yesterdayLeftover.amount)}</Text>
+            <Text style={styles.sheetSubtitle}>You spent under budget yesterday! What would you like to do?</Text>
+
+            <TouchableOpacity style={styles.sheetBtnPrimary} onPress={() => handleSaveToJar(goal.id)} activeOpacity={0.8}>
+              <LinearGradient colors={[COLORS.success, '#2DA070']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.sheetBtnGradient}>
+                <Text style={styles.sheetBtnIcon}>{'\uD83C\uDFFA'}</Text>
+                <View>
+                  <Text style={styles.sheetBtnPrimaryText}>Add to Savings Jar</Text>
+                  <Text style={styles.sheetBtnSub}>Save it for something meaningful</Text>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.sheetBtnSecondary} onPress={handleCarryForward} activeOpacity={0.8}>
+              <Text style={styles.sheetBtnSecondaryIcon}>{'\u27A1\uFE0F'}</Text>
+              <View>
+                <Text style={styles.sheetBtnSecondaryText}>Carry to Today</Text>
+                <Text style={styles.sheetBtnSubDim}>More spending money today</Text>
+              </View>
+            </TouchableOpacity>
+
+            <Text style={styles.sheetAutoNote}>Auto-carries to tomorrow if you don't choose</Text>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  /* ── Render: Savings Jar ──────────────────────────────────────────── */
+
+  const renderSavingsJar = (goal: SavingsGoal) => {
+    const jarAmount = goal.savingsJar || 0;
+    const totalSaved = goal.totalSaved || 0;
+    if (jarAmount <= 0 && totalSaved <= 0) return null;
+
+    return (
+      <View style={styles.jarCard}>
+        <View style={styles.jarHeader}>
+          <Text style={styles.jarEmoji}>{'\uD83C\uDFFA'}</Text>
+          <Text style={styles.jarTitle}>Savings Jar</Text>
+        </View>
+
+        {jarAmount > 0 && (
+          <>
+            <Text style={styles.jarAmount}>{formatCurrency(jarAmount)}</Text>
+            <Text style={styles.jarSub}>Accumulated by spending under budget</Text>
+            <TouchableOpacity style={styles.jarInvestBtn} onPress={() => handleEmptyJar(goal)} activeOpacity={0.8}>
+              <Text style={styles.jarInvestBtnText}>I invested/saved this</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {jarAmount <= 0 && totalSaved > 0 && (
+          <Text style={styles.jarEmptySub}>Jar is empty. Keep spending under budget to fill it!</Text>
+        )}
+
+        {totalSaved > 0 && (
+          <View style={styles.jarLifetime}>
+            <Text style={styles.jarLifetimeLabel}>Total Saved</Text>
+            <Text style={styles.jarLifetimeValue}>{formatCurrency(totalSaved)}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   /* ── Render: Goal Card ────────────────────────────────────────────── */
 
   const renderGoalCard = (goal: SavingsGoal) => {
     const totalMonths = monthsBetween(new Date(goal.createdAt), new Date(goal.targetDate));
     const elapsed = monthsElapsed(goal.createdAt, goal.targetDate);
     const progress = getProgressFraction(goal);
+    const effectiveBudget = getEffectiveDailyBudget(goal);
     const dailyRemaining = getDailyBudgetRemaining(goal);
     const estimatedSavings = getEstimatedSavings(goal);
     const savingsProgress = Math.min(estimatedSavings / goal.targetAmount, 1);
     const days = daysRemaining(goal.targetDate);
     const monthlySavings = goal.salary - goal.emis - goal.expenses - goal.maintenance;
+    const carryover = todayDailySpend?.carryover || 0;
 
     return (
       <View key={goal.id} style={styles.goalCard}>
@@ -719,17 +884,44 @@ export default function GoalsScreen() {
           </View>
         </LinearGradient>
 
-        {/* ── Daily Budget Status ── */}
+        {/* ── Today's Budget (the hero number) ── */}
         <View style={styles.dailyBudgetCard}>
           <Text style={styles.dailyBudgetLabel}>YOU CAN SPEND TODAY</Text>
           <Text
             style={[
               styles.dailyBudgetAmount,
-              todaySpend > goal.dailyBudget && styles.dailyBudgetNegative,
+              dailyRemaining < 0 && styles.dailyBudgetNegative,
             ]}
           >
-            {formatCurrency(dailyRemaining)}
+            {formatCurrency(Math.abs(dailyRemaining))}
           </Text>
+
+          {/* Budget breakdown: base + carryover */}
+          <View style={styles.budgetBreakdown}>
+            <View style={styles.budgetBreakdownItem}>
+              <Text style={styles.budgetBreakdownLabel}>Base</Text>
+              <Text style={styles.budgetBreakdownValue}>{formatCurrency(goal.dailyBudget)}</Text>
+            </View>
+            {carryover > 0 && (
+              <>
+                <Text style={styles.budgetBreakdownPlus}>+</Text>
+                <View style={styles.budgetBreakdownItem}>
+                  <Text style={styles.budgetBreakdownLabel}>Carried</Text>
+                  <Text style={[styles.budgetBreakdownValue, { color: COLORS.success }]}>
+                    {formatCurrency(carryover)}
+                  </Text>
+                </View>
+              </>
+            )}
+            <Text style={styles.budgetBreakdownEquals}>=</Text>
+            <View style={styles.budgetBreakdownItem}>
+              <Text style={styles.budgetBreakdownLabel}>Total</Text>
+              <Text style={[styles.budgetBreakdownValue, { color: COLORS.primary }]}>
+                {formatCurrency(effectiveBudget)}
+              </Text>
+            </View>
+          </View>
+
           {todaySpend > 0 && (
             <View style={styles.dailySpendRow}>
               <View style={styles.dailySpendBarBg}>
@@ -737,26 +929,34 @@ export default function GoalsScreen() {
                   style={[
                     styles.dailySpendBarFill,
                     {
-                      width: `${Math.min((todaySpend / goal.dailyBudget) * 100, 100)}%`,
-                      backgroundColor: todaySpend <= goal.dailyBudget ? COLORS.success : COLORS.danger,
+                      width: `${Math.min((todaySpend / effectiveBudget) * 100, 100)}%`,
+                      backgroundColor: todaySpend <= effectiveBudget ? COLORS.success : COLORS.danger,
                     },
                   ]}
                 />
               </View>
               <Text style={styles.dailyBudgetSub}>
-                {formatCurrency(todaySpend)} / {formatCurrency(goal.dailyBudget)}
+                {formatCurrency(todaySpend)} / {formatCurrency(effectiveBudget)}
               </Text>
             </View>
           )}
-          {todaySpend > goal.dailyBudget && (
+          {todaySpend > effectiveBudget && (
             <View style={styles.warningBadge}>
               <Text style={styles.warningBadgeText}>Budget exceeded for today</Text>
             </View>
           )}
+
+          {/* Auto-sync indicator */}
+          <View style={styles.autoSyncBadge}>
+            <Text style={styles.autoSyncBadgeText}>{'\u26A1'} Auto-synced from expenses</Text>
+          </View>
         </View>
 
         {/* ── Streak ── */}
         {renderStreakBadge(goal)}
+
+        {/* ── Savings Jar ── */}
+        {renderSavingsJar(goal)}
 
         {/* ── Monthly Breakdown ── */}
         <View style={styles.monthlyCard}>
@@ -791,7 +991,7 @@ export default function GoalsScreen() {
         {/* ── Financial Details ── */}
         <View style={styles.detailsCard}>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Daily budget</Text>
+            <Text style={styles.detailLabel}>Base daily budget</Text>
             <Text style={styles.detailValue}>{formatCurrency(goal.dailyBudget)}</Text>
           </View>
           <View style={styles.detailDividerThin} />
@@ -850,7 +1050,20 @@ export default function GoalsScreen() {
           {goals.length > 0 && (
             <TouchableOpacity
               style={styles.addBtn}
-              onPress={() => setShowForm(true)}
+              onPress={() => {
+                if (!isPremium && goals.length >= FREE_GOAL_LIMIT) {
+                  Alert.alert(
+                    'Premium Feature',
+                    'Free plan includes 1 savings goal. Upgrade to Premium for unlimited goals!',
+                    [
+                      { text: 'Not Now', style: 'cancel' },
+                      { text: 'See Plans', onPress: () => nav.navigate('Pricing') },
+                    ],
+                  );
+                  return;
+                }
+                setShowForm(true);
+              }}
               activeOpacity={0.7}
             >
               <LinearGradient
@@ -897,6 +1110,7 @@ export default function GoalsScreen() {
       </ScrollView>
 
       {renderFormModal()}
+      {renderLeftoverSheet()}
     </SafeAreaView>
   );
 }
@@ -1570,5 +1784,241 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.borderLight,
     marginVertical: 1,
+  },
+
+  /* ── Empty state auto-sync ─────────────────────────────────────────── */
+  emptyAutoSync: {
+    fontSize: 12,
+    color: COLORS.success,
+    textAlign: 'center',
+    marginBottom: 24,
+    fontWeight: '600',
+  },
+
+  /* ── Auto-sync badge ───────────────────────────────────────────────── */
+  autoSyncBadge: {
+    marginTop: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: `${COLORS.success}10`,
+  },
+  autoSyncBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.success,
+    letterSpacing: 0.3,
+  },
+
+  /* ── Budget breakdown ──────────────────────────────────────────────── */
+  budgetBreakdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    gap: 6,
+  },
+  budgetBreakdownItem: {
+    alignItems: 'center',
+  },
+  budgetBreakdownLabel: {
+    fontSize: 9,
+    color: COLORS.textLight,
+    letterSpacing: 0.5,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  budgetBreakdownValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  budgetBreakdownPlus: {
+    fontSize: 14,
+    color: COLORS.success,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  budgetBreakdownEquals: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+
+  /* ── Leftover Bottom Sheet ─────────────────────────────────────────── */
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  sheetContainer: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderBottomWidth: 0,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.surfaceHigher,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  sheetAmount: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: COLORS.success,
+    textAlign: 'center',
+    letterSpacing: -1,
+    marginBottom: 8,
+  },
+  sheetSubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  sheetBtnPrimary: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  sheetBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    borderRadius: 16,
+    gap: 14,
+  },
+  sheetBtnIcon: {
+    fontSize: 28,
+  },
+  sheetBtnPrimaryText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  sheetBtnSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+  },
+  sheetBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    borderRadius: 16,
+    backgroundColor: COLORS.surfaceHigh,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 14,
+    marginBottom: 16,
+  },
+  sheetBtnSecondaryIcon: {
+    fontSize: 24,
+  },
+  sheetBtnSecondaryText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  sheetBtnSubDim: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  sheetAutoNote: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    textAlign: 'center',
+  },
+
+  /* ── Savings Jar ──────────────────────────────────────────────────── */
+  jarCard: {
+    backgroundColor: COLORS.surfaceHigh,
+    padding: 18,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  jarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  jarEmoji: {
+    fontSize: 24,
+  },
+  jarTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    letterSpacing: 0.3,
+  },
+  jarAmount: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.success,
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  jarSub: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 14,
+  },
+  jarEmptySub: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  jarInvestBtn: {
+    backgroundColor: `${COLORS.success}15`,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: `${COLORS.success}30`,
+    marginBottom: 12,
+  },
+  jarInvestBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  jarLifetime: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  jarLifetimeLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  jarLifetimeValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });
