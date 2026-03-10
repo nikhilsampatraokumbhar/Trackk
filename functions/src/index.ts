@@ -7,30 +7,65 @@
  * 3. validateSubscription — Checks if a user's subscription is active
  * 4. redeemPromoCode — Validates and applies promo codes server-side
  *
+ * Email-based transaction detection (Gmail, Outlook, Yahoo):
+ * 5. connectEmail — Exchange OAuth code, set up email watching
+ * 6. disconnectEmail — Remove email connection
+ * 7. gmailWebhook — Pub/Sub handler for Gmail push notifications
+ * 8. outlookWebhook — HTTP handler for Microsoft Graph webhooks
+ * 9. renewEmailWatches — Scheduled: renew Gmail/Outlook subscriptions
+ * 10. pollYahooEmails — Scheduled: poll Yahoo Mail every 5 minutes
+ *
  * SETUP:
  * 1. Set Razorpay secrets:
  *    firebase functions:secrets:set RAZORPAY_KEY_ID
  *    firebase functions:secrets:set RAZORPAY_KEY_SECRET
  *
- * 2. Deploy:
+ * 2. Set email OAuth secrets:
+ *    firebase functions:secrets:set GMAIL_CLIENT_ID
+ *    firebase functions:secrets:set GMAIL_CLIENT_SECRET
+ *    firebase functions:secrets:set MICROSOFT_CLIENT_ID
+ *    firebase functions:secrets:set MICROSOFT_CLIENT_SECRET
+ *    firebase functions:secrets:set YAHOO_CLIENT_ID
+ *    firebase functions:secrets:set YAHOO_CLIENT_SECRET
+ *
+ * 3. Create Pub/Sub topic for Gmail:
+ *    gcloud pubsub topics create gmail-transaction-notifications
+ *    gcloud pubsub topics add-iam-policy-binding gmail-transaction-notifications \
+ *      --member="serviceAccount:gmail-api-push@system.gserviceaccount.com" \
+ *      --role="roles/pubsub.publisher"
+ *
+ * 4. Deploy:
  *    cd functions && npm install && cd .. && firebase deploy --only functions
  *
- * 3. Update Firestore rules:
+ * 5. Update Firestore rules:
  *    firebase deploy --only firestore:rules
  */
 
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
+import { onMessagePublished } from "firebase-functions/v2/pubsub";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import Razorpay from "razorpay";
 import * as crypto from "crypto";
 
+import { exchangeGmailCode, processGmailNotification, renewGmailWatch, disconnectGmail } from "./email/gmailService";
+import { exchangeOutlookCode, processOutlookNotification, renewOutlookWatch, disconnectOutlook } from "./email/outlookService";
+import { exchangeYahooCode, pollYahooMail, disconnectYahoo } from "./email/yahooService";
+
 admin.initializeApp();
 const db = admin.firestore();
 
-// ─── Secrets (set via: firebase functions:secrets:set RAZORPAY_KEY_ID) ──────
+// ─── Secrets ────────────────────────────────────────────────────────────────
 const razorpayKeyId = defineSecret("RAZORPAY_KEY_ID");
 const razorpayKeySecret = defineSecret("RAZORPAY_KEY_SECRET");
+
+const gmailClientId = defineSecret("GMAIL_CLIENT_ID");
+const gmailClientSecret = defineSecret("GMAIL_CLIENT_SECRET");
+const microsoftClientId = defineSecret("MICROSOFT_CLIENT_ID");
+const microsoftClientSecret = defineSecret("MICROSOFT_CLIENT_SECRET");
+const yahooClientId = defineSecret("YAHOO_CLIENT_ID");
+const yahooClientSecret = defineSecret("YAHOO_CLIENT_SECRET");
 
 // ─── Plan definitions (mirror of client-side plans) ────────────────────────
 
@@ -334,3 +369,219 @@ export const redeemPromoCode = onCall(async (request) => {
     message: `Premium activated for ${promo.durationDays} days!`,
   };
 });
+
+// ─── 5. Connect Email (Gmail / Outlook / Yahoo) ────────────────────────────
+
+export const connectEmail = onCall(
+  {
+    secrets: [
+      gmailClientId, gmailClientSecret,
+      microsoftClientId, microsoftClientSecret,
+      yahooClientId, yahooClientSecret,
+    ],
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be logged in");
+    }
+
+    const { provider, authCode } = request.data;
+    if (!provider || !authCode) {
+      throw new HttpsError("invalid-argument", "Provider and authCode required");
+    }
+
+    try {
+      switch (provider) {
+        case "gmail":
+          return await exchangeGmailCode(
+            request.auth.uid,
+            authCode,
+            gmailClientId.value(),
+            gmailClientSecret.value()
+          );
+
+        case "outlook": {
+          // Build webhook URL for this Firebase project
+          const projectId = process.env.GCLOUD_PROJECT || "";
+          const webhookUrl = `https://us-central1-${projectId}.cloudfunctions.net/outlookWebhook`;
+          return await exchangeOutlookCode(
+            request.auth.uid,
+            authCode,
+            microsoftClientId.value(),
+            microsoftClientSecret.value(),
+            webhookUrl
+          );
+        }
+
+        case "yahoo":
+          return await exchangeYahooCode(
+            request.auth.uid,
+            authCode,
+            yahooClientId.value(),
+            yahooClientSecret.value()
+          );
+
+        default:
+          throw new HttpsError("invalid-argument", "Unsupported provider: " + provider);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      throw new HttpsError("internal", "Failed to connect email: " + message);
+    }
+  }
+);
+
+// ─── 6. Disconnect Email ────────────────────────────────────────────────────
+
+export const disconnectEmail = onCall(
+  { secrets: [microsoftClientId, microsoftClientSecret] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be logged in");
+    }
+
+    const { provider } = request.data;
+    if (!provider) {
+      throw new HttpsError("invalid-argument", "Provider required");
+    }
+
+    switch (provider) {
+      case "gmail":
+        await disconnectGmail(request.auth.uid);
+        break;
+      case "outlook":
+        await disconnectOutlook(
+          request.auth.uid,
+          microsoftClientId.value(),
+          microsoftClientSecret.value()
+        );
+        break;
+      case "yahoo":
+        await disconnectYahoo(request.auth.uid);
+        break;
+      default:
+        throw new HttpsError("invalid-argument", "Unsupported provider");
+    }
+
+    return { success: true };
+  }
+);
+
+// ─── 7. Gmail Webhook (Pub/Sub) ─────────────────────────────────────────────
+
+export const gmailWebhook = onMessagePublished(
+  {
+    topic: "gmail-transaction-notifications",
+    secrets: [gmailClientId, gmailClientSecret],
+  },
+  async (event) => {
+    const pubsubData = event.data.message.data;
+    if (!pubsubData) return;
+
+    await processGmailNotification(
+      pubsubData,
+      gmailClientId.value(),
+      gmailClientSecret.value()
+    );
+  }
+);
+
+// ─── 8. Outlook Webhook (HTTP) ──────────────────────────────────────────────
+
+export const outlookWebhook = onRequest(
+  { secrets: [microsoftClientId, microsoftClientSecret] },
+  async (req, res) => {
+    // Microsoft Graph validation request
+    if (req.query.validationToken) {
+      res.status(200).send(req.query.validationToken);
+      return;
+    }
+
+    // Process notifications
+    if (req.method === "POST" && req.body?.value) {
+      try {
+        await processOutlookNotification(
+          req.body.value,
+          microsoftClientId.value(),
+          microsoftClientSecret.value()
+        );
+      } catch (error) {
+        console.error("Outlook webhook error:", error);
+      }
+    }
+
+    res.status(202).send();
+  }
+);
+
+// ─── 9. Renew Email Watches (Scheduled — runs daily) ────────────────────────
+
+export const renewEmailWatches = onSchedule(
+  {
+    schedule: "every 24 hours",
+    secrets: [
+      gmailClientId, gmailClientSecret,
+      microsoftClientId, microsoftClientSecret,
+    ],
+  },
+  async () => {
+    const now = Date.now();
+    const oneDayFromNow = now + 24 * 60 * 60 * 1000;
+
+    // Renew Gmail watches expiring within 24 hours
+    const gmailConnections = await db
+      .collectionGroup("emailConnections")
+      .where("provider", "==", "gmail")
+      .where("watchExpiry", "<", oneDayFromNow)
+      .get();
+
+    for (const doc of gmailConnections.docs) {
+      const uid = doc.ref.parent.parent!.id;
+      try {
+        await renewGmailWatch(uid, gmailClientId.value(), gmailClientSecret.value());
+      } catch (error) {
+        console.error(`Failed to renew Gmail watch for ${uid}:`, error);
+      }
+    }
+
+    // Renew Outlook subscriptions expiring within 24 hours
+    const outlookConnections = await db
+      .collectionGroup("emailConnections")
+      .where("provider", "==", "outlook")
+      .where("watchExpiry", "<", oneDayFromNow)
+      .get();
+
+    for (const doc of outlookConnections.docs) {
+      const uid = doc.ref.parent.parent!.id;
+      try {
+        await renewOutlookWatch(uid, microsoftClientId.value(), microsoftClientSecret.value());
+      } catch (error) {
+        console.error(`Failed to renew Outlook watch for ${uid}:`, error);
+      }
+    }
+  }
+);
+
+// ─── 10. Poll Yahoo Emails (Scheduled — every 5 minutes) ───────────────────
+
+export const pollYahooEmails = onSchedule(
+  {
+    schedule: "every 5 minutes",
+    secrets: [yahooClientId, yahooClientSecret],
+  },
+  async () => {
+    const yahooConnections = await db
+      .collectionGroup("emailConnections")
+      .where("provider", "==", "yahoo")
+      .get();
+
+    for (const doc of yahooConnections.docs) {
+      const uid = doc.ref.parent.parent!.id;
+      try {
+        await pollYahooMail(uid, yahooClientId.value(), yahooClientSecret.value());
+      } catch (error) {
+        console.error(`Failed to poll Yahoo for ${uid}:`, error);
+      }
+    }
+  }
+);
