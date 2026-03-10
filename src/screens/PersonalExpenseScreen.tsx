@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl,
-  TouchableOpacity, Alert, NativeModules, Platform,
+  TouchableOpacity, Alert, NativeModules, Platform, AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -32,6 +32,19 @@ export default function PersonalExpenseScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load, transactionVersion]));
+
+  // Reload data when app returns from background (e.g. after background notification action)
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        load();
+      }
+      appState.current = nextState;
+    });
+    return () => sub.remove();
+  }, [load]);
+
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const now = new Date();
