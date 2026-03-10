@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "978145898230",
+    "project_id": "trackk-dae50",
+    "storage_bucket": "trackk-dae50.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:978145898230:android:dc07512a71a3ba2afa06d7",
+        "android_client_info": {
+          "package_name": "com.trackk.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBuikDkrlpJ7HKRgh5RstU904lFuPKJD6I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

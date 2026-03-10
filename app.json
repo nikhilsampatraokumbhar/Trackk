@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "android": {
+      "googleServicesFile": "./google-services.json",
       "package": "com.trackk.app",
       "permissions": [
         "android.permission.READ_SMS",

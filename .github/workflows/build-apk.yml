@@ -32,14 +32,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Expo CLI & EAS CLI
-        run: npm install -g expo-cli @expo/eas-cli
+      - name: Copy google-services.json to android/app
+        run: cp google-services.json android/app/google-services.json
 
       - name: Build APK with Gradle
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           JAVA_HOME: ${{ env.JAVA_HOME }}
@@ -50,13 +50,13 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ExpenseTracker-Debug-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: Trackk-Release-APK
+          path: android/app/build/outputs/apk/release/*.apk
           retention-days: 30
 
       - name: Summary
         run: |
-          echo "## APK Build Complete! 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "## APK Build Complete!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Download your APK from the **Artifacts** section above." >> $GITHUB_STEP_SUMMARY
           echo "Install it on Android by enabling 'Install from unknown sources'." >> $GITHUB_STEP_SUMMARY
