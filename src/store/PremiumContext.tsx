@@ -135,7 +135,6 @@ export const FOUNDING_PRICES: Partial<Record<PlanId, number>> = {
 const PROMO_CODES: Record<string, PromoCode> = {
   'LAUNCH50':    { code: 'LAUNCH50', type: 'discount', durationDays: 30, discountPercent: 50 },
   'FOUNDING':    { code: 'FOUNDING', type: 'full_access', durationDays: 90 },
-  'NKTEST2026':  { code: 'NKTEST2026', type: 'full_access', durationDays: 9999 }, // REMOVE BEFORE LAUNCH
 };
 
 // DEV-ONLY promo codes — stripped in production builds via __DEV__ flag
