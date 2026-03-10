@@ -26,6 +26,14 @@
 - [x] Referral system (share code, earn 1 month free per referral, up to 12 months)
 - [x] Pricing screen with plan comparison
 
+### UX & Premium
+- [x] Notification-to-app auto-refresh (transactionVersion counter in TrackerContext)
+- [x] Free users limited to 1 active tracker; premium unlocks simultaneous trackers
+- [x] Group expenses goal-budget toggle (exclude group spend from daily goal when on trips)
+- [x] Goals overhaul: target months (1-36), custom finance fields, shared finances across goals
+- [x] Multi-goal daily budget: combined set-aside from all goals, adjusted spending budget
+- [x] Shared Monthly Finances: prefilled across goals, editable, auto-syncs on update
+
 ### Auth & Cloud
 - [x] Firebase Auth (phone OTP login)
 - [x] Firestore cloud sync for groups
