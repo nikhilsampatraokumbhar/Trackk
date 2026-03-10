@@ -103,6 +103,43 @@ APK output: `android/app/build/outputs/apk/release/app-release.apk`
 
 ---
 
+## iOS Build (EAS Cloud Build)
+
+### Prerequisites
+1. Replace `GoogleService-Info.plist` in the project root with your real file from Firebase Console
+2. Have an Expo account (free at https://expo.dev/signup)
+
+### Build for Simulator (Testing)
+```bash
+npm install -g @expo/eas-cli
+eas login
+eas build --platform ios --profile preview
+```
+
+This builds a simulator-compatible `.app` file. Download and drag into iOS Simulator.
+
+### Build for Device (Ad-hoc Distribution)
+```bash
+eas build --platform ios --profile preview --no-wait
+```
+
+You'll need an Apple Developer account ($99/year) for device builds. EAS handles provisioning profiles automatically.
+
+### What Works on iOS
+- Email-based transaction detection (Gmail, Outlook, Yahoo)
+- FCM push notifications for detected transactions
+- Group creation, splitting, settlements
+- All premium features, pricing, referrals
+- Deep links (`trackk://` scheme)
+
+### What Doesn't Work on iOS
+- SMS detection (Apple blocks SMS access — by design)
+- SMS notification listener (no iOS equivalent)
+
+iOS users connect their bank email in Profile → Email Transaction Detection to auto-track expenses.
+
+---
+
 ## Technical Details
 
 - **Low battery usage** — event-driven SMS detection, no background polling

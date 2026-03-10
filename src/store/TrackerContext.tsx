@@ -10,6 +10,7 @@ import { Platform } from 'react-native';
 import {
   requestSmsPermission, startSmsListener, stopSmsListener,
 } from '../services/SmsService';
+import { setupFcmHandlers } from '../services/FcmService';
 import {
   setupNotificationChannel, requestNotificationPermission,
   showTransactionNotification, registerNotificationCallbacks,
@@ -136,6 +137,33 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       handleNotificationEvent({ type, detail }, activeTrackers);
     });
     return () => unsubscribe();
+  }, []);
+
+  // Set up FCM handlers for email-detected transactions (both platforms)
+  useEffect(() => {
+    const unsubscribe = setupFcmHandlers(async (data) => {
+      // FCM push from Cloud Functions for email-detected transactions
+      const parsed: ParsedTransaction = {
+        amount: Number(data.amount) || 0,
+        type: (data.type as 'debit' | 'credit') || 'debit',
+        merchant: data.merchant || undefined,
+        bank: data.bank || undefined,
+        rawMessage: data.description || `Email transaction: ${data.amount}`,
+        timestamp: Number(data.timestamp) || Date.now(),
+      };
+
+      if (parsed.amount <= 0) return;
+
+      const currentState = trackerStateRef.current;
+      const currentGroups = groupsRef.current;
+      const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
+
+      if (activeTrackers.length > 0) {
+        await showTransactionNotification(parsed, activeTrackers);
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   // Initialize deep link listener for iOS (and as fallback on Android)

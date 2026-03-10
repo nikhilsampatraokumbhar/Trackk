@@ -57,15 +57,25 @@
 - [x] 116 unit/integration tests passing (6 test suites)
 - [x] SMS notification deduplication
 
+### Client-Side Email & FCM Integration
+- [x] `FcmService.ts` — FCM device token registration, refresh listener, foreground/background handlers
+- [x] `EmailService.ts` — Client-side email connection via Cloud Functions (connect/disconnect)
+- [x] Connect Email UI in ProfileScreen (Gmail, Outlook, Yahoo with connect/disconnect)
+- [x] FCM registration wired into AuthContext (auto-register on sign-in, cleanup on sign-out)
+- [x] TrackerContext handles email-detected FCM push notifications (both platforms)
+- [x] `@react-native-firebase/messaging` added to dependencies and app.json plugins
+
 ### Build & CI
-- [x] EAS Build configuration
+- [x] EAS Build configuration (Android + iOS simulator profiles)
 - [x] GitHub Actions APK build workflow (release APK)
 - [x] Firebase project configuration (.firebaserc, firebase.json)
 - [x] Fixed `babel-preset-expo` version to `~55.0.0` (was ~13.0.0, caused codegen failures)
 - [x] Fixed `react-native-screens` to `~4.23.0` and `react-native-safe-area-context` to `~5.6.2` (Expo 55 compat)
 - [x] Fixed `settings.gradle` project name (ExpenseTrackerBuild → Trackk)
-- [x] Added `googleServicesFile` to `app.json` for prebuild
+- [x] Added `googleServicesFile` to `app.json` for Android + iOS prebuild
 - [x] Copied `google-services.json` to project root
+- [x] Added `GoogleService-Info.plist` placeholder for iOS
+- [x] iOS `app.json` config: bundleIdentifier, UIBackgroundModes, deep link scheme
 
 ---
 
@@ -98,8 +108,8 @@
   firebase functions:secrets:set YAHOO_CLIENT_SECRET
   ```
 - [ ] Create Pub/Sub topic for Gmail push notifications
-- [ ] Add "Connect Email" UI to Android app
-- [ ] Register FCM device tokens on client side
+- [x] ~~Add "Connect Email" UI to Android app~~ (done — added to ProfileScreen for both platforms)
+- [x] ~~Register FCM device tokens on client side~~ (done — FcmService.ts + AuthContext wiring)
 - [ ] End-to-end test: email → parse → FCM notification → add to tracker
 
 ### Promo Codes (Priority 1)
@@ -151,3 +161,6 @@
 - **Dual detection**: Android uses SMS (primary) + email parsing; iOS uses email parsing only
 - **Email providers**: Gmail (Pub/Sub push), Outlook (Graph API webhook), Yahoo (5-min polling)
 - **Email use cases**: iOS users, reimbursement/corporate card tracking, foreign trips (temp SIM = no bank SMS)
+- **FCM flow**: Cloud Functions detect email transaction → store in `pendingTransactions` → send FCM to all user devices → client shows notification with tracker actions
+- **Client-side email**: EmailService.ts calls Cloud Functions; ProfileScreen shows connect/disconnect UI per provider
+- **Cross-platform groups**: Android + iOS users can share groups, split expenses, settle debts — groups synced via Firestore

@@ -21,6 +21,7 @@
     "plugins": [
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
+      "@react-native-firebase/messaging",
       [
         "react-native-permissions",
         {
@@ -40,7 +41,9 @@
     },
     "ios": {
       "bundleIdentifier": "com.trackk.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"],
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": ["trackk"]

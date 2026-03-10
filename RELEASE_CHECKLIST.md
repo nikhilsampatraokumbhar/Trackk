@@ -264,3 +264,8 @@
 | Update .gitignore | `.gitignore` | append |
 | Deploy Cloud Functions | `functions/` | all |
 | Deploy Firestore rules | `firestore.rules` | all |
+| Connect Email UI | `src/screens/ProfileScreen.tsx` | ~200+ |
+| FCM registration | `src/store/AuthContext.tsx` | ~30-50 |
+| Email service client | `src/services/EmailService.ts` | all |
+| FCM service | `src/services/FcmService.ts` | all |
+| iOS GoogleService-Info | `GoogleService-Info.plist` | replace placeholder |

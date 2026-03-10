@@ -1,8 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../models/types';
 import { onAuthStateChanged, signOut as firebaseSignOut, getCurrentUser } from '../services/FirebaseConfig';
 import { syncUserProfile } from '../services/SyncService';
+import {
+  requestNotificationPermission as requestFcmPermission,
+  registerDeviceToken, unregisterDeviceToken, onTokenRefresh,
+} from '../services/FcmService';
 
 interface AuthContextType {
   user: User | null;
@@ -29,6 +33,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  const tokenRefreshUnsub = useRef<(() => void) | null>(null);
+
+  // Register FCM token when user is authenticated
+  const setupFcm = useCallback(async (uid: string) => {
+    try {
+      await requestFcmPermission();
+      await registerDeviceToken(uid);
+      // Listen for token refreshes
+      if (tokenRefreshUnsub.current) tokenRefreshUnsub.current();
+      tokenRefreshUnsub.current = onTokenRefresh(uid);
+    } catch {
+      // FCM setup is best-effort — may fail in emulator
+    }
+  }, []);
+
   // Check for existing auth session on mount
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(async (firebaseUser) => {
@@ -41,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (localUser.id === firebaseUser.uid) {
             setUser(localUser);
             setIsAuthenticated(true);
+            setupFcm(localUser.id);
           } else {
             // Mismatch - create new local profile for this Firebase user
             const newUser: User = {
@@ -52,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
             setUser(newUser);
             setIsAuthenticated(true);
+            setupFcm(newUser.id);
           }
         } else {
           // No local profile yet - create one from Firebase user
@@ -64,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
           setUser(newUser);
           setIsAuthenticated(true);
+          setupFcm(newUser.id);
         }
       } else {
         // Not signed in
@@ -101,6 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(localUser);
     setIsAuthenticated(true);
 
+    // Register FCM device token
+    setupFcm(uid);
+
     // Sync profile to Firestore so other users can find this user by phone
     try {
       await syncUserProfile(uid, phone, localUser.displayName);
@@ -110,6 +135,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOutUser = useCallback(async () => {
+    // Unregister FCM token before sign out
+    if (user?.id) {
+      try {
+        await unregisterDeviceToken(user.id);
+      } catch {
+        // Best-effort cleanup
+      }
+    }
+    if (tokenRefreshUnsub.current) {
+      tokenRefreshUnsub.current();
+      tokenRefreshUnsub.current = null;
+    }
     try {
       await firebaseSignOut();
     } catch {
@@ -118,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.removeItem(STORAGE_KEY);
     setUser(null);
     setIsAuthenticated(false);
-  }, []);
+  }, [user?.id]);
 
   const updateProfile = useCallback(async (displayName: string, phone: string) => {
     if (!user) return;

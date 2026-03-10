@@ -23,6 +23,15 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "simulator": true
+      },
+      "distribution": "internal"
+    },
+    "preview-ios": {
+      "ios": {
+        "simulator": true
+      },
       "distribution": "internal"
     },
     "production": {

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert,
+  TextInput, Alert, ActivityIndicator, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,11 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { usePremium } from '../store/PremiumContext';
 import { COLORS } from '../utils/helpers';
+import {
+  EmailProvider, connectEmail, disconnectEmail, parseOAuthRedirect,
+  getProviderDisplayName, getProviderColor,
+} from '../services/EmailService';
+import { db } from '../services/FirebaseConfig';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -20,6 +25,71 @@ export default function ProfileScreen() {
   const { isPremium, isFamily, currentPlan, subscription, referralStats } = usePremium();
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(user?.displayName || '');
+  const [connectedEmails, setConnectedEmails] = useState<Record<EmailProvider, string | null>>({
+    gmail: null, outlook: null, yahoo: null,
+  });
+  const [connectingProvider, setConnectingProvider] = useState<EmailProvider | null>(null);
+
+  // Load connected email status
+  useEffect(() => {
+    if (!user?.id) return;
+    const providers: EmailProvider[] = ['gmail', 'outlook', 'yahoo'];
+    providers.forEach(async (provider) => {
+      try {
+        const doc = await db.user(user.id).collection('emailConnections').doc(provider).get();
+        if (doc.exists) {
+          const data = doc.data() as { email?: string };
+          setConnectedEmails(prev => ({ ...prev, [provider]: data?.email || 'Connected' }));
+        }
+      } catch {
+        // Ignore — Firestore may not have this collection yet
+      }
+    });
+  }, [user?.id]);
+
+  // Listen for OAuth redirects
+  useEffect(() => {
+    const handleUrl = async (event: { url: string }) => {
+      const parsed = parseOAuthRedirect(event.url);
+      if (!parsed) return;
+
+      setConnectingProvider(parsed.provider);
+      try {
+        const result = await connectEmail(parsed.provider, parsed.code);
+        setConnectedEmails(prev => ({ ...prev, [parsed.provider]: result.email }));
+        Alert.alert('Connected', `${getProviderDisplayName(parsed.provider)} connected: ${result.email}`);
+      } catch (error: any) {
+        Alert.alert('Connection Failed', error.message || 'Could not connect email. Please try again.');
+      } finally {
+        setConnectingProvider(null);
+      }
+    };
+
+    const subscription = Linking.addEventListener('url', handleUrl);
+    return () => subscription.remove();
+  }, []);
+
+  const handleDisconnectEmail = useCallback((provider: EmailProvider) => {
+    Alert.alert(
+      'Disconnect Email',
+      `Stop receiving transaction notifications from ${getProviderDisplayName(provider)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await disconnectEmail(provider);
+              setConnectedEmails(prev => ({ ...prev, [provider]: null }));
+            } catch {
+              Alert.alert('Error', 'Could not disconnect. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  }, []);
 
   const initial = (user?.displayName || 'U').charAt(0).toUpperCase();
   const avatarColor = user?.avatarColor || COLORS.personalColor;
@@ -197,6 +267,66 @@ export default function ProfileScreen() {
             <Text style={styles.chevron}>›</Text>
           </View>
         </TouchableOpacity>
+
+        {/* ── Connect Email ─────────────────────────────────────── */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>EMAIL TRANSACTION DETECTION</Text>
+        </View>
+
+        <View style={styles.emailCard}>
+          <Text style={styles.emailCardDesc}>
+            {Platform.OS === 'ios'
+              ? 'Connect your email to automatically detect bank transactions from email alerts.'
+              : 'Connect your email for reimbursement tracking and foreign trip expenses (when SMS is unavailable).'}
+          </Text>
+
+          {(['gmail', 'outlook', 'yahoo'] as EmailProvider[]).map((provider) => {
+            const email = connectedEmails[provider];
+            const isConnecting = connectingProvider === provider;
+            const color = getProviderColor(provider);
+
+            return (
+              <View key={provider} style={styles.emailProviderRow}>
+                <View style={[styles.emailProviderIcon, { backgroundColor: `${color}18`, borderColor: `${color}30` }]}>
+                  <Text style={[styles.emailProviderLetter, { color }]}>
+                    {provider === 'gmail' ? 'G' : provider === 'outlook' ? 'O' : 'Y'}
+                  </Text>
+                </View>
+                <View style={styles.emailProviderInfo}>
+                  <Text style={styles.emailProviderName}>{getProviderDisplayName(provider)}</Text>
+                  {email ? (
+                    <Text style={styles.emailProviderEmail} numberOfLines={1}>{email}</Text>
+                  ) : (
+                    <Text style={styles.emailProviderStatus}>Not connected</Text>
+                  )}
+                </View>
+                {isConnecting ? (
+                  <ActivityIndicator size="small" color={color} />
+                ) : email ? (
+                  <TouchableOpacity
+                    style={styles.emailDisconnectBtn}
+                    onPress={() => handleDisconnectEmail(provider)}
+                  >
+                    <Text style={styles.emailDisconnectText}>Disconnect</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.emailConnectBtn, { borderColor: `${color}40` }]}
+                    onPress={() => {
+                      Alert.alert(
+                        `Connect ${getProviderDisplayName(provider)}`,
+                        'Email OAuth setup is required before this feature works. See RELEASE_CHECKLIST.md for setup instructions.\n\nOnce configured, tapping Connect will open your browser to sign in.',
+                        [{ text: 'OK' }],
+                      );
+                    }}
+                  >
+                    <Text style={[styles.emailConnectText, { color }]}>Connect</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
+        </View>
 
         {/* Privacy & Data Section */}
         <View style={styles.sectionHeader}>
@@ -595,6 +725,82 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.border,
     marginVertical: 12,
+  },
+
+  /* ── Email Connection ──────────────────────────────────────── */
+  emailCard: {
+    backgroundColor: COLORS.surfaceHigh,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  emailCardDesc: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  emailProviderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  emailProviderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+  },
+  emailProviderLetter: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  emailProviderInfo: {
+    flex: 1,
+  },
+  emailProviderName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  emailProviderEmail: {
+    fontSize: 11,
+    color: COLORS.success,
+    fontWeight: '600',
+  },
+  emailProviderStatus: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  emailConnectBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  emailConnectText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  emailDisconnectBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  emailDisconnectText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
   },
 
   signOutBtn: {
