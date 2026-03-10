@@ -28,7 +28,7 @@ function TransactionCardInner({ transaction, onPress, showBadge }: Props) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       {/* Icon */}
-      <View style={[styles.icon, { backgroundColor: `${color}20` }]}>
+      <View style={[styles.icon, { backgroundColor: `${color}15` }]}>
         <Text style={[styles.iconText, { color }]}>{initial}</Text>
       </View>
 
@@ -42,8 +42,8 @@ function TransactionCardInner({ transaction, onPress, showBadge }: Props) {
         {transaction.tags && transaction.tags.length > 0 && (
           <View style={styles.tagRow}>
             {transaction.tags.slice(0, 3).map(tag => (
-              <View key={tag} style={styles.tagMini}>
-                <Text style={styles.tagMiniText}>{tag}</Text>
+              <View key={tag} style={styles.tagChip}>
+                <Text style={styles.tagChipText}>{tag}</Text>
               </View>
             ))}
             {transaction.tags.length > 3 && (
@@ -57,7 +57,7 @@ function TransactionCardInner({ transaction, onPress, showBadge }: Props) {
       <View style={styles.right}>
         <Text style={styles.amount}>-{formatCurrency(transaction.amount)}</Text>
         {showBadge && (
-          <View style={[styles.badge, { backgroundColor: `${color}18` }]}>
+          <View style={[styles.badge, { backgroundColor: `${color}12` }]}>
             <Text style={[styles.badgeText, { color }]}>
               {TRACKER_LABELS[transaction.trackerType] || transaction.trackerType}
             </Text>
@@ -72,20 +72,20 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    padding: 16,
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   icon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   iconText: { fontSize: 18, fontWeight: '800' },
   info: { flex: 1 },
@@ -108,35 +108,35 @@ const styles = StyleSheet.create({
   tagRow: {
     flexDirection: 'row',
     gap: 4,
-    marginTop: 4,
+    marginTop: 6,
     alignItems: 'center',
   },
-  tagMini: {
-    backgroundColor: `${COLORS.primary}12`,
-    borderRadius: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+  tagChip: {
+    backgroundColor: COLORS.glassHigh,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  tagMiniText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  tagMore: {
+  tagChipText: {
     fontSize: 9,
     fontWeight: '600',
     color: COLORS.textSecondary,
   },
-  right: { alignItems: 'flex-end', gap: 4 },
+  tagMore: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: COLORS.textLight,
+  },
+  right: { alignItems: 'flex-end', gap: 6 },
   amount: {
     fontSize: 15,
     fontWeight: '700',
-    color: COLORS.danger,
+    color: COLORS.text,
   },
   badge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   badgeText: {
     fontSize: 9,

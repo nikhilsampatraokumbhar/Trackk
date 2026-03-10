@@ -84,7 +84,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
           paddingHorizontal: 3,
           paddingVertical: 1,
         }}>
-          <Text style={{ fontSize: 6, fontWeight: '800', color: '#0A0A0F', letterSpacing: 0.3 }}>PRO</Text>
+          <Text style={{ fontSize: 6, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 }}>PRO</Text>
         </View>
       )}
     </View>
@@ -108,12 +108,12 @@ function MainTabs() {
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarStyle: {
-          backgroundColor: COLORS.surface,
-          borderTopColor: COLORS.border,
+          backgroundColor: '#131318',
+          borderTopColor: 'rgba(255,255,255,0.06)',
           borderTopWidth: 1,
-          paddingBottom: 6,
-          paddingTop: 4,
-          height: 60,
+          paddingBottom: 8,
+          paddingTop: 6,
+          height: 64,
           elevation: 0,
           shadowOpacity: 0,
         },

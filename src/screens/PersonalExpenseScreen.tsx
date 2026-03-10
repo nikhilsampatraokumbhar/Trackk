@@ -153,7 +153,7 @@ export default function PersonalExpenseScreen() {
 
           {/* Stats hero */}
           <LinearGradient
-            colors={['#140E20', '#0A0A0F']}
+            colors={['#16121A', '#0A0A0F']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroCard}
@@ -242,10 +242,10 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background },
 
   heroCard: {
-    borderRadius: 18,
+    borderRadius: 24,
     marginVertical: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
     overflow: 'hidden',
   },
   heroAccent: {
@@ -253,12 +253,12 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    padding: 20,
+    padding: 22,
   },
   stat: { flex: 1, alignItems: 'center' },
   statDivider: {
     width: 1,
-    backgroundColor: COLORS.border,
+    backgroundColor: COLORS.glassBorder,
     marginHorizontal: 16,
   },
   statLabel: {
@@ -285,17 +285,17 @@ const styles = StyleSheet.create({
   },
   quickAccessCard: {
     flex: 1,
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
     alignItems: 'center',
   },
   quickAccessIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: COLORS.textSecondary,
     fontWeight: '600',
-    marginTop: 6,
+    marginTop: 8,
   },
   sectionTitle: {
     fontSize: 10,
@@ -333,26 +333,26 @@ const styles = StyleSheet.create({
   emptyIcon: {
     width: 60,
     height: 60,
-    borderRadius: 18,
-    backgroundColor: COLORS.surfaceHigh,
+    borderRadius: 20,
+    backgroundColor: COLORS.glass,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   debugBox: {
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 12,
+    backgroundColor: COLORS.glass,
+    borderRadius: 16,
     padding: 14,
     marginVertical: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   debugTitle: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.warning || '#FFA500',
+    color: COLORS.warning,
     letterSpacing: 1.5,
     marginBottom: 8,
   },
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
   },
   debugBtn: {
     backgroundColor: COLORS.primary,
-    borderRadius: 8,
+    borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center' as const,
     marginTop: 10,
@@ -384,12 +384,12 @@ const styles = StyleSheet.create({
   iosSetupBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: `${COLORS.primary}12`,
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
+    padding: 16,
     marginVertical: 10,
     borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
+    borderColor: `${COLORS.primary}20`,
     gap: 12,
   },
   iosSetupEmoji: {

@@ -113,7 +113,7 @@ export default function ProfileScreen() {
       >
         {/* Header */}
         <LinearGradient
-          colors={['#1C1708', '#0E0C04', COLORS.background]}
+          colors={['#1A1210', '#100C0A', COLORS.background]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerCard}
@@ -392,11 +392,11 @@ const styles = StyleSheet.create({
 
   /* ── Header Card ────────────────────────────────────────────── */
   headerCard: {
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 24,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
+    borderColor: COLORS.glassBorder,
     alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
@@ -408,8 +408,8 @@ const styles = StyleSheet.create({
     right: 0,
     height: 2,
     backgroundColor: COLORS.primary,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
 
   /* ── Avatar ─────────────────────────────────────────────────── */
@@ -510,14 +510,14 @@ const styles = StyleSheet.create({
   /* ── Premium Card ───────────────────────────────────────────── */
   premiumCard: {
     backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   premiumCardActive: {
-    borderColor: `${COLORS.primary}40`,
+    borderColor: `${COLORS.primary}30`,
   },
   premiumRow: {
     flexDirection: 'row',
@@ -613,12 +613,12 @@ const styles = StyleSheet.create({
 
   /* ── Privacy Card ────────────────────────────────────────────── */
   privacyCard: {
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 16,
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
     padding: 20,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   privacyHeader: {
     flexDirection: 'row',
@@ -676,12 +676,12 @@ const styles = StyleSheet.create({
 
   /* ── About Card ──────────────────────────────────────────────── */
   aboutCard: {
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 16,
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 32,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   aboutRow: {
     flexDirection: 'row',
@@ -709,12 +709,12 @@ const styles = StyleSheet.create({
 
   /* ── Email Connection ──────────────────────────────────────── */
   emailCard: {
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 16,
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   emailCardDesc: {
     fontSize: 12,
@@ -784,13 +784,13 @@ const styles = StyleSheet.create({
   },
 
   signOutBtn: {
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
     alignItems: 'center',
     marginTop: 16,
-    backgroundColor: COLORS.surfaceHigh,
+    backgroundColor: COLORS.glass,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   signOutBtnText: {
     fontSize: 15,

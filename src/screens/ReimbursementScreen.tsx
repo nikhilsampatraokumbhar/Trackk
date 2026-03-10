@@ -287,12 +287,12 @@ const styles = StyleSheet.create({
 
   /* ── Expense Summary Card ─────────────────────────────────────── */
   summaryCard: {
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 16,
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
     padding: 16,
     marginVertical: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   summaryHeader: {
     flexDirection: 'row',
@@ -343,10 +343,10 @@ const styles = StyleSheet.create({
 
   /* ── Hero Card ────────────────────────────────────────────────── */
   heroCard: {
-    borderRadius: 18,
+    borderRadius: 24,
     marginVertical: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
     overflow: 'hidden',
   },
   heroAccent: { height: 2 },
@@ -473,13 +473,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: '#131318',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     padding: 24,
     paddingBottom: 40,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   modalTitle: {
     fontSize: 18,
