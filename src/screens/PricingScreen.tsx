@@ -212,6 +212,7 @@ export default function PricingScreen() {
             <>
               {renderPlanCard('family_monthly')}
               {renderPlanCard('family_annual')}
+              {renderPlanCard('family_lifetime')}
 
               {/* Social lock-in messaging */}
               <View style={styles.familyNudge}>

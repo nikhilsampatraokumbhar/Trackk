@@ -76,7 +76,7 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
   premium_lifetime: {
     id: 'premium_lifetime',
     name: 'Premium Lifetime',
-    price: 1999,
+    price: 2999,
     period: 'lifetime',
     maxMembers: 1,
     tagline: 'Pay once, track forever \u2014 your gym membership costs more. And you don\'t even go.',
@@ -116,6 +116,20 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     ],
     savings: 'Save \u20B9789/year',
   },
+  family_lifetime: {
+    id: 'family_lifetime',
+    name: 'Family Lifetime',
+    price: 9999,
+    period: 'lifetime',
+    maxMembers: 4,
+    tagline: 'One family, one payment, forever \u2014 less than what you spend eating out in a month',
+    features: [
+      'Everything in Family',
+      'Lifetime access for the whole family',
+      'All future features included',
+      'Founding member badge',
+    ],
+  },
 };
 
 // ─── Founding member pricing (Phase 2) ──────────────────────────────────────
@@ -124,8 +138,10 @@ export const FOUNDING_PRICES: Partial<Record<PlanId, number>> = {
   premium_monthly: 49,
   premium_half_yearly: 199,
   premium_annual: 399,
+  premium_lifetime: 1999,
   family_monthly: 99,
   family_annual: 599,
+  family_lifetime: 6999,
 };
 
 // ─── Built-in Promo Codes ───────────────────────────────────────────────────
@@ -189,8 +205,10 @@ export type PremiumFeature =
   | 'unlimited_notes'
   | 'unlimited_export'
   | 'receipt_storage'
+  | 'nightly_review'
   | 'family_dashboard'
   | 'shared_budgets'
+  | 'reimbursement_export'
   | 'priority_support';
 
 const FREE_FEATURES: Set<PremiumFeature> = new Set();
@@ -230,7 +248,7 @@ export function PremiumProvider({ children, userId }: { children: ReactNode; use
 
   // ── Derived state ───────────────────────────────────────────────────────
   const isPremium = subscription?.status === 'active' || subscription?.status === 'trial';
-  const isFamily = isPremium && (subscription?.planId === 'family_monthly' || subscription?.planId === 'family_annual');
+  const isFamily = isPremium && (subscription?.planId === 'family_monthly' || subscription?.planId === 'family_annual' || subscription?.planId === 'family_lifetime');
   const isTrial = subscription?.status === 'trial';
   const currentPlan = PLANS[subscription?.planId || 'free'];
 

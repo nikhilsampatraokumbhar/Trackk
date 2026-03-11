@@ -70,7 +70,7 @@ function getStreakTier(streak: number): { label: string; color: string; emoji: s
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const FREE_GOAL_LIMIT = 1;
+const FREE_GOAL_LIMIT = 2;
 
 export default function GoalsScreen() {
   const nav = useNavigation<Nav>();
@@ -1148,7 +1148,7 @@ export default function GoalsScreen() {
                 if (!isPremium && goals.length >= FREE_GOAL_LIMIT) {
                   Alert.alert(
                     'Premium Feature',
-                    'Free plan includes 1 savings goal. Upgrade to Premium for unlimited goals!',
+                    'Free plan includes 2 savings goals. Upgrade to Premium for unlimited goals!',
                     [
                       { text: 'Not Now', style: 'cancel' },
                       { text: 'See Plans', onPress: () => nav.navigate('Pricing') },

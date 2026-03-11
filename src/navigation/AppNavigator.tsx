@@ -21,6 +21,8 @@ import IOSSetupScreen from '../screens/iOSSetupScreen';
 import PricingScreen from '../screens/PricingScreen';
 import ReferralScreen from '../screens/ReferralScreen';
 import SplitEditorScreen from '../screens/SplitEditorScreen';
+import NightlyReviewScreen from '../screens/NightlyReviewScreen';
+import QuickAddScreen from '../screens/QuickAddScreen';
 import LoginScreen from '../screens/LoginScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 
@@ -47,6 +49,8 @@ export type RootStackParamList = {
   TrackerSettings: undefined;
   Reimbursement: undefined;
   IOSSetup: undefined;
+  NightlyReview: undefined;
+  QuickAdd: { amount?: number; description?: string } | undefined;
   Pricing: undefined;
   Referral: undefined;
 };
@@ -253,6 +257,16 @@ export function AppNavigator() {
               name="SplitEditor"
               component={SplitEditorScreen}
               options={{ title: 'Split Expense', presentation: 'modal' }}
+            />
+            <Stack.Screen
+              name="NightlyReview"
+              component={NightlyReviewScreen}
+              options={{ title: 'Nightly Review', headerBackTitle: '' }}
+            />
+            <Stack.Screen
+              name="QuickAdd"
+              component={QuickAddScreen}
+              options={{ title: 'Quick Add', presentation: 'modal', headerShown: false }}
             />
             {Platform.OS === 'ios' && (
               <Stack.Screen

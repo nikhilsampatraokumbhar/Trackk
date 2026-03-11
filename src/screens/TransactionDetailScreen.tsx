@@ -18,7 +18,7 @@ import {
 } from '../services/CategoryService';
 import BottomSheet from '../components/BottomSheet';
 
-const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+const SIXTY_DAYS = 60 * 24 * 60 * 60 * 1000;
 
 type Route = RouteProp<RootStackParamList, 'TransactionDetail'>;
 
@@ -295,7 +295,7 @@ export default function TransactionDetailScreen() {
 
         {/* Note */}
         {(() => {
-          const isOld = Date.now() - txn.timestamp > THIRTY_DAYS;
+          const isOld = Date.now() - txn.timestamp > SIXTY_DAYS;
           const noteLocked = isOld && !isPremium;
           return (
             <View style={styles.noteCard}>
@@ -303,7 +303,7 @@ export default function TransactionDetailScreen() {
               {noteLocked ? (
                 <TouchableOpacity onPress={() => nav.navigate('Pricing')}>
                   <Text style={styles.notePlaceholder}>
-                    {txn.note || 'Notes on transactions older than 30 days are a Premium feature'}
+                    {txn.note || 'Notes on transactions older than 60 days are a Premium feature'}
                   </Text>
                   {!txn.note && (
                     <Text style={styles.noteUpgrade}>Upgrade to add notes</Text>

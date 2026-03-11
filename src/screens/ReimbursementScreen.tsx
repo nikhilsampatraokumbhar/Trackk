@@ -11,7 +11,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useTracker } from '../store/TrackerContext';
+import { usePremium } from '../store/PremiumContext';
 import { getTransactions, updateTransaction, saveTransaction } from '../services/StorageService';
+import { exportReimbursementReceipts } from '../services/ExportService';
 import { Transaction, ParsedTransaction } from '../models/types';
 import TrackerToggle from '../components/TrackerToggle';
 import TransactionCard from '../components/TransactionCard';
@@ -27,6 +29,7 @@ export default function ReimbursementScreen() {
   const nav = useNavigation<Nav>();
   const { user } = useAuth();
   const { trackerState, toggleReimbursement, transactionVersion } = useTracker();
+  const { isPremium } = usePremium();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -173,15 +176,45 @@ export default function ReimbursementScreen() {
     }
   };
 
-  const handleDownloadAllReceipts = () => {
+  const handleDownloadAllReceipts = async () => {
+    if (!isPremium) {
+      Alert.alert(
+        'Premium Feature',
+        'Export reimbursement receipts with named files and CSV summary is a Premium feature. Upgrade to unlock!',
+        [
+          { text: 'Not Now', style: 'cancel' },
+          { text: 'View Plans', onPress: () => nav.navigate('Pricing') },
+        ],
+      );
+      return;
+    }
+
     const withReceipts = transactions.filter(t => t.receiptUri);
     if (withReceipts.length === 0) {
       Alert.alert('No Receipts', 'No receipts have been attached to any expenses yet.');
       return;
     }
+
+    Vibration.vibrate(30);
     Alert.alert(
-      'Receipts Summary',
-      `${withReceipts.length} receipt(s) saved locally on your device.\n\nCloud backup & export coming with Trackk Premium.`,
+      'Export Reimbursement',
+      `Export ${transactions.length} expense(s) with ${withReceipts.length} receipt(s)?\n\nReceipts will be named as:\nMerchant_Date.jpg (e.g., Swiggy_2024-03-15.jpg)`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Export',
+          onPress: async () => {
+            const result = await exportReimbursementReceipts(transactions);
+            if (result.success) {
+              setSuccessMessage('Export Ready');
+              setSuccessSub(`${result.count} receipt(s) + summary CSV`);
+              setShowSuccess(true);
+            } else {
+              Alert.alert('Export Failed', result.error || 'Please try again.');
+            }
+          },
+        },
+      ],
     );
   };
 

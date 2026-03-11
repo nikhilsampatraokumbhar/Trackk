@@ -150,7 +150,7 @@ export interface SavingsJarEntry {
 
 // ─── Premium / Subscription ─────────────────────────────────────────────────
 
-export type PlanId = 'free' | 'premium_monthly' | 'premium_half_yearly' | 'premium_annual' | 'premium_lifetime' | 'family_monthly' | 'family_annual';
+export type PlanId = 'free' | 'premium_monthly' | 'premium_half_yearly' | 'premium_annual' | 'premium_lifetime' | 'family_monthly' | 'family_annual' | 'family_lifetime';
 
 export interface SubscriptionPlan {
   id: PlanId;

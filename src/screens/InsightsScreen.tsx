@@ -83,8 +83,8 @@ export default function InsightsScreen() {
     }))
     .sort((a, b) => b.amount - a.amount);
 
-  const visibleCategories = isPremium ? categories : categories.slice(0, 3);
-  const hiddenCount = isPremium ? 0 : Math.max(categories.length - 3, 0);
+  const visibleCategories = isPremium ? categories : categories.slice(0, 5);
+  const hiddenCount = isPremium ? 0 : Math.max(categories.length - 5, 0);
 
   // Top merchants
   const merchantMap: Record<string, { amount: number; count: number }> = {};
@@ -215,8 +215,8 @@ export default function InsightsScreen() {
           <>
             <Text style={styles.sectionTitle}>RECURRING EXPENSES</Text>
             <View style={styles.recurringCard}>
-              {recurring.slice(0, isPremium ? recurring.length : 3).map((r, idx) => (
-                <View key={r.merchant} style={[styles.recurringRow, idx === Math.min(recurring.length, isPremium ? recurring.length : 3) - 1 && styles.recurringRowLast]}>
+              {recurring.slice(0, isPremium ? recurring.length : 5).map((r, idx) => (
+                <View key={r.merchant} style={[styles.recurringRow, idx === Math.min(recurring.length, isPremium ? recurring.length : 5) - 1 && styles.recurringRowLast]}>
                   <View style={styles.recurringLeft}>
                     <View style={[styles.recurringFreqBadge, { backgroundColor: r.frequency === 'monthly' ? `${COLORS.primary}15` : `${COLORS.success}15` }]}>
                       <Text style={[styles.recurringFreqText, { color: r.frequency === 'monthly' ? COLORS.primary : COLORS.success }]}>

@@ -562,7 +562,60 @@ export const renewEmailWatches = onSchedule(
   }
 );
 
-// ─── 10. Poll Yahoo Emails (Scheduled — every 5 minutes) ───────────────────
+// ─── 10. Nightly Review Nudge (Scheduled — 9 PM IST daily) ──────────────────
+
+export const nightlyReviewNudge = onSchedule(
+  { schedule: "every day 15:30", timeZone: "Asia/Kolkata" }, // 9 PM IST
+  async () => {
+    const activeSubs = await db
+      .collection("subscriptions")
+      .where("status", "==", "active")
+      .get();
+
+    for (const subDoc of activeSubs.docs) {
+      const uid = subDoc.id;
+      try {
+        const devicesSnap = await db
+          .collection("users").doc(uid).collection("devices").get();
+        if (devicesSnap.empty) continue;
+
+        const tokens = devicesSnap.docs
+          .map((d) => d.data().fcmToken)
+          .filter(Boolean);
+        if (tokens.length === 0) continue;
+
+        for (const token of tokens) {
+          try {
+            await admin.messaging().send({
+              token,
+              notification: {
+                title: "Time for your nightly review",
+                body: "Review today's transactions and assign them to trackers!",
+              },
+              data: {
+                type: "nightly_review",
+                action: "open_nightly_review",
+              },
+            });
+          } catch (tokenError: unknown) {
+            const errCode = (tokenError as { code?: string })?.code;
+            if (
+              errCode === "messaging/invalid-registration-token" ||
+              errCode === "messaging/registration-token-not-registered"
+            ) {
+              await db.collection("users").doc(uid)
+                .collection("devices").doc(token).delete();
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Nightly nudge failed for ${uid}:`, error);
+      }
+    }
+  }
+);
+
+// ─── 11. Poll Yahoo Emails (Scheduled — every 5 minutes) ───────────────────
 
 export const pollYahooEmails = onSchedule(
   {

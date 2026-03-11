@@ -19,6 +19,11 @@ import {
 import { saveTransaction, addGroupTransaction, getGroup, getGoals, getOrCreateTodaySpend, getOrCreateUser } from '../services/StorageService';
 import { addGroupTransactionCloud, getGroupCloud } from '../services/SyncService';
 import { initDeepLinkListener } from '../services/DeepLinkService';
+import {
+  ingestTransaction,
+  addToPendingReview,
+  TransactionSource,
+} from '../services/TransactionSignalEngine';
 import { useGroups } from './GroupContext';
 import { usePremium } from './PremiumContext';
 
@@ -213,12 +218,17 @@ export function TrackerProvider({ children, groups, userId }: Props) {
 
       if (parsed.amount <= 0) return;
 
+      const signal = ingestTransaction(parsed, 'email');
+      if (!signal) return; // duplicate
+
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
 
       if (activeTrackers.length > 0) {
         await handleIncomingTransaction(parsed, activeTrackers);
+      } else {
+        await addToPendingReview(parsed, 'email');
       }
     });
 
@@ -228,11 +238,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   // Initialize deep link listener for iOS (and as fallback on Android)
   useEffect(() => {
     const cleanup = initDeepLinkListener(async (parsed) => {
+      const signal = ingestTransaction(parsed, 'deep_link');
+      if (!signal) return; // duplicate
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
       if (activeTrackers.length > 0) {
         await handleIncomingTransaction(parsed, activeTrackers);
+      } else {
+        await addToPendingReview(parsed, 'deep_link');
       }
     });
     return cleanup;
@@ -298,10 +312,16 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     await requestNotificationPermission();
 
     startSmsListener(async (parsed) => {
+      const signal = ingestTransaction(parsed, 'sms');
+      if (!signal) return; // duplicate — already handled from another source
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
-      await handleIncomingTransaction(parsed, activeTrackers);
+      if (activeTrackers.length > 0) {
+        await handleIncomingTransaction(parsed, activeTrackers);
+      } else {
+        await addToPendingReview(parsed, 'sms');
+      }
     });
 
     setIsListening(true);

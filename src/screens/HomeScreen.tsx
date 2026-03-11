@@ -12,6 +12,7 @@ import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
 import { getTransactions, getGoals, computeTodaySpendFromTransactions, deleteTransaction, getTransaction } from '../services/StorageService';
 import { getOverallBudget, getBudgetStatus, setBudget, deleteBudget, BudgetStatus } from '../services/BudgetService';
+import { getTodayPendingCount } from '../services/TransactionSignalEngine';
 import { Transaction, SavingsGoal } from '../models/types';
 import TransactionCard from '../components/TransactionCard';
 import AnimatedAmount from '../components/AnimatedAmount';
@@ -50,6 +51,9 @@ export default function HomeScreen() {
   // Goal daily budget display
   const [activeGoal, setActiveGoal] = useState<SavingsGoal | null>(null);
   const [todaySpend, setTodaySpend] = useState(0);
+
+  // Pending review count
+  const [pendingReviewCount, setPendingReviewCount] = useState(0);
 
   // Undo toast
   const [undoState, setUndoState] = useState<{ visible: boolean; message: string; txn: Transaction | null }>({ visible: false, message: '', txn: null });
@@ -108,6 +112,11 @@ export default function HomeScreen() {
     } else {
       setActiveGoal(null);
     }
+
+    // Load pending review count for nightly review badge
+    const pendingCount = await getTodayPendingCount();
+    setPendingReviewCount(pendingCount);
+
     setLoading(false);
   }, []);
 
@@ -329,6 +338,58 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Quick Actions */}
+        <View style={styles.quickActionsRow}>
+          <TouchableOpacity
+            style={styles.quickActionBtn}
+            onPress={() => nav.navigate('QuickAdd', undefined)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: `${COLORS.primary}20` }]}>
+              <Text style={styles.quickActionEmoji}>+</Text>
+            </View>
+            <Text style={styles.quickActionLabel}>Quick Add</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionBtn}
+            onPress={() => nav.navigate('NightlyReview')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(138,120,240,0.15)' }]}>
+              <Text style={styles.quickActionEmoji}>🌙</Text>
+              {pendingReviewCount > 0 && (
+                <View style={styles.quickActionBadge}>
+                  <Text style={styles.quickActionBadgeText}>{pendingReviewCount}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.quickActionLabel}>Review</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionBtn}
+            onPress={() => nav.navigate('Reimbursement')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: `${COLORS.reimbursementColor}15` }]}>
+              <Text style={styles.quickActionEmoji}>🧾</Text>
+            </View>
+            <Text style={styles.quickActionLabel}>Reimburse</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionBtn}
+            onPress={() => nav.navigate('Goals')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: `${COLORS.success}15` }]}>
+              <Text style={styles.quickActionEmoji}>🎯</Text>
+            </View>
+            <Text style={styles.quickActionLabel}>Goals</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Recent Transactions */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
@@ -477,6 +538,15 @@ const styles = StyleSheet.create({
   goalBudgetRight: { alignItems: 'flex-end' },
   goalBudgetAmount: { fontSize: 22, fontWeight: '800', color: COLORS.success, letterSpacing: -0.5 },
   goalBudgetSub: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+
+  /* Quick Actions */
+  quickActionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 16, gap: 8 },
+  quickActionBtn: { flex: 1, alignItems: 'center' },
+  quickActionIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  quickActionEmoji: { fontSize: 20 },
+  quickActionLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 0.3 },
+  quickActionBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: COLORS.danger, borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  quickActionBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFFFFF' },
 
   budgetModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   budgetModalContainer: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.glassBorder, borderBottomWidth: 0 },
