@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, AppState,
@@ -6,7 +6,6 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useGroups } from '../store/GroupContext';
@@ -15,21 +14,20 @@ import { getTransactions, getGoals, computeTodaySpendFromTransactions } from '..
 import { getOverallBudget, getBudgetStatus, setBudget, deleteBudget, BudgetStatus } from '../services/BudgetService';
 import { Transaction, SavingsGoal } from '../models/types';
 import TransactionCard from '../components/TransactionCard';
+import AnimatedAmount from '../components/AnimatedAmount';
+import { HeroCardSkeleton, TransactionListSkeleton } from '../components/SkeletonLoader';
 import ActiveTrackerBanner from '../components/ActiveTrackerBanner';
 import TrackerSelectionDialog from '../components/TrackerSelectionDialog';
-import TrackerToggle from '../components/TrackerToggle';
 import { COLORS, formatCurrency } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function HomeScreen() {
   const nav = useNavigation<Nav>();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { groups } = useGroups();
   const {
-    trackerState, togglePersonal, toggleReimbursement, toggleGroup,
-    getActiveTrackers, pendingTransaction, pendingGroupTracker,
+    trackerState, getActiveTrackers, pendingTransaction, pendingGroupTracker,
     clearPendingTransaction, addTransactionToTracker,
     transactionVersion,
   } = useTracker();
@@ -39,6 +37,7 @@ export default function HomeScreen() {
   const [monthSpent, setMonthSpent] = useState(0);
   const [budgetStatus, setBudgetStatusState] = useState<BudgetStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Budget editing modal
   const [showBudgetModal, setShowBudgetModal] = useState(false);
@@ -96,6 +95,7 @@ export default function HomeScreen() {
     } else {
       setActiveGoal(null);
     }
+    setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -164,6 +164,27 @@ export default function HomeScreen() {
     return 'Good evening';
   };
 
+  const contextualSubtext = useMemo(() => {
+    const day = new Date().getDay();
+    const h = new Date().getHours();
+    if (budgetStatus && budgetStatus.percentage > 80) {
+      return 'Budget\'s getting tight — stay mindful';
+    }
+    if (recentTxns.length === 0) {
+      return 'Start tracking your expenses';
+    }
+    if (day === 0 || day === 6) {
+      return 'Weekend vibes — spend wisely';
+    }
+    if (h < 12) {
+      return 'Let\'s keep spending in check today';
+    }
+    if (h >= 21) {
+      return 'Wrapping up the day\'s expenses';
+    }
+    return 'Your finances at a glance';
+  }, [budgetStatus, recentTxns.length]);
+
   const hasTransactions = recentTxns.length > 0;
   const userInitial = (user?.displayName || 'U')[0].toUpperCase();
 
@@ -191,6 +212,7 @@ export default function HomeScreen() {
           <View style={styles.headerLeft}>
             <Text style={styles.greeting}>{greeting()}</Text>
             <Text style={styles.name}>{user?.displayName || 'User'}</Text>
+            <Text style={styles.contextSub}>{contextualSubtext}</Text>
           </View>
           <TouchableOpacity
             style={styles.profileBtn}
@@ -215,6 +237,9 @@ export default function HomeScreen() {
         )}
 
         {/* Hero card — total spent + budget progress merged */}
+        {loading ? (
+          <HeroCardSkeleton />
+        ) : (
         <LinearGradient
           colors={['#1A1210', '#100C0A', COLORS.background]}
           start={{ x: 0, y: 0 }}
@@ -223,7 +248,7 @@ export default function HomeScreen() {
         >
           <View style={styles.heroGoldLine} />
           <Text style={styles.heroLabel}>TOTAL SPENT</Text>
-          <Text style={styles.heroAmount}>{formatCurrency(totalSpent)}</Text>
+          <AnimatedAmount value={totalSpent} style={styles.heroAmount} />
           <Text style={styles.heroSub}>
             {recentTxns.length > 0
               ? `Across ${recentTxns.filter(t => !t.groupId).length} personal transactions`
@@ -264,6 +289,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           )}
         </LinearGradient>
+        )}
 
         {/* Today's Goal Budget — quick glance card */}
         {activeGoal && (
@@ -292,42 +318,14 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Quick Trackers */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Quick Trackers</Text>
-        </View>
-
-        <TrackerToggle
-          label="Personal Expenses"
-          subtitle="Daily spending"
-          isActive={trackerState.personal}
-          onToggle={togglePersonal}
-          color={COLORS.personalColor}
-        />
-        <TrackerToggle
-          label="Reimbursement"
-          subtitle="Office expenses"
-          isActive={trackerState.reimbursement}
-          onToggle={toggleReimbursement}
-          color={COLORS.reimbursementColor}
-        />
-        {groups.slice(0, 3).map(group => (
-          <TrackerToggle
-            key={group.id}
-            label={group.name}
-            subtitle={`${group.members.length} members`}
-            isActive={trackerState.activeGroupIds.includes(group.id)}
-            onToggle={() => toggleGroup(group.id)}
-            color={COLORS.groupColor}
-          />
-        ))}
-
         {/* Recent Transactions */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
         </View>
 
-        {recentTxns.length === 0 ? (
+        {loading ? (
+          <TransactionListSkeleton count={4} />
+        ) : recentTxns.length === 0 ? (
           <View style={styles.empty}>
             <View style={styles.emptyIcon}>
               <Text style={styles.emptyEmoji}>💳</Text>
@@ -440,6 +438,12 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginTop: 2,
     letterSpacing: -0.5,
+  },
+  contextSub: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginTop: 4,
+    letterSpacing: 0.2,
   },
   profileBtn: {
     width: 44,

@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, RefreshControl,
+  View, Text, StyleSheet, SectionList, RefreshControl,
   TouchableOpacity, Alert, Modal, Image, AppState,
-  TextInput, KeyboardAvoidingView, Platform,
+  TextInput, KeyboardAvoidingView, Platform, Vibration,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -15,7 +15,11 @@ import { getTransactions, updateTransaction, saveTransaction } from '../services
 import { Transaction, ParsedTransaction } from '../models/types';
 import TrackerToggle from '../components/TrackerToggle';
 import TransactionCard from '../components/TransactionCard';
-import { COLORS, formatCurrency } from '../utils/helpers';
+import SuccessOverlay from '../components/SuccessOverlay';
+import AnimatedAmount from '../components/AnimatedAmount';
+import { HeroCardSkeleton, TransactionListSkeleton } from '../components/SkeletonLoader';
+import { COLORS, formatCurrency, groupByDate } from '../utils/helpers';
+import { REIMBURSEMENT_CATEGORIES } from '../utils/categories';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -25,6 +29,7 @@ export default function ReimbursementScreen() {
   const { trackerState, toggleReimbursement, transactionVersion } = useTracker();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
   const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
 
@@ -32,16 +37,23 @@ export default function ReimbursementScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addAmount, setAddAmount] = useState('');
   const [addDescription, setAddDescription] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Success overlay
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [successSub, setSuccessSub] = useState('');
 
   const load = useCallback(async () => {
     const txns = await getTransactions('reimbursement');
     setTransactions(txns.sort((a, b) => b.timestamp - a.timestamp));
+    setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load, transactionVersion]));
 
-  // Reload data when app returns from background (e.g. after background notification action)
+  // Reload data when app returns from background
   const appState = useRef(AppState.currentState);
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
@@ -55,26 +67,38 @@ export default function ReimbursementScreen() {
 
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
+  const handleCategorySelect = (label: string) => {
+    Vibration.vibrate(30);
+    setSelectedCategory(label);
+    setAddDescription(label);
+  };
+
   const handleAddExpense = async () => {
     const amount = parseFloat(addAmount);
     if (!amount || amount <= 0) {
       Alert.alert('Invalid', 'Please enter a valid amount.');
       return;
     }
+    Vibration.vibrate(40);
     setSaving(true);
     try {
+      const desc = addDescription.trim() || selectedCategory || 'Office expense';
       const parsed: ParsedTransaction = {
         amount,
         type: 'debit',
-        merchant: addDescription.trim() || undefined,
-        rawMessage: `Manual entry: ${addDescription.trim() || 'Office expense'} - ${amount}`,
+        merchant: desc,
+        rawMessage: `Manual entry: ${desc} - ${amount}`,
         timestamp: Date.now(),
       };
       await saveTransaction(parsed, 'reimbursement', user?.id || '');
       setShowAddModal(false);
       setAddAmount('');
       setAddDescription('');
+      setSelectedCategory(null);
       await load();
+      setSuccessMessage('Expense Saved');
+      setSuccessSub(formatCurrency(amount) + ' added to reimbursements');
+      setShowSuccess(true);
     } catch {
       Alert.alert('Error', 'Failed to save expense.');
     } finally {
@@ -84,7 +108,7 @@ export default function ReimbursementScreen() {
 
   const total = transactions.reduce((s, t) => s + t.amount, 0);
 
-  // ── Monthly breakdown for Expense Summary ──────────────────────────────
+  // Monthly breakdown for Expense Summary
   const monthlyBreakdown = useMemo(() => {
     const map: Record<string, { label: string; total: number; count: number }> = {};
     transactions.forEach(t => {
@@ -100,8 +124,12 @@ export default function ReimbursementScreen() {
       .map(([, v]) => v);
   }, [transactions]);
 
-  // ── Receipt capture (simulated) ────────────────────────────────────────
+  // Date-grouped sections
+  const sections = useMemo(() => groupByDate(transactions), [transactions]);
+
+  // Receipt capture
   const handleReceiptPress = (transactionId: string) => {
+    Vibration.vibrate(30);
     setSelectedTransactionId(transactionId);
     setReceiptModalVisible(true);
   };
@@ -135,7 +163,10 @@ export default function ReimbursementScreen() {
       if (!result.canceled && result.assets[0] && selectedTransactionId) {
         await updateTransaction(selectedTransactionId, { receiptUri: result.assets[0].uri });
         await load();
-        Alert.alert('Receipt saved', 'Receipt attached to this expense.');
+        Vibration.vibrate(50);
+        setSuccessMessage('Receipt Saved');
+        setSuccessSub('Receipt attached to expense');
+        setShowSuccess(true);
       }
     } catch (err) {
       Alert.alert('Error', 'Could not capture receipt. Please try again.');
@@ -154,9 +185,84 @@ export default function ReimbursementScreen() {
     );
   };
 
+  const renderHeader = () => (
+    <>
+      <TrackerToggle
+        label="Reimbursement"
+        subtitle="Track office / business expenses"
+        isActive={trackerState.reimbursement}
+        onToggle={toggleReimbursement}
+        color={COLORS.reimbursementColor}
+      />
+
+      {/* Expense Summary (monthly breakdown) */}
+      {monthlyBreakdown.length > 0 && (
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryHeader}>
+            <Text style={styles.summaryIcon}>📊</Text>
+            <Text style={styles.summaryTitle}>EXPENSE SUMMARY</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          {monthlyBreakdown.map((m, i) => (
+            <View key={i} style={styles.summaryRow}>
+              <Text style={styles.summaryMonth}>{m.label}</Text>
+              <View style={styles.summaryRight}>
+                <Text style={styles.summaryCount}>{m.count} txns</Text>
+                <Text style={styles.summaryAmount}>
+                  {formatCurrency(m.total)}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {loading ? (
+        <HeroCardSkeleton />
+      ) : (
+        <LinearGradient
+          colors={['#200E12', '#0A0A0F']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroCard}
+        >
+          <View style={[styles.heroAccent, { backgroundColor: COLORS.reimbursementColor }]} />
+          <View style={styles.heroBody}>
+            <View>
+              <Text style={styles.heroLabel}>TOTAL REIMBURSABLE</Text>
+              <AnimatedAmount
+                value={total}
+                style={[styles.heroAmount, { color: COLORS.reimbursementColor }]}
+              />
+            </View>
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{transactions.length}</Text>
+              <Text style={styles.countLabel}>expenses</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      )}
+
+      {loading && <TransactionListSkeleton count={3} />}
+
+      {!loading && transactions.length === 0 && (
+        <View style={styles.empty}>
+          <View style={styles.emptyIcon}>
+            <Text style={styles.emptyEmoji}>🧾</Text>
+          </View>
+          <Text style={styles.emptyText}>
+            {trackerState.reimbursement
+              ? 'No reimbursement expenses yet'
+              : 'Enable the tracker to log office expenses'}
+          </Text>
+        </View>
+      )}
+    </>
+  );
+
   return (
     <View style={styles.container}>
-      <FlatList
+      <SectionList
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={
@@ -167,77 +273,12 @@ export default function ReimbursementScreen() {
             colors={[COLORS.primary]}
           />
         }
-        ListHeaderComponent={
-          <>
-            <TrackerToggle
-              label="Reimbursement"
-              subtitle="Track office / business expenses"
-              isActive={trackerState.reimbursement}
-              onToggle={toggleReimbursement}
-              color={COLORS.reimbursementColor}
-            />
-
-            {/* ── Expense Summary (monthly breakdown) ─────────────────── */}
-            {monthlyBreakdown.length > 0 && (
-              <View style={styles.summaryCard}>
-                <View style={styles.summaryHeader}>
-                  <Text style={styles.summaryIcon}>📊</Text>
-                  <Text style={styles.summaryTitle}>EXPENSE SUMMARY</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                {monthlyBreakdown.map((m, i) => (
-                  <View key={i} style={styles.summaryRow}>
-                    <Text style={styles.summaryMonth}>{m.label}</Text>
-                    <View style={styles.summaryRight}>
-                      <Text style={styles.summaryCount}>{m.count} txns</Text>
-                      <Text style={styles.summaryAmount}>
-                        {formatCurrency(m.total)}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            <LinearGradient
-              colors={['#200E12', '#0A0A0F']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroCard}
-            >
-              <View style={[styles.heroAccent, { backgroundColor: COLORS.reimbursementColor }]} />
-              <View style={styles.heroBody}>
-                <View>
-                  <Text style={styles.heroLabel}>TOTAL REIMBURSABLE</Text>
-                  <Text style={[styles.heroAmount, { color: COLORS.reimbursementColor }]}>
-                    {formatCurrency(total)}
-                  </Text>
-                </View>
-                <View style={styles.countBadge}>
-                  <Text style={styles.countText}>{transactions.length}</Text>
-                  <Text style={styles.countLabel}>expenses</Text>
-                </View>
-              </View>
-            </LinearGradient>
-
-            <Text style={styles.sectionTitle}>ALL EXPENSES</Text>
-
-            {transactions.length === 0 && (
-              <View style={styles.empty}>
-                <View style={styles.emptyIcon}>
-                  <Text style={styles.emptyEmoji}>🧾</Text>
-                </View>
-                <Text style={styles.emptyText}>
-                  {trackerState.reimbursement
-                    ? 'No reimbursement expenses yet'
-                    : 'Enable the tracker to log office expenses'}
-                </Text>
-              </View>
-            )}
-          </>
-        }
-        data={transactions}
+        ListHeaderComponent={renderHeader}
+        sections={loading ? [] : sections}
         keyExtractor={item => item.id}
+        renderSectionHeader={({ section: { title } }) => (
+          <Text style={styles.sectionTitle}>{title.toUpperCase()}</Text>
+        )}
         renderItem={({ item }) => (
           <View style={styles.transactionRow}>
             <View style={styles.transactionCardWrap}>
@@ -267,12 +308,13 @@ export default function ReimbursementScreen() {
             </TouchableOpacity>
           ) : null
         }
+        stickySectionHeadersEnabled={false}
       />
 
       {/* Add Expense FAB */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => setShowAddModal(true)}
+        onPress={() => { Vibration.vibrate(30); setShowAddModal(true); }}
         activeOpacity={0.8}
       >
         <Text style={styles.fabIcon}>+</Text>
@@ -332,6 +374,30 @@ export default function ReimbursementScreen() {
             <Text style={styles.addModalTitle}>Add Office Expense</Text>
             <Text style={styles.addModalSub}>Log a cash or missed reimbursable expense</Text>
 
+            {/* Category Quick Picks */}
+            <Text style={styles.addModalLabel}>CATEGORY</Text>
+            <View style={styles.categoryRow}>
+              {REIMBURSEMENT_CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  key={cat.label}
+                  style={[
+                    styles.categoryChip,
+                    selectedCategory === cat.label && styles.categoryChipActive,
+                  ]}
+                  onPress={() => handleCategorySelect(cat.label)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
+                  <Text style={[
+                    styles.categoryChipText,
+                    selectedCategory === cat.label && styles.categoryChipTextActive,
+                  ]}>
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <Text style={styles.addModalLabel}>AMOUNT</Text>
             <View style={styles.addModalAmountRow}>
               <Text style={styles.addModalCurrency}>₹</Text>
@@ -350,7 +416,7 @@ export default function ReimbursementScreen() {
             <TextInput
               style={styles.addModalDescInput}
               value={addDescription}
-              onChangeText={setAddDescription}
+              onChangeText={(t) => { setAddDescription(t); setSelectedCategory(null); }}
               placeholder="e.g. Cab to office, Client lunch..."
               placeholderTextColor={COLORS.textLight}
               maxLength={200}
@@ -374,12 +440,21 @@ export default function ReimbursementScreen() {
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.addModalCancelBtn} onPress={() => { setShowAddModal(false); setAddAmount(''); setAddDescription(''); }}>
+            <TouchableOpacity style={styles.addModalCancelBtn} onPress={() => { setShowAddModal(false); setAddAmount(''); setAddDescription(''); setSelectedCategory(null); }}>
               <Text style={styles.addModalCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Success Overlay */}
+      <SuccessOverlay
+        visible={showSuccess}
+        message={successMessage}
+        subMessage={successSub}
+        onDone={() => setShowSuccess(false)}
+        color={COLORS.reimbursementColor}
+      />
     </View>
   );
 }
@@ -403,9 +478,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 10,
   },
-  summaryIcon: {
-    fontSize: 16,
-  },
+  summaryIcon: { fontSize: 16 },
   summaryTitle: {
     fontSize: 10,
     fontWeight: '700',
@@ -498,6 +571,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     letterSpacing: 1.5,
     marginBottom: 12,
+    marginTop: 16,
   },
   empty: { alignItems: 'center', paddingVertical: 40 },
   emptyIcon: {
@@ -524,9 +598,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 2,
   },
-  transactionCardWrap: {
-    flex: 1,
-  },
+  transactionCardWrap: { flex: 1 },
   receiptBtn: {
     width: 40,
     height: 40,
@@ -538,9 +610,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  receiptBtnIcon: {
-    fontSize: 18,
-  },
+  receiptBtnIcon: { fontSize: 18 },
   receiptBtnAttached: {
     borderColor: `${COLORS.success}50`,
     backgroundColor: `${COLORS.success}15`,
@@ -559,9 +629,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     gap: 10,
   },
-  downloadBtnIcon: {
-    fontSize: 18,
-  },
+  downloadBtnIcon: { fontSize: 18 },
   downloadBtnText: {
     fontSize: 15,
     fontWeight: '700',
@@ -606,9 +674,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     gap: 14,
   },
-  modalOptionIcon: {
-    fontSize: 22,
-  },
+  modalOptionIcon: { fontSize: 22 },
   modalOptionText: {
     fontSize: 15,
     fontWeight: '600',
@@ -699,6 +765,39 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: 8,
   },
+
+  /* ── Category Quick Picks ─────────────────────────────────────── */
+  categoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.glass,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+    gap: 6,
+  },
+  categoryChipActive: {
+    borderColor: COLORS.reimbursementColor,
+    backgroundColor: `${COLORS.reimbursementColor}15`,
+  },
+  categoryChipIcon: { fontSize: 16 },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  categoryChipTextActive: {
+    color: COLORS.reimbursementColor,
+  },
+
   addModalAmountRow: {
     flexDirection: 'row',
     alignItems: 'center',
