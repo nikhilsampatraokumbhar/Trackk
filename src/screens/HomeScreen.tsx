@@ -29,7 +29,8 @@ export default function HomeScreen() {
   const { groups } = useGroups();
   const {
     trackerState, togglePersonal, toggleReimbursement, toggleGroup,
-    getActiveTrackers, pendingTransaction, clearPendingTransaction, addTransactionToTracker,
+    getActiveTrackers, pendingTransaction, pendingGroupTracker,
+    clearPendingTransaction, addTransactionToTracker,
     transactionVersion,
   } = useTracker();
 
@@ -48,6 +49,23 @@ export default function HomeScreen() {
   const [todaySpend, setTodaySpend] = useState(0);
 
   const activeTrackers = getActiveTrackers(groups);
+
+  // Auto-open SplitEditor when a group tracker is auto-routed from notification
+  useEffect(() => {
+    if (pendingTransaction && pendingGroupTracker) {
+      const txn = pendingTransaction;
+      const tracker = pendingGroupTracker;
+      clearPendingTransaction();
+      nav.navigate('SplitEditor', {
+        groupId: tracker.id,
+        amount: txn.amount,
+        description: txn.merchant
+          ? `Payment at ${txn.merchant}`
+          : undefined,
+        merchant: txn.merchant || undefined,
+      });
+    }
+  }, [pendingTransaction, pendingGroupTracker]);
 
   const loadTransactions = useCallback(async () => {
     const all = await getTransactions();
@@ -369,9 +387,9 @@ export default function HomeScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Tracker selection dialog */}
+      {/* Tracker selection dialog — only shown if no auto-routing (no pendingGroupTracker) */}
       <TrackerSelectionDialog
-        visible={!!pendingTransaction}
+        visible={!!pendingTransaction && !pendingGroupTracker}
         transaction={pendingTransaction}
         trackers={activeTrackers}
         onSelect={async tracker => {

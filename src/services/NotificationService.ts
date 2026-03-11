@@ -189,6 +189,31 @@ export function registerBackgroundHandler(): void {
   });
 }
 
+/**
+ * Show a confirmation notification when a transaction is auto-saved
+ * to both reimbursement and personal trackers.
+ */
+export async function showAutoSavedNotification(
+  parsed: ParsedTransaction,
+): Promise<void> {
+  const notificationId = makeNotificationId(parsed);
+  const title = `💰 ${formatCurrency(parsed.amount)} tracked`;
+  const body = parsed.merchant
+    ? `${parsed.merchant} → Saved to Reimbursement + Personal`
+    : 'Saved to Reimbursement + Personal';
+
+  await notifee.displayNotification({
+    id: notificationId,
+    title,
+    body,
+    android: {
+      channelId: CHANNEL_ID,
+      category: AndroidCategory.MESSAGE,
+      importance: AndroidImportance.HIGH,
+    },
+  });
+}
+
 export async function requestNotificationPermission(): Promise<boolean> {
   const settings = await notifee.requestPermission();
   return settings.authorizationStatus >= 1;
