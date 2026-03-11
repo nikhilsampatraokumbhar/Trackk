@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert, ActivityIndicator, Platform, Linking,
+  TextInput, Alert, ActivityIndicator, Platform, Linking, Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,7 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { usePremium } from '../store/PremiumContext';
 import { COLORS } from '../utils/helpers';
+import { isDevMode, setDevMode, loadDevMode } from '../utils/devMode';
 import {
   EmailProvider, connectEmail, disconnectEmail, parseOAuthRedirect,
   getProviderDisplayName, getProviderColor,
@@ -29,6 +30,31 @@ export default function ProfileScreen() {
     gmail: null, outlook: null, yahoo: null,
   });
   const [connectingProvider, setConnectingProvider] = useState<EmailProvider | null>(null);
+  const [devMode, setDevModeState] = useState(false);
+  const versionTapCount = useRef(0);
+  const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    loadDevMode().then(setDevModeState);
+  }, []);
+
+  const handleVersionTap = () => {
+    versionTapCount.current += 1;
+    if (versionTapTimer.current) clearTimeout(versionTapTimer.current);
+    if (versionTapCount.current >= 7) {
+      versionTapCount.current = 0;
+      Vibration.vibrate(100);
+      const newState = !devMode;
+      setDevMode(newState);
+      setDevModeState(newState);
+      Alert.alert(
+        newState ? 'Developer Mode Enabled' : 'Developer Mode Disabled',
+        newState ? 'Debug diagnostics are now visible.' : 'Debug diagnostics are now hidden.',
+      );
+      return;
+    }
+    versionTapTimer.current = setTimeout(() => { versionTapCount.current = 0; }, 1500);
+  };
 
   // Load connected email status
   useEffect(() => {
@@ -342,10 +368,10 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.aboutCard}>
-          <View style={styles.aboutRow}>
+          <TouchableOpacity style={styles.aboutRow} onPress={handleVersionTap} activeOpacity={0.7}>
             <Text style={styles.aboutLabel}>App Version</Text>
-            <Text style={styles.aboutValue}>1.0.0</Text>
-          </View>
+            <Text style={styles.aboutValue}>1.0.0{devMode ? ' (Dev)' : ''}</Text>
+          </TouchableOpacity>
           <View style={styles.aboutDivider} />
           <View style={styles.aboutRow}>
             <Text style={styles.aboutLabel}>Storage</Text>

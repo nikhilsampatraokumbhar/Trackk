@@ -89,3 +89,34 @@ export function getColorForId(id: string): string {
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 11);
 }
+
+/** Group transactions by date section (Today, Yesterday, This Week, Earlier) */
+export function groupByDate<T extends { timestamp: number }>(items: T[]): { title: string; data: T[] }[] {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterday = today - 86400000;
+  const weekAgo = today - 7 * 86400000;
+
+  const groups: Record<string, T[]> = {
+    Today: [],
+    Yesterday: [],
+    'This Week': [],
+    Earlier: [],
+  };
+
+  for (const item of items) {
+    if (item.timestamp >= today) {
+      groups.Today.push(item);
+    } else if (item.timestamp >= yesterday) {
+      groups.Yesterday.push(item);
+    } else if (item.timestamp >= weekAgo) {
+      groups['This Week'].push(item);
+    } else {
+      groups.Earlier.push(item);
+    }
+  }
+
+  return Object.entries(groups)
+    .filter(([, data]) => data.length > 0)
+    .map(([title, data]) => ({ title, data }));
+}

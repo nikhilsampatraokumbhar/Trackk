@@ -13,10 +13,10 @@ import {
 import { setupFcmHandlers } from '../services/FcmService';
 import {
   setupNotificationChannel, requestNotificationPermission,
-  showTransactionNotification, registerNotificationCallbacks,
-  handleNotificationEvent,
+  showTransactionNotification, showAutoSavedNotification,
+  registerNotificationCallbacks, handleNotificationEvent,
 } from '../services/NotificationService';
-import { saveTransaction, addGroupTransaction, getGroup, getGoals, getOrCreateTodaySpend } from '../services/StorageService';
+import { saveTransaction, addGroupTransaction, getGroup, getGoals, getOrCreateTodaySpend, getOrCreateUser } from '../services/StorageService';
 import { addGroupTransactionCloud, getGroupCloud } from '../services/SyncService';
 import { initDeepLinkListener } from '../services/DeepLinkService';
 import { useGroups } from './GroupContext';
@@ -39,6 +39,7 @@ interface TrackerContextType {
   toggleGroup: (groupId: string) => Promise<void>;
   getActiveTrackers: (groups: Group[]) => ActiveTracker[];
   pendingTransaction: ParsedTransaction | null;
+  pendingGroupTracker: ActiveTracker | null; // auto-routed group tracker for SplitEditor
   clearPendingTransaction: () => void;
   addTransactionToTracker: (parsed: ParsedTransaction, trackerType: TrackerType, trackerId: string) => Promise<void>;
   transactionVersion: number; // increments on every new transaction, screens can react to this
@@ -46,6 +47,35 @@ interface TrackerContextType {
 }
 
 const TrackerContext = createContext<TrackerContextType>({} as TrackerContextType);
+
+/**
+ * Smart routing logic for multiple active trackers:
+ * - Group + any other → route to group automatically (no "Choose Tracker")
+ * - Reimbursement + Personal → auto-save to both
+ * - Otherwise → normal flow
+ */
+function resolveTrackerRouting(
+  activeTrackers: ActiveTracker[],
+): { action: 'auto_group'; tracker: ActiveTracker } |
+   { action: 'auto_reimbursement_personal'; trackers: ActiveTracker[] } |
+   { action: 'normal'; trackers: ActiveTracker[] } {
+  const groupTrackers = activeTrackers.filter(t => t.type === 'group');
+  const hasPersonal = activeTrackers.some(t => t.type === 'personal');
+  const hasReimbursement = activeTrackers.some(t => t.type === 'reimbursement');
+
+  // If any group tracker is active → route to group (first one if multiple)
+  if (groupTrackers.length > 0) {
+    return { action: 'auto_group', tracker: groupTrackers[0] };
+  }
+
+  // If both reimbursement and personal → auto-save to both
+  if (hasReimbursement && hasPersonal) {
+    return { action: 'auto_reimbursement_personal', trackers: activeTrackers };
+  }
+
+  // Single tracker or other combinations → normal flow
+  return { action: 'normal', trackers: activeTrackers };
+}
 
 interface Props {
   children: ReactNode;
@@ -57,6 +87,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   const [trackerState, setTrackerState] = useState<TrackerState>(DEFAULT_STATE);
   const [isListening, setIsListening] = useState(false);
   const [pendingTransaction, setPendingTransaction] = useState<ParsedTransaction | null>(null);
+  const [pendingGroupTracker, setPendingGroupTracker] = useState<ActiveTracker | null>(null);
   const [transactionVersion, setTransactionVersion] = useState(0);
 
   const { loadGroupTransactions, activeGroupId } = useGroups();
@@ -104,19 +135,34 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       }
 
       const initial = await notifee.getInitialNotification();
-      if (
-        initial?.pressAction?.id === 'choose_tracker' &&
-        initial?.notification?.data
-      ) {
+      if (initial?.pressAction?.id && initial?.notification?.data) {
+        const actionId = initial.pressAction.id;
         const d = initial.notification.data as Record<string, string>;
-        setPendingTransaction({
+        const parsed: ParsedTransaction = {
           amount: Number(d.amount),
           type: 'debit',
           merchant: d.merchant || undefined,
           bank: d.bank || undefined,
           rawMessage: d.rawMessage,
           timestamp: Number(d.timestamp),
-        });
+        };
+
+        if (actionId === 'add_to_tracker' && d.trackerType === 'group') {
+          // Cold-start from group notification → open SplitEditor
+          setPendingGroupTracker({
+            type: 'group',
+            id: d.trackerId,
+            label: d.trackerLabel || 'Group',
+          });
+          setPendingTransaction(parsed);
+        } else if (actionId === 'choose_tracker') {
+          setPendingTransaction(parsed);
+        } else if (actionId === 'add_to_tracker') {
+          // Non-group single tracker → auto-save
+          const trackerType = d.trackerType as TrackerType;
+          const user = await getOrCreateUser();
+          await saveTransaction(parsed, trackerType, user.id);
+        }
       }
     })();
   }, []);
@@ -125,7 +171,14 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   useEffect(() => {
     registerNotificationCallbacks(
       async (parsed, tracker) => {
-        await addTransactionToTracker(parsed, tracker.type, tracker.id);
+        if (tracker.type === 'group') {
+          // Group tracker → set pending transaction and group tracker so HomeScreen
+          // can open SplitEditor automatically
+          setPendingGroupTracker(tracker);
+          setPendingTransaction(parsed);
+        } else {
+          await addTransactionToTracker(parsed, tracker.type, tracker.id);
+        }
       },
       (parsed) => {
         setPendingTransaction(parsed);
@@ -165,7 +218,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
 
       if (activeTrackers.length > 0) {
-        await showTransactionNotification(parsed, activeTrackers);
+        await handleIncomingTransaction(parsed, activeTrackers);
       }
     });
 
@@ -179,10 +232,42 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
       if (activeTrackers.length > 0) {
-        await showTransactionNotification(parsed, activeTrackers);
+        await handleIncomingTransaction(parsed, activeTrackers);
       }
     });
     return cleanup;
+  }, []);
+
+  /**
+   * Handle an incoming transaction with smart routing:
+   * - Group active → open SplitEditor (set pending + group tracker)
+   * - Reimbursement + Personal → auto-save to both
+   * - Otherwise → show notification as normal
+   */
+  const handleIncomingTransaction = useCallback(async (
+    parsed: ParsedTransaction,
+    activeTrackers: ActiveTracker[],
+  ) => {
+    if (activeTrackers.length === 0) return;
+
+    const routing = resolveTrackerRouting(activeTrackers);
+
+    if (routing.action === 'auto_group') {
+      // Group tracker is active → show notification with single "Add to <Group>" button
+      await showTransactionNotification(parsed, [routing.tracker]);
+    } else if (routing.action === 'auto_reimbursement_personal') {
+      // Reimbursement + Personal → auto-save to both, show confirmation notification
+      const uid = userIdRef.current;
+      await saveTransaction(parsed, 'reimbursement', uid);
+      await saveTransaction(parsed, 'personal', uid);
+      await syncGoalDailyBudget();
+      setTransactionVersion(v => v + 1);
+      // Show a confirmation notification (no action buttons needed)
+      await showAutoSavedNotification(parsed);
+    } else {
+      // Normal flow → show notification with appropriate action(s)
+      await showTransactionNotification(parsed, routing.trackers);
+    }
   }, []);
 
   // Start/stop SMS listener based on tracker state (Android only)
@@ -216,9 +301,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
-      if (activeTrackers.length > 0) {
-        await showTransactionNotification(parsed, activeTrackers);
-      }
+      await handleIncomingTransaction(parsed, activeTrackers);
     });
 
     setIsListening(true);
@@ -407,6 +490,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
 
   const clearPendingTransaction = useCallback(() => {
     setPendingTransaction(null);
+    setPendingGroupTracker(null);
   }, []);
 
   const value = useMemo(() => ({
@@ -417,11 +501,12 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     toggleGroup,
     getActiveTrackers,
     pendingTransaction,
+    pendingGroupTracker,
     clearPendingTransaction,
     addTransactionToTracker,
     transactionVersion,
     toggleGroupAffectsGoal,
-  }), [trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup, getActiveTrackers, pendingTransaction, clearPendingTransaction, addTransactionToTracker, transactionVersion, toggleGroupAffectsGoal]);
+  }), [trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup, getActiveTrackers, pendingTransaction, pendingGroupTracker, clearPendingTransaction, addTransactionToTracker, transactionVersion, toggleGroupAffectsGoal]);
 
   return (
     <TrackerContext.Provider value={value}>

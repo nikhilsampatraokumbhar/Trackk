@@ -255,7 +255,8 @@ export default function SplitEditorScreen() {
         loadGroupTransactions(groupId);
       }
 
-      nav.goBack();
+      // Navigate to the group detail screen so user can see the expense
+      nav.replace('GroupDetail', { groupId });
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to save expense');
     } finally {
