@@ -68,11 +68,25 @@ const EMOJI_ICONS: Record<string, string> = {
 };
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
+  const isGroups = name === 'Groups';
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center' }}>
       <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.35 }}>
         {EMOJI_ICONS[name] || '•'}
       </Text>
+      {isGroups && (
+        <View style={{
+          position: 'absolute',
+          top: -2,
+          right: -14,
+          backgroundColor: COLORS.primary,
+          borderRadius: 4,
+          paddingHorizontal: 3,
+          paddingVertical: 1,
+        }}>
+          <Text style={{ fontSize: 6, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 }}>PRO</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -94,12 +108,12 @@ function MainTabs() {
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarStyle: {
-          backgroundColor: COLORS.surface,
-          borderTopColor: COLORS.border,
+          backgroundColor: '#131318',
+          borderTopColor: 'rgba(255,255,255,0.06)',
           borderTopWidth: 1,
-          paddingBottom: 6,
-          paddingTop: 4,
-          height: 60,
+          paddingBottom: 8,
+          paddingTop: 6,
+          height: 64,
           elevation: 0,
           shadowOpacity: 0,
         },

@@ -198,7 +198,7 @@ export default function HomeScreen() {
 
         {/* Hero card — total spent + budget progress merged */}
         <LinearGradient
-          colors={['#1C1708', '#0E0C04', COLORS.background]}
+          colors={['#1A1210', '#100C0A', COLORS.background]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.heroCard}
@@ -407,46 +407,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 20,
     marginTop: 4,
   },
   headerLeft: { flex: 1 },
   greeting: {
     fontSize: 13,
     color: COLORS.textSecondary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   name: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
     color: COLORS.text,
     marginTop: 2,
     letterSpacing: -0.5,
   },
   profileBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: `${COLORS.primary}20`,
-    borderWidth: 1.5,
-    borderColor: `${COLORS.primary}50`,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.glass,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
   profileInitial: {
     fontSize: 17,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: COLORS.text,
   },
 
   // Privacy card (only for new users)
   privacyCard: {
-    backgroundColor: `${COLORS.success}10`,
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
+    padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: `${COLORS.success}30`,
+    borderColor: `${COLORS.success}20`,
   },
   privacyHeader: {
     flexDirection: 'row',
@@ -470,11 +470,11 @@ const styles = StyleSheet.create({
   },
 
   heroCard: {
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 24,
-    marginBottom: 24,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
+    borderColor: COLORS.glassBorder,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -485,8 +485,8 @@ const styles = StyleSheet.create({
     right: 0,
     height: 2,
     backgroundColor: COLORS.primary,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   heroLabel: {
     fontSize: 10,
@@ -496,9 +496,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   heroAmount: {
-    fontSize: 38,
+    fontSize: 40,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: COLORS.text,
     letterSpacing: -1,
   },
   heroSub: {
@@ -509,16 +509,16 @@ const styles = StyleSheet.create({
 
   // Budget inline within hero card
   budgetInline: {
-    marginTop: 16,
-    paddingTop: 14,
+    marginTop: 18,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: `${COLORS.primary}15`,
+    borderTopColor: COLORS.glassBorder,
   },
   budgetRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   budgetMessage: {
     fontSize: 12,
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   },
   budgetTrack: {
     height: 4,
-    backgroundColor: `${COLORS.primary}15`,
+    backgroundColor: COLORS.glassHigh,
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
   budgetEditHint: {
     fontSize: 10,
     color: COLORS.textLight,
-    marginTop: 6,
+    marginTop: 8,
     textAlign: 'right',
   },
   setBudgetText: {
@@ -557,12 +557,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: `${COLORS.success}25`,
+    borderColor: COLORS.glassBorder,
   },
   goalBudgetLeft: {
     flex: 1,
@@ -597,17 +597,17 @@ const styles = StyleSheet.create({
   /* ── Budget Modal ──────────────────────────────────────────────────── */
   budgetModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'flex-end',
   },
   budgetModalContainer: {
     backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     padding: 24,
     paddingBottom: 40,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
     borderBottomWidth: 0,
   },
   budgetModalHandle: {
@@ -632,8 +632,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   budgetModalInput: {
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 14,
+    backgroundColor: COLORS.glass,
+    borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 16,
     fontSize: 24,
@@ -641,28 +641,28 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     textAlign: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
     marginBottom: 20,
   },
   budgetModalSaveBtn: {
-    borderRadius: 14,
+    borderRadius: 30,
     overflow: 'hidden',
     marginBottom: 12,
   },
   budgetModalSaveBtnGradient: {
     paddingVertical: 16,
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 30,
   },
   budgetModalSaveBtnText: {
     fontSize: 15,
     fontWeight: '700',
-    color: COLORS.background,
+    color: '#FFFFFF',
   },
   budgetModalDeleteBtn: {
     paddingVertical: 14,
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: `${COLORS.danger}30`,
     backgroundColor: `${COLORS.danger}08`,
@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
 
   sectionHeader: {
     marginBottom: 12,
-    marginTop: 4,
+    marginTop: 8,
   },
   sectionTitle: {
     fontSize: 12,
@@ -703,12 +703,12 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: COLORS.surfaceHigh,
+    backgroundColor: COLORS.glass,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   emptyEmoji: { fontSize: 28 },
   emptyText: {
