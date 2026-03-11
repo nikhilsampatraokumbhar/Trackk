@@ -4,8 +4,10 @@ import { ParsedTransaction } from '../models/types';
 const URL_SCHEME = 'trackk://';
 
 type TransactionCallback = (parsed: ParsedTransaction) => void;
+type NavigationCallback = (route: string, params?: Record<string, unknown>) => void;
 
 let onTransactionReceived: TransactionCallback | null = null;
+let onNavigationRequest: NavigationCallback | null = null;
 
 /**
  * Parse a Trackk deep link URL into a ParsedTransaction.
@@ -40,20 +42,57 @@ function parseDeepLink(url: string): ParsedTransaction | null {
 
 /**
  * Handle an incoming deep link URL.
+ * Supports:
+ *   trackk://transaction?amount=500&merchant=...  → transaction
+ *   trackk://quick-add                            → open QuickAdd screen
+ *   trackk://quick-add?amount=500&desc=Taxi       → open QuickAdd with prefill
+ *   trackk://nightly-review                       → open NightlyReview screen
  */
 function handleDeepLink(event: { url: string }): void {
-  const parsed = parseDeepLink(event.url);
-  if (parsed && onTransactionReceived) {
-    console.log('[Trackk] Deep link transaction received:', parsed.amount);
-    onTransactionReceived(parsed);
+  try {
+    if (!event.url.startsWith(URL_SCHEME)) return;
+
+    const path = event.url.replace(URL_SCHEME, '');
+    const [route, queryString] = path.split('?');
+
+    // Quick Add deep link
+    if (route === 'quick-add') {
+      const params: Record<string, unknown> = {};
+      if (queryString) {
+        const p = new URLSearchParams(queryString);
+        if (p.get('amount')) params.amount = parseFloat(p.get('amount')!);
+        if (p.get('desc')) params.description = p.get('desc');
+      }
+      if (onNavigationRequest) onNavigationRequest('QuickAdd', params);
+      return;
+    }
+
+    // Nightly Review deep link
+    if (route === 'nightly-review') {
+      if (onNavigationRequest) onNavigationRequest('NightlyReview');
+      return;
+    }
+
+    // Transaction deep link (existing)
+    const parsed = parseDeepLink(event.url);
+    if (parsed && onTransactionReceived) {
+      console.log('[Trackk] Deep link transaction received:', parsed.amount);
+      onTransactionReceived(parsed);
+    }
+  } catch {
+    // Silently ignore malformed deep links
   }
 }
 
 /**
  * Initialize deep link listening. Call once at app startup.
  */
-export function initDeepLinkListener(callback: TransactionCallback): () => void {
+export function initDeepLinkListener(
+  callback: TransactionCallback,
+  navCallback?: NavigationCallback,
+): () => void {
   onTransactionReceived = callback;
+  onNavigationRequest = navCallback || null;
 
   // Handle deep link that launched the app (cold start)
   Linking.getInitialURL().then(url => {
@@ -65,6 +104,7 @@ export function initDeepLinkListener(callback: TransactionCallback): () => void 
 
   return () => {
     onTransactionReceived = null;
+    onNavigationRequest = null;
     subscription.remove();
   };
 }

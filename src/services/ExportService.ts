@@ -1,4 +1,6 @@
-import { Share } from 'react-native';
+import { Share, Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { Transaction } from '../models/types';
 import { formatCurrency } from '../utils/helpers';
 
@@ -110,4 +112,203 @@ export async function shareCSV(transactions: Transaction[]): Promise<void> {
 export async function shareTextReport(transactions: Transaction[], periodLabel: string): Promise<void> {
   const report = generateTextReport(transactions, periodLabel);
   await Share.share({ message: report, title: `Trackk Report - ${periodLabel}` });
+}
+
+// ─── Reimbursement Export with Named Receipts ──────────────────────────────
+
+/**
+ * Format a date for file naming: 2024-03-15
+ */
+function formatDateForFilename(timestamp: number): string {
+  const d = new Date(timestamp);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Sanitize a merchant name for use as a filename
+ */
+function sanitizeFilename(name: string): string {
+  return name
+    .replace(/[^a-zA-Z0-9\s-]/g, '') // Remove special chars
+    .replace(/\s+/g, '_')             // Replace spaces with underscores
+    .substring(0, 50)                  // Limit length
+    || 'Receipt';
+}
+
+/**
+ * Get file extension from a URI
+ */
+function getFileExtension(uri: string): string {
+  const match = uri.match(/\.([a-zA-Z0-9]+)$/);
+  return match ? match[1].toLowerCase() : 'jpg';
+}
+
+export interface ReceiptExportItem {
+  transaction: Transaction;
+  filename: string;
+  sourceUri: string;
+}
+
+/**
+ * Build a list of receipt files with descriptive names.
+ * Format: MerchantName_YYYY-MM-DD.ext (e.g., Swiggy_2024-03-15.jpg)
+ */
+export function buildReceiptExportList(transactions: Transaction[]): ReceiptExportItem[] {
+  const withReceipts = transactions.filter(t => t.receiptUri);
+  const nameCounts: Record<string, number> = {};
+
+  return withReceipts.map(t => {
+    const merchant = t.merchant || t.description || 'Receipt';
+    const sanitized = sanitizeFilename(merchant);
+    const dateStr = formatDateForFilename(t.timestamp);
+    const ext = getFileExtension(t.receiptUri!);
+
+    // Handle duplicate names by appending a counter
+    const baseName = `${sanitized}_${dateStr}`;
+    nameCounts[baseName] = (nameCounts[baseName] || 0) + 1;
+    const suffix = nameCounts[baseName] > 1 ? `_${nameCounts[baseName]}` : '';
+
+    return {
+      transaction: t,
+      filename: `${baseName}${suffix}.${ext}`,
+      sourceUri: t.receiptUri!,
+    };
+  });
+}
+
+/**
+ * Export reimbursement receipts as individual named files.
+ * Copies receipts to a temp directory with proper names, then shares.
+ */
+export async function exportReimbursementReceipts(
+  transactions: Transaction[],
+  tripName?: string,
+): Promise<{ success: boolean; count: number; error?: string }> {
+  const exportList = buildReceiptExportList(transactions);
+
+  if (exportList.length === 0) {
+    return { success: false, count: 0, error: 'No receipts attached to any expenses.' };
+  }
+
+  try {
+    // Create temp export directory
+    const folderName = tripName
+      ? sanitizeFilename(tripName) + '_Receipts'
+      : 'Trackk_Reimbursement_Receipts';
+    const exportDir = `${FileSystem.cacheDirectory}${folderName}/`;
+
+    // Ensure directory exists (clean up old exports first)
+    const dirInfo = await FileSystem.getInfoAsync(exportDir);
+    if (dirInfo.exists) {
+      await FileSystem.deleteAsync(exportDir, { idempotent: true });
+    }
+    await FileSystem.makeDirectoryAsync(exportDir, { intermediates: true });
+
+    // Copy each receipt with its new name
+    for (const item of exportList) {
+      const destUri = `${exportDir}${item.filename}`;
+      await FileSystem.copyAsync({
+        from: item.sourceUri,
+        to: destUri,
+      });
+    }
+
+    // Also generate a summary CSV in the same folder
+    const csvContent = generateReimbursementCSV(transactions);
+    const csvPath = `${exportDir}Reimbursement_Summary.csv`;
+    await FileSystem.writeAsStringAsync(csvPath, csvContent);
+
+    // Share the folder (on iOS this shares individual files)
+    // For now, share the CSV summary which references the receipt files
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (isAvailable) {
+      await Sharing.shareAsync(csvPath, {
+        mimeType: 'text/csv',
+        dialogTitle: `${folderName}`,
+        UTI: 'public.comma-separated-values-text',
+      });
+    } else {
+      // Fallback to Share API with text summary
+      const summary = generateReimbursementSummary(transactions, exportList);
+      await Share.share({
+        message: summary,
+        title: folderName,
+      });
+    }
+
+    return { success: true, count: exportList.length };
+  } catch (error) {
+    return {
+      success: false,
+      count: 0,
+      error: error instanceof Error ? error.message : 'Export failed',
+    };
+  }
+}
+
+/**
+ * Generate a CSV specifically for reimbursement with receipt info
+ */
+function generateReimbursementCSV(transactions: Transaction[]): string {
+  const headers = [
+    'Date', 'Description', 'Merchant', 'Amount (INR)',
+    'Category', 'Receipt Filename', 'Has Receipt',
+  ];
+
+  const sorted = [...transactions].sort((a, b) => b.timestamp - a.timestamp);
+  const exportList = buildReceiptExportList(transactions);
+  const receiptMap = new Map(exportList.map(r => [r.transaction.id, r.filename]));
+
+  const rows = sorted.map(t => [
+    formatExportDate(t.timestamp),
+    `"${(t.description || '').replace(/"/g, '""')}"`,
+    `"${(t.merchant || '').replace(/"/g, '""')}"`,
+    t.amount.toFixed(2),
+    `"${t.category || ''}"`,
+    `"${receiptMap.get(t.id) || ''}"`,
+    t.receiptUri ? 'Yes' : 'No',
+  ]);
+
+  const total = transactions.reduce((s, t) => s + t.amount, 0);
+  rows.push(['', '', 'TOTAL', total.toFixed(2), '', '', '']);
+
+  return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+}
+
+/**
+ * Generate a text summary of reimbursement with receipt filenames
+ */
+function generateReimbursementSummary(
+  transactions: Transaction[],
+  exportList: ReceiptExportItem[],
+): string {
+  const total = transactions.reduce((s, t) => s + t.amount, 0);
+  const receiptMap = new Map(exportList.map(r => [r.transaction.id, r.filename]));
+
+  const lines = transactions
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .map(t => {
+      const receipt = receiptMap.get(t.id);
+      const receiptLabel = receipt ? ` [Receipt: ${receipt}]` : ' [No receipt]';
+      return `  ${formatExportDate(t.timestamp)}  ${formatCurrency(t.amount).padStart(12)}  ${t.merchant || t.description}${receiptLabel}`;
+    })
+    .join('\n');
+
+  return `TRACKK REIMBURSEMENT EXPORT
+${'='.repeat(50)}
+
+Total: ${formatCurrency(total)}
+Transactions: ${transactions.length}
+Receipts attached: ${exportList.length}
+
+EXPENSES
+${'─'.repeat(50)}
+${lines}
+
+${'─'.repeat(50)}
+Receipt files are named as: MerchantName_YYYY-MM-DD.ext
+Generated by Trackk on ${new Date().toLocaleDateString('en-IN')}`;
 }

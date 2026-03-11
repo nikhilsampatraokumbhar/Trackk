@@ -98,12 +98,15 @@ export async function unregisterDeviceToken(uid: string): Promise<void> {
  * Returns an unsubscribe function for the foreground handler.
  */
 export function setupFcmHandlers(
-  onTransaction: (data: Record<string, string>) => void
+  onTransaction: (data: Record<string, string>) => void,
+  onNightlyReview?: () => void,
 ): () => void {
   // Foreground messages
   const unsubscribe = messaging().onMessage(async (remoteMessage) => {
     if (remoteMessage.data?.type === 'email_transaction') {
       onTransaction(remoteMessage.data as Record<string, string>);
+    } else if (remoteMessage.data?.type === 'nightly_review' && onNightlyReview) {
+      onNightlyReview();
     }
   });
 
@@ -111,9 +114,6 @@ export function setupFcmHandlers(
   messaging().setBackgroundMessageHandler(async (remoteMessage) => {
     // The notification is already displayed by the system
     // The app handles the tap action via notification press
-    if (remoteMessage.data?.type === 'email_transaction') {
-      // Data is passed via notification — handled when user taps
-    }
   });
 
   return unsubscribe;

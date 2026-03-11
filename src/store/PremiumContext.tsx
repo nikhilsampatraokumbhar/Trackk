@@ -189,6 +189,7 @@ export type PremiumFeature =
   | 'unlimited_notes'
   | 'unlimited_export'
   | 'receipt_storage'
+  | 'nightly_review'
   | 'family_dashboard'
   | 'shared_budgets'
   | 'priority_support';
