@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Modal, Linking, Alert,
+  RefreshControl, ActivityIndicator, Linking, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -21,6 +21,7 @@ import TrackerToggle from '../components/TrackerToggle';
 import DebtSummary from '../components/DebtSummary';
 import GroupMemberCard from '../components/GroupMemberCard';
 import { COLORS, formatCurrency, formatDate, getColorForId } from '../utils/helpers';
+import BottomSheet from '../components/BottomSheet';
 
 type Route = RouteProp<RootStackParamList, 'GroupDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -555,79 +556,49 @@ export default function GroupDetailScreen() {
         <Text style={styles.fabText}>Add Expense</Text>
       </TouchableOpacity>
 
-      {/* Settlement Modal - Bottom Sheet */}
-      <Modal
+      {/* Settlement Bottom Sheet */}
+      <BottomSheet
         visible={settleModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
-          setSettleModalVisible(false);
-          setSettleTarget(null);
-        }}
+        onClose={() => { setSettleModalVisible(false); setSettleTarget(null); }}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => {
-            setSettleModalVisible(false);
-            setSettleTarget(null);
-          }}
-        >
-          <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Settle Payment</Text>
-            {settleTarget && (
-              <Text style={styles.modalSubtitle}>
-                Pay {formatCurrency(settleTarget.debt.amount)} to{' '}
-                {settleTarget.debt.toUserId === userId ? 'yourself' : settleTarget.debt.toName}
-              </Text>
-            )}
+        <Text style={styles.modalTitle}>Settle Payment</Text>
+        {settleTarget && (
+          <Text style={styles.modalSubtitle}>
+            Pay {formatCurrency(settleTarget.debt.amount)} to{' '}
+            {settleTarget.debt.toUserId === userId ? 'yourself' : settleTarget.debt.toName}
+          </Text>
+        )}
 
-            <View style={styles.modalOptions}>
-              {/* UPI Option */}
-              <TouchableOpacity
-                style={styles.modalOption}
-                onPress={handleUPISettle}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.modalOptionIcon, { backgroundColor: `${COLORS.primaryLight}18` }]}>
-                  <Text style={styles.modalOptionEmoji}>📱</Text>
-                </View>
-                <View style={styles.modalOptionInfo}>
-                  <Text style={styles.modalOptionTitle}>Pay via UPI</Text>
-                  <Text style={styles.modalOptionSubtitle}>Opens your UPI app to complete payment</Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Cash Option */}
-              <TouchableOpacity
-                style={styles.modalOption}
-                onPress={handleCashSettle}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.modalOptionIcon, { backgroundColor: `${COLORS.success}18` }]}>
-                  <Text style={styles.modalOptionEmoji}>💵</Text>
-                </View>
-                <View style={styles.modalOptionInfo}>
-                  <Text style={styles.modalOptionTitle}>Settled by Cash</Text>
-                  <Text style={styles.modalOptionSubtitle}>Mark as paid in cash or other method</Text>
-                </View>
-              </TouchableOpacity>
+        <View style={styles.modalOptions}>
+          <TouchableOpacity style={styles.modalOption} onPress={handleUPISettle} activeOpacity={0.7}>
+            <View style={[styles.modalOptionIcon, { backgroundColor: `${COLORS.primaryLight}18` }]}>
+              <Text style={styles.modalOptionEmoji}>📱</Text>
             </View>
-
-            <TouchableOpacity
-              style={styles.modalCancel}
-              onPress={() => {
-                setSettleModalVisible(false);
-                setSettleTarget(null);
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
+            <View style={styles.modalOptionInfo}>
+              <Text style={styles.modalOptionTitle}>Pay via UPI</Text>
+              <Text style={styles.modalOptionSubtitle}>Opens your UPI app to complete payment</Text>
+            </View>
           </TouchableOpacity>
+
+          <TouchableOpacity style={styles.modalOption} onPress={handleCashSettle} activeOpacity={0.7}>
+            <View style={[styles.modalOptionIcon, { backgroundColor: `${COLORS.success}18` }]}>
+              <Text style={styles.modalOptionEmoji}>💵</Text>
+            </View>
+            <View style={styles.modalOptionInfo}>
+              <Text style={styles.modalOptionTitle}>Settled by Cash</Text>
+              <Text style={styles.modalOptionSubtitle}>Mark as paid in cash or other method</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={styles.modalCancel}
+          onPress={() => { setSettleModalVisible(false); setSettleTarget(null); }}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.modalCancelText}>Cancel</Text>
         </TouchableOpacity>
-      </Modal>
+      </BottomSheet>
     </View>
   );
 }
@@ -1026,30 +997,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Settlement Modal (bottom sheet style)
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 34,
-    borderTopWidth: 1,
-    borderColor: COLORS.border,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.surfaceHigher,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
+  // Settlement Bottom Sheet content
   modalTitle: {
     fontSize: 18,
     fontWeight: '800',

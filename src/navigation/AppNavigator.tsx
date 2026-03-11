@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Platform } from 'react-native';
 import HomeScreen from '../screens/HomeScreen';
@@ -21,11 +22,15 @@ import PricingScreen from '../screens/PricingScreen';
 import ReferralScreen from '../screens/ReferralScreen';
 import SplitEditorScreen from '../screens/SplitEditorScreen';
 import LoginScreen from '../screens/LoginScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 
 import { COLORS } from '../utils/helpers';
 import { useAuth } from '../store/AuthContext';
 
+const ONBOARDING_KEY = '@et_onboarding_done';
+
 export type RootStackParamList = {
+  Onboarding: undefined;
   Login: undefined;
   SplitEditor: {
     groupId: string;
@@ -137,6 +142,21 @@ function MainTabs() {
 
 export function AppNavigator() {
   const { isAuthenticated } = useAuth();
+  const [hasOnboarded, setHasOnboarded] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY).then(val => {
+      setHasOnboarded(val === 'true');
+    });
+  }, []);
+
+  const handleOnboardingComplete = async () => {
+    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+    setHasOnboarded(true);
+  };
+
+  // Wait until onboarding state is loaded
+  if (hasOnboarded === null) return null;
 
   return (
     <NavigationContainer
@@ -173,7 +193,11 @@ export function AppNavigator() {
           contentStyle: { backgroundColor: COLORS.background },
         }}
       >
-        {!isAuthenticated ? (
+        {!hasOnboarded ? (
+          <Stack.Screen name="Onboarding" options={{ headerShown: false }}>
+            {() => <OnboardingScreen onComplete={handleOnboardingComplete} />}
+          </Stack.Screen>
+        ) : !isAuthenticated ? (
           // Auth flow - Login screen
           <Stack.Screen
             name="Login"

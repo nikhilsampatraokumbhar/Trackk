@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, SectionList, ActivityIndicator, RefreshControl,
+  View, Text, StyleSheet, SectionList, RefreshControl,
   TouchableOpacity, Alert, NativeModules, Platform, AppState,
-  Modal, TextInput, KeyboardAvoidingView, Vibration, ScrollView,
+  TextInput, Vibration, ScrollView, Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -10,13 +10,16 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useTracker } from '../store/TrackerContext';
-import { getTransactions, saveTransaction } from '../services/StorageService';
+import { getTransactions, saveTransaction, deleteTransaction } from '../services/StorageService';
 import { Transaction, ParsedTransaction } from '../models/types';
 import TrackerToggle from '../components/TrackerToggle';
 import TransactionCard from '../components/TransactionCard';
 import SuccessOverlay from '../components/SuccessOverlay';
 import { HeroCardSkeleton, TransactionListSkeleton } from '../components/SkeletonLoader';
 import AnimatedAmount from '../components/AnimatedAmount';
+import UndoToast from '../components/UndoToast';
+import ContextMenu, { ContextMenuItem } from '../components/ContextMenu';
+import BottomSheet from '../components/BottomSheet';
 import { COLORS, formatCurrency, groupByDate } from '../utils/helpers';
 import { PERSONAL_CATEGORIES } from '../utils/categories';
 import { isDevMode } from '../utils/devMode';
@@ -43,10 +46,39 @@ export default function PersonalExpenseScreen() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [successAmount, setSuccessAmount] = useState('');
 
+  // Undo toast
+  const [undoState, setUndoState] = useState<{ visible: boolean; message: string; txn: Transaction | null }>({ visible: false, message: '', txn: null });
+
+  // Context menu
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; transaction: Transaction | null }>({ visible: false, transaction: null });
+
+  // Staggered animation tracking
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const itemAnims = useRef<Map<string, { translateY: Animated.Value; opacity: Animated.Value }>>(new Map());
+
+  const getItemAnim = (id: string, index: number) => {
+    if (!itemAnims.current.has(id)) {
+      const translateY = new Animated.Value(hasAnimated ? 0 : 20);
+      const opacity = new Animated.Value(hasAnimated ? 1 : 0);
+      itemAnims.current.set(id, { translateY, opacity });
+
+      if (!hasAnimated && index < 10) {
+        setTimeout(() => {
+          Animated.parallel([
+            Animated.spring(translateY, { toValue: 0, friction: 8, tension: 80, useNativeDriver: true }),
+            Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+          ]).start();
+        }, index * 60);
+      }
+    }
+    return itemAnims.current.get(id)!;
+  };
+
   const load = useCallback(async () => {
     const txns = await getTransactions('personal');
     setTransactions(txns.sort((a, b) => b.timestamp - a.timestamp));
     setLoading(false);
+    setTimeout(() => setHasAnimated(true), 800);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load, transactionVersion]));
@@ -92,9 +124,31 @@ export default function PersonalExpenseScreen() {
     }
   };
 
-  const selectCategory = (label: string) => {
-    setAddDescription(label);
+  const selectCategory = (label: string) => { setAddDescription(label); };
+
+  // Swipe-to-delete with undo
+  const handleSwipeDelete = async (txn: Transaction) => {
+    await deleteTransaction(txn.id);
+    setUndoState({ visible: true, message: `Deleted: ${txn.description}`, txn });
+    await load();
   };
+
+  const handleUndo = async () => {
+    if (undoState.txn) {
+      const txn = undoState.txn;
+      await saveTransaction(
+        { amount: txn.amount, type: 'debit', merchant: txn.merchant, rawMessage: txn.rawMessage || '', timestamp: txn.timestamp },
+        txn.trackerType, txn.userId, txn.groupId,
+      );
+      await load();
+    }
+    setUndoState({ visible: false, message: '', txn: null });
+  };
+
+  const getContextMenuItems = (txn: Transaction): ContextMenuItem[] => [
+    { label: 'View Details', icon: '📋', onPress: () => nav.navigate('TransactionDetail', { transactionId: txn.id }) },
+    { label: 'Delete', icon: '🗑️', destructive: true, onPress: () => handleSwipeDelete(txn) },
+  ];
 
   const now = new Date();
   const thisMonth = transactions.filter(t => {
@@ -104,7 +158,6 @@ export default function PersonalExpenseScreen() {
   const totalMonthly = thisMonth.reduce((s, t) => s + t.amount, 0);
   const totalAll = transactions.reduce((s, t) => s + t.amount, 0);
 
-  // Group transactions by date
   const sections = useMemo(() => groupByDate(transactions), [transactions]);
 
   if (loading) {
@@ -136,15 +189,21 @@ export default function PersonalExpenseScreen() {
             <View style={styles.dateHeaderLine} />
           </View>
         )}
-        renderItem={({ item }) => (
-          <TransactionCard
-            transaction={item}
-            onPress={() => nav.navigate('TransactionDetail', { transactionId: item.id })}
-          />
-        )}
+        renderItem={({ item, index }) => {
+          const anim = getItemAnim(item.id, index);
+          return (
+            <Animated.View style={{ transform: [{ translateY: anim.translateY }], opacity: anim.opacity }}>
+              <TransactionCard
+                transaction={item}
+                onPress={() => nav.navigate('TransactionDetail', { transactionId: item.id })}
+                onLongPress={() => setContextMenu({ visible: true, transaction: item })}
+                onSwipeDelete={() => handleSwipeDelete(item)}
+              />
+            </Animated.View>
+          );
+        }}
         ListHeaderComponent={
           <>
-            {/* Toggle */}
             <TrackerToggle
               label="Personal Expenses"
               subtitle="Track daily spending from SMS"
@@ -153,7 +212,6 @@ export default function PersonalExpenseScreen() {
               color={COLORS.personalColor}
             />
 
-            {/* iOS Setup Banner */}
             {Platform.OS === 'ios' && (
               <TouchableOpacity style={styles.iosSetupBanner} onPress={() => nav.navigate('IOSSetup' as any)} activeOpacity={0.7}>
                 <Text style={styles.iosSetupEmoji}>📱</Text>
@@ -165,7 +223,6 @@ export default function PersonalExpenseScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Debug diagnostics — only visible in dev mode */}
             {isDevMode() && trackerState.personal && Platform.OS === 'android' && (
               <View style={styles.debugBox}>
                 <Text style={styles.debugTitle}>DIAGNOSTICS (DEV)</Text>
@@ -193,7 +250,6 @@ export default function PersonalExpenseScreen() {
               </View>
             )}
 
-            {/* Stats hero */}
             <LinearGradient colors={['#16121A', '#0A0A0F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
               <View style={[styles.heroAccent, { backgroundColor: COLORS.personalColor }]} />
               <View style={styles.statsRow}>
@@ -211,7 +267,6 @@ export default function PersonalExpenseScreen() {
               </View>
             </LinearGradient>
 
-            {/* Savings Goals & Reimbursement */}
             <View style={styles.quickAccessRow}>
               <TouchableOpacity style={styles.quickAccessCard} onPress={() => nav.navigate('Goals')} activeOpacity={0.8}>
                 <View style={[styles.quickAccessIconWrap, { backgroundColor: `${COLORS.success}18`, borderColor: `${COLORS.success}30` }]}>
@@ -232,14 +287,8 @@ export default function PersonalExpenseScreen() {
             {transactions.length === 0 && (
               <View style={styles.empty}>
                 <View style={styles.emptyIcon}><Text style={styles.emptyEmoji}>💳</Text></View>
-                <Text style={styles.emptyTitle}>
-                  {trackerState.personal ? 'No expenses yet' : 'Start tracking'}
-                </Text>
-                <Text style={styles.emptyText}>
-                  {trackerState.personal
-                    ? 'Your expenses will show up here automatically'
-                    : 'Enable the tracker above or add manually'}
-                </Text>
+                <Text style={styles.emptyTitle}>{trackerState.personal ? 'No expenses yet' : 'Start tracking'}</Text>
+                <Text style={styles.emptyText}>{trackerState.personal ? 'Your expenses will show up here automatically' : 'Enable the tracker above or add manually'}</Text>
               </View>
             )}
           </>
@@ -253,69 +302,74 @@ export default function PersonalExpenseScreen() {
         <Text style={styles.fabText}>Add Expense</Text>
       </TouchableOpacity>
 
-      {/* Add Expense Modal */}
-      <Modal visible={showAddModal} transparent animationType="slide" onRequestClose={() => setShowAddModal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.addModalOverlay}>
-          <View style={styles.addModalSheet}>
-            <View style={styles.addModalHandle} />
-            <Text style={styles.addModalTitle}>Add Expense</Text>
-            <Text style={styles.addModalSub}>Log a cash or missed expense</Text>
+      {/* Add Expense Bottom Sheet */}
+      <BottomSheet visible={showAddModal} onClose={() => { setShowAddModal(false); setAddAmount(''); setAddDescription(''); }}>
+        <Text style={styles.addModalTitle}>Add Expense</Text>
+        <Text style={styles.addModalSub}>Log a cash or missed expense</Text>
 
-            <Text style={styles.addModalLabel}>AMOUNT</Text>
-            <View style={styles.addModalAmountRow}>
-              <Text style={styles.addModalCurrency}>₹</Text>
-              <TextInput
-                style={styles.addModalAmountInput}
-                value={addAmount}
-                onChangeText={setAddAmount}
-                placeholder="0"
-                placeholderTextColor={COLORS.textLight}
-                keyboardType="decimal-pad"
-                autoFocus
-              />
-            </View>
+        <Text style={styles.addModalLabel}>AMOUNT</Text>
+        <View style={styles.addModalAmountRow}>
+          <Text style={styles.addModalCurrency}>₹</Text>
+          <TextInput
+            style={styles.addModalAmountInput}
+            value={addAmount}
+            onChangeText={setAddAmount}
+            placeholder="0"
+            placeholderTextColor={COLORS.textLight}
+            keyboardType="decimal-pad"
+            autoFocus
+          />
+        </View>
 
-            {/* Category quick-picks */}
-            <Text style={styles.addModalLabel}>QUICK PICK</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll} contentContainerStyle={styles.categoryScrollContent}>
-              {PERSONAL_CATEGORIES.map(cat => (
-                <TouchableOpacity
-                  key={cat.label}
-                  style={[styles.categoryChip, addDescription === cat.label && styles.categoryChipActive]}
-                  onPress={() => { Vibration.vibrate(20); selectCategory(cat.label); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.categoryIcon}>{cat.icon}</Text>
-                  <Text style={[styles.categoryLabel, addDescription === cat.label && styles.categoryLabelActive]}>{cat.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <Text style={styles.addModalLabel}>OR DESCRIBE</Text>
-            <TextInput
-              style={styles.addModalDescInput}
-              value={addDescription}
-              onChangeText={setAddDescription}
-              placeholder="e.g. Parking, Snacks, Subscription..."
-              placeholderTextColor={COLORS.textLight}
-              maxLength={200}
-            />
-
-            <TouchableOpacity style={[styles.addModalSaveBtn, saving && { opacity: 0.5 }]} onPress={handleAddExpense} disabled={saving} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.addModalSaveBtnGradient}>
-                <Text style={styles.addModalSaveBtnText}>{saving ? 'Saving...' : 'Save Expense'}</Text>
-              </LinearGradient>
+        <Text style={styles.addModalLabel}>QUICK PICK</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll} contentContainerStyle={styles.categoryScrollContent}>
+          {PERSONAL_CATEGORIES.map(cat => (
+            <TouchableOpacity
+              key={cat.label}
+              style={[styles.categoryChip, addDescription === cat.label && styles.categoryChipActive]}
+              onPress={() => { Vibration.vibrate(20); selectCategory(cat.label); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.categoryIcon}>{cat.icon}</Text>
+              <Text style={[styles.categoryLabel, addDescription === cat.label && styles.categoryLabelActive]}>{cat.label}</Text>
             </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-            <TouchableOpacity style={styles.addModalCancelBtn} onPress={() => { setShowAddModal(false); setAddAmount(''); setAddDescription(''); }}>
-              <Text style={styles.addModalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        <Text style={styles.addModalLabel}>OR DESCRIBE</Text>
+        <TextInput
+          style={styles.addModalDescInput}
+          value={addDescription}
+          onChangeText={setAddDescription}
+          placeholder="e.g. Parking, Snacks, Subscription..."
+          placeholderTextColor={COLORS.textLight}
+          maxLength={200}
+        />
+
+        <TouchableOpacity style={[styles.addModalSaveBtn, saving && { opacity: 0.5 }]} onPress={handleAddExpense} disabled={saving} activeOpacity={0.8}>
+          <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.addModalSaveBtnGradient}>
+            <Text style={styles.addModalSaveBtnText}>{saving ? 'Saving...' : 'Save Expense'}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.addModalCancelBtn} onPress={() => { setShowAddModal(false); setAddAmount(''); setAddDescription(''); }}>
+          <Text style={styles.addModalCancelText}>Cancel</Text>
+        </TouchableOpacity>
+      </BottomSheet>
 
       {/* Success overlay */}
       <SuccessOverlay visible={showSuccess} message="Expense saved" subMessage={successAmount} onDone={() => setShowSuccess(false)} color={COLORS.personalColor} />
+
+      {/* Undo Toast */}
+      <UndoToast visible={undoState.visible} message={undoState.message} onUndo={handleUndo} onDismiss={() => setUndoState({ visible: false, message: '', txn: null })} />
+
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        onClose={() => setContextMenu({ visible: false, transaction: null })}
+        items={contextMenu.transaction ? getContextMenuItems(contextMenu.transaction) : []}
+        title={contextMenu.transaction?.description}
+      />
     </View>
   );
 }
@@ -323,36 +377,12 @@ export default function PersonalExpenseScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 16, paddingBottom: 80 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background },
 
-  /* ── Date group headers ──────────────────────────────────────── */
-  dateHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 10,
-  },
-  dateHeaderLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
-  dateHeaderText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    paddingHorizontal: 12,
-  },
+  dateHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 10 },
+  dateHeaderLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
+  dateHeaderText: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, textTransform: 'uppercase', paddingHorizontal: 12 },
 
-  heroCard: {
-    borderRadius: 24,
-    marginVertical: 16,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    overflow: 'hidden',
-  },
+  heroCard: { borderRadius: 24, marginVertical: 16, borderWidth: 1, borderColor: COLORS.glassBorder, overflow: 'hidden' },
   heroAccent: { height: 2 },
   statsRow: { flexDirection: 'row', padding: 22 },
   stat: { flex: 1, alignItems: 'center' },
@@ -362,97 +392,51 @@ const styles = StyleSheet.create({
   statCount: { fontSize: 11, color: COLORS.textSecondary, marginTop: 4 },
 
   quickAccessRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  quickAccessCard: {
-    flex: 1, backgroundColor: COLORS.glass, borderRadius: 20, padding: 16,
-    borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center',
-  },
-  quickAccessIconWrap: {
-    width: 42, height: 42, borderRadius: 14, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
-  },
+  quickAccessCard: { flex: 1, backgroundColor: COLORS.glass, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center' },
+  quickAccessIconWrap: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   quickAccessIcon: { fontSize: 18 },
   quickAccessTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
   quickAccessSub: { fontSize: 10, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 14 },
 
   empty: { alignItems: 'center', paddingVertical: 40 },
-  emptyIcon: {
-    width: 64, height: 64, borderRadius: 20, backgroundColor: COLORS.glass,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-    borderWidth: 1, borderColor: COLORS.glassBorder,
-  },
+  emptyIcon: { width: 64, height: 64, borderRadius: 20, backgroundColor: COLORS.glass, alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: COLORS.glassBorder },
   emptyEmoji: { fontSize: 28 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, marginBottom: 6 },
   emptyText: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 19 },
 
-  /* ── Debug (dev mode only) ───────────────────────────────────── */
-  debugBox: {
-    backgroundColor: COLORS.glass, borderRadius: 16, padding: 14,
-    marginVertical: 10, borderWidth: 1, borderColor: `${COLORS.warning}30`,
-  },
+  debugBox: { backgroundColor: COLORS.glass, borderRadius: 16, padding: 14, marginVertical: 10, borderWidth: 1, borderColor: `${COLORS.warning}30` },
   debugTitle: { fontSize: 10, fontWeight: '700', color: COLORS.warning, letterSpacing: 1.5, marginBottom: 8 },
   debugText: { fontSize: 12, color: COLORS.text, marginBottom: 4, fontFamily: 'monospace' },
   debugBtn: { backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 10, alignItems: 'center' as const, marginTop: 10 },
   debugBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
-  iosSetupBanner: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glass,
-    borderRadius: 20, padding: 16, marginVertical: 10,
-    borderWidth: 1, borderColor: `${COLORS.primary}20`, gap: 12,
-  },
+  iosSetupBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glass, borderRadius: 20, padding: 16, marginVertical: 10, borderWidth: 1, borderColor: `${COLORS.primary}20`, gap: 12 },
   iosSetupEmoji: { fontSize: 24 },
   iosSetupContent: { flex: 1 },
   iosSetupTitle: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
   iosSetupSub: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
   iosSetupArrow: { fontSize: 18, color: COLORS.textSecondary, fontWeight: '600' },
 
-  /* ── FAB ──────────────────────────────────────────────────────── */
-  fab: {
-    position: 'absolute', right: 20, bottom: 20,
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.personalColor, paddingHorizontal: 20, paddingVertical: 14,
-    borderRadius: 30, elevation: 8,
-    shadowColor: COLORS.personalColor, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12,
-  },
+  fab: { position: 'absolute', right: 20, bottom: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.personalColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 30, elevation: 8, shadowColor: COLORS.personalColor, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12 },
   fabIcon: { color: '#0A0A0F', fontSize: 20, fontWeight: '800', marginRight: 6 },
   fabText: { color: '#0A0A0F', fontWeight: '800', fontSize: 14, letterSpacing: 0.3 },
 
-  /* ── Add Expense Modal ────────────────────────────────────────── */
-  addModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
-  addModalSheet: {
-    backgroundColor: COLORS.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.glassBorder, borderBottomWidth: 0,
-  },
-  addModalHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.surfaceHigher, alignSelf: 'center', marginBottom: 20 },
   addModalTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 4 },
   addModalSub: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 24 },
   addModalLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 8 },
-  addModalAmountRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glass,
-    borderRadius: 16, paddingHorizontal: 20, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: 20,
-  },
+  addModalAmountRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glass, borderRadius: 16, paddingHorizontal: 20, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: 20 },
   addModalCurrency: { fontSize: 24, fontWeight: '800', color: COLORS.primary, marginRight: 4 },
   addModalAmountInput: { flex: 1, fontSize: 28, fontWeight: '800', color: COLORS.text, paddingVertical: 14 },
 
-  /* ── Category quick-picks ─────────────────────────────────────── */
   categoryScroll: { marginBottom: 16 },
   categoryScrollContent: { gap: 8 },
-  categoryChip: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.surfaceHigh, borderRadius: 20,
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-  categoryChipActive: {
-    borderColor: COLORS.personalColor, backgroundColor: `${COLORS.personalColor}15`,
-  },
+  categoryChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surfaceHigh, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.border },
+  categoryChipActive: { borderColor: COLORS.personalColor, backgroundColor: `${COLORS.personalColor}15` },
   categoryIcon: { fontSize: 14, marginRight: 6 },
   categoryLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
   categoryLabelActive: { color: COLORS.personalColor },
 
-  addModalDescInput: {
-    backgroundColor: COLORS.glass, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 14,
-    fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: 24,
-  },
+  addModalDescInput: { backgroundColor: COLORS.glass, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 14, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: 24 },
   addModalSaveBtn: { borderRadius: 30, overflow: 'hidden', marginBottom: 12 },
   addModalSaveBtnGradient: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
   addModalSaveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
