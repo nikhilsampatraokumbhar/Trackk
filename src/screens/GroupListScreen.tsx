@@ -17,7 +17,6 @@ import {
   checkGroupRetentionStatus,
   dismissRetentionBanner,
   markSoftAlertShown,
-  acceptDeletion,
 } from '../services/DataRetentionService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -60,18 +59,14 @@ export default function GroupListScreen() {
     ));
   };
 
-  const handleSoftAlertResponse = async (action: 'upgrade' | 'fine' | 'later') => {
+  const handleSoftAlertResponse = async (action: 'upgrade' | 'later') => {
     if (!softAlertStatus) return;
     if (action === 'upgrade') {
       await markSoftAlertShown(softAlertStatus.groupId);
       setSoftAlertStatus(null);
       nav.navigate('Pricing');
-    } else if (action === 'fine') {
-      await markSoftAlertShown(softAlertStatus.groupId);
-      await acceptDeletion(softAlertStatus.groupId);
-      setSoftAlertStatus(null);
     } else {
-      // "Remind me later" — just close, don't mark as shown
+      await markSoftAlertShown(softAlertStatus.groupId);
       setSoftAlertStatus(null);
     }
   };
@@ -208,7 +203,7 @@ export default function GroupListScreen() {
                     <View style={styles.retentionBannerContent}>
                       <Text style={styles.retentionBannerText}>
                         {retention.expiringCount} expense{retention.expiringCount > 1 ? 's' : ''} older than 75 days.
-                        Free accounts keep 90 days of history.
+                        Free accounts can view up to 90 days. Older data is safe but locked.
                       </Text>
                       <View style={styles.retentionBannerActions}>
                         <TouchableOpacity
@@ -266,13 +261,13 @@ export default function GroupListScreen() {
             <View style={styles.modalIconWrap}>
               <Text style={styles.modalIcon}>🗓️</Text>
             </View>
-            <Text style={styles.modalTitle}>Data cleanup ahead</Text>
+            <Text style={styles.modalTitle}>Your data is safe</Text>
             <Text style={styles.modalDesc}>
-              Group expenses older than 90 days will be removed
-              {softAlertStatus?.daysUntilPurge
-                ? ` in ${softAlertStatus.daysUntilPurge} day${softAlertStatus.daysUntilPurge > 1 ? 's' : ''}`
+              Group expenses older than 90 days will be locked
+              {softAlertStatus?.daysUntilLock
+                ? ` in ${softAlertStatus.daysUntilLock} day${softAlertStatus.daysUntilLock > 1 ? 's' : ''}`
                 : ' soon'}
-              . Upgrade to keep everything, or we'll clean up the oldest entries automatically.
+              . Your data won't be deleted — upgrade to Premium anytime to unlock full history.
             </Text>
 
             <TouchableOpacity
@@ -284,19 +279,11 @@ export default function GroupListScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.modalSecondaryBtn}
-              onPress={() => handleSoftAlertResponse('fine')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modalSecondaryBtnText}>That's fine, clean up</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
               style={styles.modalTertiaryBtn}
               onPress={() => handleSoftAlertResponse('later')}
               activeOpacity={0.7}
             >
-              <Text style={styles.modalTertiaryBtnText}>Remind me later</Text>
+              <Text style={styles.modalTertiaryBtnText}>Got it</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -76,10 +76,10 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
   premium_lifetime: {
     id: 'premium_lifetime',
     name: 'Premium Lifetime',
-    price: 9999,
+    price: 2999,
     period: 'lifetime',
     maxMembers: 1,
-    tagline: 'Pay once, track forever \u2014 less than what you spend eating out in a month',
+    tagline: 'Pay once, track forever \u2014 your gym membership costs more. And you don\'t even go.',
     features: [
       'Everything in Premium',
       'Lifetime access, no renewals',
@@ -119,10 +119,10 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
   family_lifetime: {
     id: 'family_lifetime',
     name: 'Family Lifetime',
-    price: 2999,
+    price: 9999,
     period: 'lifetime',
     maxMembers: 4,
-    tagline: 'One family, one payment, forever \u2014 your Netflix costs more monthly',
+    tagline: 'One family, one payment, forever \u2014 less than what you spend eating out in a month',
     features: [
       'Everything in Family',
       'Lifetime access for the whole family',
@@ -138,10 +138,10 @@ export const FOUNDING_PRICES: Partial<Record<PlanId, number>> = {
   premium_monthly: 49,
   premium_half_yearly: 199,
   premium_annual: 399,
-  premium_lifetime: 6999,
+  premium_lifetime: 1999,
   family_monthly: 99,
   family_annual: 599,
-  family_lifetime: 1999,
+  family_lifetime: 6999,
 };
 
 // ─── Built-in Promo Codes ───────────────────────────────────────────────────
