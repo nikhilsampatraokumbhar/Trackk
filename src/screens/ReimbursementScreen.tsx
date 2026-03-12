@@ -2,10 +2,11 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import {
   View, Text, StyleSheet, FlatList, SectionList, RefreshControl,
   TouchableOpacity, Alert, Modal, TextInput, KeyboardAvoidingView,
-  Platform, Vibration, AppState, ScrollView,
+  Platform, AppState, ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { hapticLight, hapticMedium, hapticHeavy } from '../utils/haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
@@ -107,7 +108,7 @@ export default function ReimbursementScreen() {
       Alert.alert('Enter a name', 'Give your expense log a name like "US Trip" or "Client Visit".');
       return;
     }
-    Vibration.vibrate(40);
+    hapticMedium();
     const trip = await createReimbursementTrip(name);
     setTripName('');
     setShowCreateTrip(false);
@@ -125,7 +126,7 @@ export default function ReimbursementScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Complete', onPress: async () => {
-            Vibration.vibrate(40);
+            hapticMedium();
             await completeReimbursementTrip(trip.id);
             setSelectedTrip({ ...trip, status: 'completed', completedAt: Date.now() });
             await loadTrips();
@@ -146,7 +147,7 @@ export default function ReimbursementScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Archive', onPress: async () => {
-            Vibration.vibrate(40);
+            hapticMedium();
             await archiveReimbursementTrip(trip.id);
             setSelectedTrip(null);
             await loadTrips();
@@ -159,7 +160,7 @@ export default function ReimbursementScreen() {
   // ─── Expense Actions ─────────────────────────────────────────
 
   const handleCategorySelect = (label: string) => {
-    Vibration.vibrate(30);
+    hapticLight();
     setSelectedCategory(label);
     setAddDescription(label);
   };
@@ -171,7 +172,7 @@ export default function ReimbursementScreen() {
       Alert.alert('Invalid', 'Please enter a valid amount.');
       return;
     }
-    Vibration.vibrate(40);
+    hapticMedium();
     setSaving(true);
     try {
       const desc = addDescription.trim() || selectedCategory || 'Office expense';
@@ -201,7 +202,7 @@ export default function ReimbursementScreen() {
   // ─── Receipt ─────────────────────────────────────────────────
 
   const handleReceiptPress = (transactionId: string) => {
-    Vibration.vibrate(30);
+    hapticLight();
     setSelectedTransactionId(transactionId);
     setReceiptModalVisible(true);
   };
@@ -228,7 +229,7 @@ export default function ReimbursementScreen() {
       if (!result.canceled && result.assets[0] && selectedTransactionId) {
         await updateTransaction(selectedTransactionId, { receiptUri: result.assets[0].uri });
         if (selectedTrip) await loadTripDetail(selectedTrip);
-        Vibration.vibrate(50);
+        hapticHeavy();
         setSuccessMessage('Receipt Saved');
         setSuccessSub('Receipt attached to expense');
         setShowSuccess(true);
@@ -255,7 +256,7 @@ export default function ReimbursementScreen() {
       Alert.alert('No Receipts', 'No receipts attached to expenses in this trip yet.');
       return;
     }
-    Vibration.vibrate(30);
+    hapticLight();
     Alert.alert(
       'Export Trip',
       `Export ${tripTransactions.length} expense(s) with ${withReceipts.length} receipt(s)?`,
@@ -397,7 +398,7 @@ export default function ReimbursementScreen() {
         {selectedTrip.status === 'active' && (
           <TouchableOpacity
             style={styles.fab}
-            onPress={() => { Vibration.vibrate(30); setShowAddModal(true); }}
+            onPress={() => { hapticLight(); setShowAddModal(true); }}
             activeOpacity={0.8}
           >
             <Text style={styles.fabIcon}>+</Text>
@@ -469,7 +470,7 @@ export default function ReimbursementScreen() {
       {/* Create Trip FAB */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => { Vibration.vibrate(30); setShowCreateTrip(true); }}
+        onPress={() => { hapticLight(); setShowCreateTrip(true); }}
         activeOpacity={0.8}
       >
         <Text style={styles.fabIcon}>+</Text>

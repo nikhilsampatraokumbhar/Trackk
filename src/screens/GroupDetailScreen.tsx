@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, ActivityIndicator, Linking, Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -267,7 +268,7 @@ export default function GroupDetailScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
@@ -599,7 +600,7 @@ export default function GroupDetailScreen() {
           <Text style={styles.modalCancelText}>Cancel</Text>
         </TouchableOpacity>
       </BottomSheet>
-    </View>
+    </SafeAreaView>
   );
 }
 

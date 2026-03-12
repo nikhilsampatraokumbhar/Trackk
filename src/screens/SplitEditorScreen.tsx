@@ -270,7 +270,7 @@ export default function SplitEditorScreen() {
   const tagOptions = members.filter(m => !m.isGuest && m.included);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

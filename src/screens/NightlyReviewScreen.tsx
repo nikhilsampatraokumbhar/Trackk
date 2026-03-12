@@ -13,10 +13,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Alert, Vibration, Modal,
+  Alert, Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { hapticLight, hapticMedium } from '../utils/haptics';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -98,14 +99,14 @@ export default function NightlyReviewScreen() {
   const unreviewedCount = items.filter(i => !reviewedIds.has(i.id)).length;
 
   const handleAssign = (item: ReviewItem) => {
-    Vibration.vibrate(30);
+    hapticLight();
     setSelectedItem(item);
     setAssignModalVisible(true);
   };
 
   const handleAssignToTracker = async (trackerType: TrackerType, trackerId: string) => {
     if (!selectedItem || !user) return;
-    Vibration.vibrate(40);
+    hapticMedium();
 
     try {
       if (trackerType === 'group') {
@@ -133,14 +134,14 @@ export default function NightlyReviewScreen() {
   };
 
   const handleDismiss = async (item: ReviewItem) => {
-    Vibration.vibrate(30);
+    hapticLight();
     const ids = [item.id];
     await markAsReviewed(ids);
     setReviewedIds(prev => new Set([...prev, ...ids]));
   };
 
   const handleDismissAll = async () => {
-    Vibration.vibrate(30);
+    hapticLight();
     Alert.alert(
       'Dismiss All',
       `Dismiss all ${unreviewedCount} unreviewed transactions?`,

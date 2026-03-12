@@ -2,10 +2,11 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import {
   View, Text, StyleSheet, SectionList, RefreshControl,
   TouchableOpacity, Alert, NativeModules, Platform, AppState,
-  TextInput, Vibration, ScrollView, Animated,
+  TextInput, ScrollView, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { hapticLight, hapticMedium, hapticSuccess } from '../utils/haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -111,7 +112,7 @@ export default function PersonalExpenseScreen() {
         timestamp: Date.now(),
       };
       await saveTransaction(parsed, 'personal', user?.id || '');
-      Vibration.vibrate(50);
+      hapticSuccess();
       setShowAddModal(false);
       setSuccessAmount(formatCurrency(amount));
       setShowSuccess(true);
@@ -209,7 +210,7 @@ export default function PersonalExpenseScreen() {
               label="Personal Expenses"
               subtitle="Track daily spending from SMS"
               isActive={trackerState.personal}
-              onToggle={() => { Vibration.vibrate(30); togglePersonal(); }}
+              onToggle={() => { hapticLight(); togglePersonal(); }}
               color={COLORS.personalColor}
             />
 
@@ -298,7 +299,7 @@ export default function PersonalExpenseScreen() {
       />
 
       {/* Add Expense FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => { Vibration.vibrate(30); setShowAddModal(true); }} activeOpacity={0.8}>
+      <TouchableOpacity style={styles.fab} onPress={() => { hapticMedium(); setShowAddModal(true); }} activeOpacity={0.8}>
         <Text style={styles.fabIcon}>+</Text>
         <Text style={styles.fabText}>Add Expense</Text>
       </TouchableOpacity>
@@ -328,7 +329,7 @@ export default function PersonalExpenseScreen() {
             <TouchableOpacity
               key={cat.label}
               style={[styles.categoryChip, addDescription === cat.label && styles.categoryChipActive]}
-              onPress={() => { Vibration.vibrate(20); selectCategory(cat.label); }}
+              onPress={() => { hapticLight(); selectCategory(cat.label); }}
               activeOpacity={0.7}
             >
               <Text style={styles.categoryIcon}>{cat.icon}</Text>

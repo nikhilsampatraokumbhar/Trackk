@@ -16,7 +16,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, Vibration, Alert,
+  KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -28,6 +28,7 @@ import { saveTransaction } from '../services/StorageService';
 import { ingestTransaction } from '../services/TransactionSignalEngine';
 import { ParsedTransaction } from '../models/types';
 import { COLORS, formatCurrency } from '../utils/helpers';
+import { hapticLight, hapticMedium } from '../utils/haptics';
 import SuccessOverlay from '../components/SuccessOverlay';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -64,7 +65,7 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
   }, []);
 
   const handleCategoryTap = (label: string) => {
-    Vibration.vibrate(20);
+    hapticLight();
     setSelectedCategory(label);
     if (!description) setDescription(label);
   };
@@ -76,7 +77,7 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
       return;
     }
 
-    Vibration.vibrate(40);
+    hapticMedium();
     setSaving(true);
 
     try {

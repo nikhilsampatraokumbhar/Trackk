@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 
 import { AuthProvider, useAuth } from './src/store/AuthContext';
 import { GroupProvider, useGroups } from './src/store/GroupContext';
@@ -42,6 +43,7 @@ export default function App() {
   return (
     <AuthProvider>
       <GroupProvider>
+        <StatusBar style="light" />
         <AppContent />
       </GroupProvider>
     </AuthProvider>

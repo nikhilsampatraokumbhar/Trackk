@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert, ActivityIndicator, Platform, Linking, Vibration,
+  TextInput, Alert, ActivityIndicator, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { hapticDevMode } from '../utils/haptics';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -43,7 +44,7 @@ export default function ProfileScreen() {
     if (versionTapTimer.current) clearTimeout(versionTapTimer.current);
     if (versionTapCount.current >= 7) {
       versionTapCount.current = 0;
-      Vibration.vibrate(100);
+      hapticDevMode();
       const newState = !devMode;
       setDevMode(newState);
       setDevModeState(newState);
