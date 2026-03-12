@@ -119,8 +119,8 @@ function MainTabs() {
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarStyle: {
-          backgroundColor: '#131318',
-          borderTopColor: 'rgba(255,255,255,0.06)',
+          backgroundColor: '#141418',
+          borderTopColor: '#1E1E26',
           borderTopWidth: 1,
           paddingBottom: Math.max(insets.bottom, 8),
           paddingTop: 6,

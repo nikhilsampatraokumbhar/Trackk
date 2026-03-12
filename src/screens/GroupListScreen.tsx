@@ -12,27 +12,60 @@ import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
 import { usePremium } from '../store/PremiumContext';
 import TrackerToggle from '../components/TrackerToggle';
-import { COLORS, getColorForId } from '../utils/helpers';
+import { COLORS, getColorForId, formatCurrency } from '../utils/helpers';
 import {
   RetentionStatus,
   checkGroupRetentionStatus,
   dismissRetentionBanner,
   markSoftAlertShown,
 } from '../services/DataRetentionService';
-import { archiveGroup } from '../services/StorageService';
+import { archiveGroup, getGroupTransactions } from '../services/StorageService';
+import { calculateDebts, getUserDebtSummary } from '../services/DebtCalculator';
+import { useAuth } from '../store/AuthContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+interface GroupStats {
+  total: number;
+  settledPercent: number;
+  netOwed: number;   // positive = you are owed, negative = you owe
+}
+
 export default function GroupListScreen() {
   const nav = useNavigation<Nav>();
+  const { user } = useAuth();
   const { groups, loading, refreshGroups } = useGroups();
   const { trackerState, toggleGroup } = useTracker();
   const { isPremium } = usePremium();
   const [refreshing, setRefreshing] = useState(false);
   const [retentionStatuses, setRetentionStatuses] = useState<RetentionStatus[]>([]);
   const [softAlertStatus, setSoftAlertStatus] = useState<RetentionStatus | null>(null);
+  const [groupStats, setGroupStats] = useState<Record<string, GroupStats>>({});
 
   useFocusEffect(useCallback(() => { refreshGroups(); }, [refreshGroups]));
+
+  // Load stats (total, settled %, net balance) for each group
+  useEffect(() => {
+    if (groups.length === 0 || !user) return;
+    (async () => {
+      const stats: Record<string, GroupStats> = {};
+      for (const g of groups) {
+        try {
+          const txns = await getGroupTransactions(g.id);
+          const total = txns.reduce((s, t) => s + t.amount, 0);
+          const totalSplits = txns.reduce((s, t) => s + t.splits.length, 0);
+          const settledSplits = txns.reduce((s, t) => s + t.splits.filter(sp => sp.settled).length, 0);
+          const settledPercent = totalSplits > 0 ? Math.round((settledSplits / totalSplits) * 100) : 0;
+          const debts = calculateDebts(txns);
+          const { totalOwed, totalOwing } = getUserDebtSummary(debts, user.id);
+          stats[g.id] = { total, settledPercent, netOwed: totalOwed - totalOwing };
+        } catch {
+          stats[g.id] = { total: 0, settledPercent: 0, netOwed: 0 };
+        }
+      }
+      setGroupStats(stats);
+    })();
+  }, [groups, user]);
 
   // Check retention status for all groups (free users only)
   useEffect(() => {
@@ -186,49 +219,67 @@ export default function GroupListScreen() {
         renderItem={({ item }) => {
           const color = getColorForId(item.id);
           const isActive = trackerState.activeGroupIds.includes(item.id);
+          const stats = groupStats[item.id];
+          const netOwed = stats?.netOwed || 0;
+
           return (
-            <View style={[styles.groupCard, isActive && { borderColor: `${COLORS.groupColor}50` }]}>
-              {/* Group info row */}
-              <TouchableOpacity
-                style={styles.groupInfoRow}
-                onPress={() => nav.navigate('GroupDetail', { groupId: item.id })}
-                onLongPress={() => handleArchiveGroup(item.id, item.name)}
-                delayLongPress={500}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.groupIcon, { backgroundColor: `${color}22` }]}>
+            <TouchableOpacity
+              style={[styles.groupCard, isActive && { borderColor: `${COLORS.groupColor}40` }]}
+              onPress={() => nav.navigate('GroupDetail', { groupId: item.id })}
+              onLongPress={() => handleArchiveGroup(item.id, item.name)}
+              delayLongPress={500}
+              activeOpacity={0.7}
+            >
+              {/* Top row: icon + name/meta + total/settled */}
+              <View style={styles.groupTopRow}>
+                <View style={[styles.groupIcon, { backgroundColor: `${color}18` }]}>
                   <Text style={[styles.groupInitial, { color }]}>
                     {(item.name || 'G')[0].toUpperCase()}
                   </Text>
                 </View>
                 <View style={styles.groupTextWrap}>
                   <Text style={styles.groupName}>{item.name}</Text>
-                  <View style={styles.membersRow}>
-                    {item.members.slice(0, 4).map((m, i) => (
-                      <View
-                        key={m.userId}
-                        style={[styles.memberAvatar, {
-                          backgroundColor: `${getColorForId(m.userId)}30`,
-                          borderColor: COLORS.surface,
-                          marginLeft: i > 0 ? -8 : 0,
-                          zIndex: 10 - i,
-                        }]}
-                      >
-                        <Text style={[styles.memberInitial, { color: getColorForId(m.userId) }]}>
-                          {m.displayName[0].toUpperCase()}
-                        </Text>
-                      </View>
-                    ))}
-                    {item.members.length > 4 && (
-                      <View style={[styles.memberAvatar, styles.memberMore, { marginLeft: -8 }]}>
-                        <Text style={styles.memberMoreText}>+{item.members.length - 4}</Text>
-                      </View>
-                    )}
-                    <Text style={styles.memberCount}>{item.members.length} members</Text>
-                  </View>
+                  <Text style={styles.groupMeta}>{item.members.length} members</Text>
                 </View>
-                <Text style={styles.chevron}>›</Text>
-              </TouchableOpacity>
+                <View style={styles.groupStatsRight}>
+                  {stats && stats.total > 0 && (
+                    <>
+                      <Text style={styles.groupTotal}>{formatCurrency(stats.total)}</Text>
+                      <Text style={styles.groupSettled}>Settled {stats.settledPercent}%</Text>
+                    </>
+                  )}
+                </View>
+              </View>
+
+              {/* Net balance row */}
+              {stats && stats.total > 0 && (
+                <View style={styles.netRow}>
+                  <Text style={styles.netLabel}>Net</Text>
+                  <Text style={[styles.netValue, { color: netOwed >= 0 ? COLORS.success : COLORS.danger }]}>
+                    {netOwed >= 0 ? `You are owed ${formatCurrency(netOwed)}` : `You owe ${formatCurrency(Math.abs(netOwed))}`}
+                  </Text>
+                </View>
+              )}
+
+              {/* Action row: Settle Up + Tracker toggle */}
+              <View style={styles.groupActionRow}>
+                <TouchableOpacity
+                  style={styles.settleUpBtn}
+                  onPress={() => nav.navigate('GroupDetail', { groupId: item.id })}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.settleUpText}>Settle Up</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.trackBtn, isActive && styles.trackBtnActive]}
+                  onPress={() => toggleGroup(item.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.trackBtnText, isActive && styles.trackBtnTextActive]}>
+                    {isActive ? 'Tracking' : 'Track'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Retention warning banner (Day 75+) */}
               {(() => {
@@ -239,19 +290,13 @@ export default function GroupListScreen() {
                     <View style={styles.retentionBannerContent}>
                       <Text style={styles.retentionBannerText}>
                         {retention.expiringCount} expense{retention.expiringCount > 1 ? 's' : ''} older than 75 days.
-                        Free accounts can view up to 90 days. Older data is safe but locked.
+                        Older data is safe but locked.
                       </Text>
                       <View style={styles.retentionBannerActions}>
-                        <TouchableOpacity
-                          style={styles.retentionUpgradeBtn}
-                          onPress={() => nav.navigate('Pricing')}
-                        >
+                        <TouchableOpacity style={styles.retentionUpgradeBtn} onPress={() => nav.navigate('Pricing')}>
                           <Text style={styles.retentionUpgradeText}>Keep with Premium</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.retentionDismissBtn}
-                          onPress={() => handleDismissBanner(item.id)}
-                        >
+                        <TouchableOpacity style={styles.retentionDismissBtn} onPress={() => handleDismissBanner(item.id)}>
                           <Text style={styles.retentionDismissText}>Dismiss</Text>
                         </TouchableOpacity>
                       </View>
@@ -259,18 +304,7 @@ export default function GroupListScreen() {
                   </View>
                 );
               })()}
-
-              {/* Tracker toggle row */}
-              <View style={styles.toggleRow}>
-                <TrackerToggle
-                  label="Track for this group"
-                  subtitle="Auto-split expenses"
-                  isActive={isActive}
-                  onToggle={() => toggleGroup(item.id)}
-                  color={COLORS.groupColor}
-                />
-              </View>
-            </View>
+            </TouchableOpacity>
           );
         }}
         ListFooterComponent={
@@ -456,67 +490,114 @@ const styles = StyleSheet.create({
 
   groupCard: {
     backgroundColor: COLORS.glass,
-    borderRadius: 20,
-    marginBottom: 12,
+    borderRadius: 18,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: COLORS.glassBorder,
-    overflow: 'hidden',
+    padding: 16,
+  },
+  groupTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  groupIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  groupInitial: { fontSize: 18, fontWeight: '800' },
+  groupTextWrap: { flex: 1 },
+  groupName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  groupMeta: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  groupStatsRight: {
+    alignItems: 'flex-end',
+  },
+  groupTotal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  groupSettled: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  netRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginBottom: 14,
+    gap: 8,
+  },
+  netLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  netValue: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  groupActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  settleUpBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+    backgroundColor: COLORS.surfaceHigh,
+  },
+  settleUpText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  trackBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  trackBtnActive: {
+    borderColor: `${COLORS.groupColor}50`,
+    backgroundColor: `${COLORS.groupColor}15`,
+  },
+  trackBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  trackBtnTextActive: {
+    color: COLORS.groupColor,
+  },
+  memberCount: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
   },
   groupInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  groupIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  groupInitial: { fontSize: 20, fontWeight: '800' },
-  groupTextWrap: { flex: 1 },
-  groupName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 6,
-  },
-  membersRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  memberAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-  },
-  memberInitial: { fontSize: 9, fontWeight: '800' },
-  memberMore: {
-    backgroundColor: COLORS.surfaceHigher,
-    borderColor: COLORS.border,
-  },
-  memberMoreText: { fontSize: 9, fontWeight: '700', color: COLORS.textSecondary },
-  memberCount: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginLeft: 8,
   },
   chevron: {
     fontSize: 22,
     color: COLORS.textSecondary,
     marginLeft: 8,
-  },
-  toggleRow: {
-    paddingHorizontal: 12,
-    paddingBottom: 4,
-    paddingTop: 4,
   },
 
   /* ── Retention Banner (per group card) ───────────────────── */
