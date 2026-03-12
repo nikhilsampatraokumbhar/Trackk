@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Platform } from 'react-native';
@@ -101,6 +102,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 }
 
 function MainTabs() {
+  const insets = useSafeAreaInsets();
   const LABELS: Record<string, string> = {
     Home: 'Home',
     Personal: 'Personal',
@@ -117,12 +119,12 @@ function MainTabs() {
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarStyle: {
-          backgroundColor: '#131318',
-          borderTopColor: 'rgba(255,255,255,0.06)',
+          backgroundColor: '#141418',
+          borderTopColor: '#1E1E26',
           borderTopWidth: 1,
-          paddingBottom: 8,
+          paddingBottom: Math.max(insets.bottom, 8),
           paddingTop: 6,
-          height: 64,
+          height: 56 + Math.max(insets.bottom, 8),
           elevation: 0,
           shadowOpacity: 0,
         },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 
 import { AuthProvider, useAuth } from './src/store/AuthContext';
 import { GroupProvider, useGroups } from './src/store/GroupContext';
@@ -7,6 +7,7 @@ import { TrackerProvider } from './src/store/TrackerContext';
 import { PremiumProvider } from './src/store/PremiumContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { registerBackgroundHandler } from './src/services/NotificationService';
+import SplashScreen from './src/components/SplashScreen';
 
 import { COLORS } from './src/utils/helpers';
 
@@ -18,11 +19,7 @@ function AppContent() {
   const { groups } = useGroups();
 
   if (loading) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
+    return <SplashScreen />;
   }
 
   // If not authenticated, AppNavigator will show LoginScreen

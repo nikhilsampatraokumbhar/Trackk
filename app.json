@@ -4,7 +4,11 @@
     "slug": "trackk",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0A0A0F",
+      "resizeMode": "contain"
+    },
     "android": {
       "googleServicesFile": "./google-services.json",
       "package": "com.trackk.app",

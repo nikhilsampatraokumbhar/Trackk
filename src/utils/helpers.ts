@@ -1,17 +1,17 @@
-// Hume-inspired glassmorphic dark palette
+// Clean dark palette — inspired by modern finance apps
 export const COLORS = {
-  // Backgrounds (deep dark, layered glassmorphism)
+  // Backgrounds (deep dark, layered)
   background: '#0A0A0F',
-  surface: '#131318',
-  surfaceHigh: '#1C1C24',
-  surfaceHigher: '#25252F',
+  surface: '#141418',
+  surfaceHigh: '#1C1C22',
+  surfaceHigher: '#262630',
 
-  // Glass overlay tints (use for glassmorphic cards)
-  glass: 'rgba(255,255,255,0.05)',
-  glassHigh: 'rgba(255,255,255,0.08)',
-  glassBorder: 'rgba(255,255,255,0.08)',
+  // Card surfaces (solid dark gray, no transparency)
+  glass: '#1A1A20',
+  glassHigh: '#222228',
+  glassBorder: '#2A2A32',
 
-  // Warm orange accent — Hume signature
+  // Warm orange accent
   primary: '#E8734A',
   primaryLight: '#F09070',
   primaryDark: '#C05A35',
@@ -19,12 +19,12 @@ export const COLORS = {
 
   // Text
   text: '#F0F0F5',
-  textSecondary: '#8A8A9E',
-  textLight: '#555568',
+  textSecondary: '#7A7A90',
+  textLight: '#4A4A5C',
 
-  // Borders (subtle, glassmorphic)
-  border: 'rgba(255,255,255,0.06)',
-  borderLight: 'rgba(255,255,255,0.03)',
+  // Borders (subtle solid)
+  border: '#1E1E26',
+  borderLight: '#161620',
 
   // Status
   success: '#3CB882',

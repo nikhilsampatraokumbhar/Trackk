@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   User, Transaction, Group, GroupTransaction, Split,
   TrackerType, ParsedTransaction, SavingsGoal, DailySpend, Settlement,
-  SavingsJarEntry, FinanceItem,
+  SavingsJarEntry, FinanceItem, ReimbursementTrip,
 } from '../models/types';
 import { generateId } from '../utils/helpers';
 import { buildDescription } from './TransactionParser';
@@ -17,6 +17,7 @@ const KEYS = {
   SAVINGS_JAR: '@et_savings_jar',
   SETTLEMENTS: (groupId: string) => `@et_settlements_${groupId}`,
   SHARED_FINANCES: '@et_shared_finances',
+  REIMBURSEMENT_TRIPS: '@et_reimbursement_trips',
 };
 
 // ─── User ────────────────────────────────────────────────────────────────────
@@ -155,6 +156,15 @@ export async function updateGroup(groupId: string, data: Partial<Group>): Promis
   const idx = groups.findIndex(g => g.id === groupId);
   if (idx !== -1) {
     groups[idx] = { ...groups[idx], ...data };
+    await saveGroups(groups);
+  }
+}
+
+export async function archiveGroup(groupId: string): Promise<void> {
+  const groups = await getGroups();
+  const idx = groups.findIndex(g => g.id === groupId);
+  if (idx !== -1) {
+    groups[idx] = { ...groups[idx], archived: true };
     await saveGroups(groups);
   }
 }
@@ -530,12 +540,83 @@ export async function emptyJar(goalId: string): Promise<number> {
   return jarAmount;
 }
 
+// ─── Reimbursement Trips ─────────────────────────────────────────────────────
+
+export async function getReimbursementTrips(): Promise<ReimbursementTrip[]> {
+  const raw = await AsyncStorage.getItem(KEYS.REIMBURSEMENT_TRIPS);
+  return raw ? JSON.parse(raw) : [];
+}
+
+async function saveReimbursementTrips(trips: ReimbursementTrip[]): Promise<void> {
+  await AsyncStorage.setItem(KEYS.REIMBURSEMENT_TRIPS, JSON.stringify(trips));
+}
+
+export async function createReimbursementTrip(name: string): Promise<ReimbursementTrip> {
+  const trip: ReimbursementTrip = {
+    id: generateId(),
+    name,
+    status: 'active',
+    createdAt: Date.now(),
+  };
+  const all = await getReimbursementTrips();
+  all.unshift(trip);
+  await saveReimbursementTrips(all);
+  return trip;
+}
+
+export async function completeReimbursementTrip(tripId: string): Promise<void> {
+  const all = await getReimbursementTrips();
+  const idx = all.findIndex(t => t.id === tripId);
+  if (idx !== -1) {
+    all[idx] = { ...all[idx], status: 'completed', completedAt: Date.now() };
+    await saveReimbursementTrips(all);
+  }
+}
+
+export async function archiveReimbursementTrip(tripId: string): Promise<void> {
+  const all = await getReimbursementTrips();
+  const idx = all.findIndex(t => t.id === tripId);
+  if (idx !== -1) {
+    all[idx] = { ...all[idx], status: 'archived' };
+    await saveReimbursementTrips(all);
+  }
+}
+
+export async function getTripTransactions(tripId: string): Promise<Transaction[]> {
+  const all = await getAllTransactions();
+  return all.filter(t => t.tripId === tripId).sort((a, b) => b.timestamp - a.timestamp);
+}
+
+export async function saveReimbursementExpense(
+  parsed: ParsedTransaction,
+  tripId: string,
+  userId: string,
+): Promise<Transaction> {
+  const txn: Transaction = {
+    id: generateId(),
+    userId,
+    amount: parsed.amount,
+    description: buildDescription(parsed),
+    merchant: parsed.merchant,
+    source: parsed.bank || 'Bank',
+    rawMessage: parsed.rawMessage,
+    trackerType: 'reimbursement',
+    tripId,
+    timestamp: parsed.timestamp,
+    createdAt: Date.now(),
+  };
+  const all = await getAllTransactions();
+  all.unshift(txn);
+  await saveAllTransactions(all);
+  return txn;
+}
+
 // ─── Clear all data ──────────────────────────────────────────────────────────
 
 export async function clearAllData(): Promise<void> {
   const groups = await getGroups();
   const keys = [
-    KEYS.USER, KEYS.TRANSACTIONS, KEYS.GROUPS, KEYS.GOALS, KEYS.DAILY_SPENDS, KEYS.SAVINGS_JAR, KEYS.SHARED_FINANCES,
+    KEYS.USER, KEYS.TRANSACTIONS, KEYS.GROUPS, KEYS.GOALS, KEYS.DAILY_SPENDS, KEYS.SAVINGS_JAR, KEYS.SHARED_FINANCES, KEYS.REIMBURSEMENT_TRIPS,
     ...groups.map(g => KEYS.GROUP_TRANSACTIONS(g.id)),
     ...groups.map(g => KEYS.SETTLEMENTS(g.id)),
     // Also clear cache, tracker state, and premium data

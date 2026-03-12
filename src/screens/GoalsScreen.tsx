@@ -1173,28 +1173,47 @@ export default function GoalsScreen() {
         </View>
 
         {/* Summary Card (when goals exist) */}
-        {goals.length > 0 && (
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Today</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(todaySpend)}</Text>
+        {goals.length > 0 && (() => {
+          const totalSaved = goals.reduce((s, g) => s + (g.totalSaved || 0) + (g.savingsJar || 0), 0);
+          const totalTarget = goals.reduce((s, g) => s + g.targetAmount, 0);
+          const overallProgress = totalTarget > 0 ? Math.min(totalSaved / totalTarget, 1) : 0;
+          return (
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryTopRow}>
+                <View>
+                  <Text style={styles.summaryLabel}>Total Saved</Text>
+                  <View style={styles.summaryAmountRow}>
+                    <Text style={styles.summaryAmount}>{formatCurrency(totalSaved)}</Text>
+                    <Text style={styles.summaryTarget}> / {formatCurrency(totalTarget)}</Text>
+                  </View>
+                </View>
+                <View style={styles.summaryRight}>
+                  <Text style={styles.summaryLabel}>Active Goals</Text>
+                  <Text style={styles.summaryGoalCount}>{goals.length}</Text>
+                </View>
               </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>This Month</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(monthSpend)}</Text>
+              <View style={styles.summaryProgressBg}>
+                <View style={[styles.summaryProgressFill, { width: `${overallProgress * 100}%` }]} />
               </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Best Streak</Text>
-                <Text style={[styles.summaryValue, { color: COLORS.warning }]}>
-                  {Math.max(...goals.map(g => g.streak), 0)}d
-                </Text>
+              <View style={styles.summaryBottomRow}>
+                <View style={styles.summaryStatItem}>
+                  <Text style={styles.summaryStatLabel}>Today</Text>
+                  <Text style={styles.summaryStatValue}>{formatCurrency(todaySpend)}</Text>
+                </View>
+                <View style={styles.summaryStatItem}>
+                  <Text style={styles.summaryStatLabel}>This Month</Text>
+                  <Text style={styles.summaryStatValue}>{formatCurrency(monthSpend)}</Text>
+                </View>
+                <View style={styles.summaryStatItem}>
+                  <Text style={styles.summaryStatLabel}>Streak</Text>
+                  <Text style={[styles.summaryStatValue, { color: COLORS.warning }]}>
+                    {Math.max(...goals.map(g => g.streak), 0)}d
+                  </Text>
+                </View>
               </View>
             </View>
-          </View>
-        )}
+          );
+        })()}
 
         {goals.length === 0 && renderEmptyState()}
 
@@ -1263,36 +1282,76 @@ const styles = StyleSheet.create({
 
   /* ── Summary Card ─────────────────────────────────────────────────── */
   summaryCard: {
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: COLORS.glass,
+    borderRadius: 18,
+    padding: 20,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
-  summaryRow: {
+  summaryTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
   },
   summaryLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textSecondary,
-    letterSpacing: 0.5,
     marginBottom: 4,
   },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: '700',
+  summaryAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  summaryAmount: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.success,
+    letterSpacing: -0.5,
+  },
+  summaryTarget: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  summaryRight: {
+    alignItems: 'flex-end',
+  },
+  summaryGoalCount: {
+    fontSize: 28,
+    fontWeight: '800',
     color: COLORS.text,
   },
-  summaryDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: COLORS.border,
+  summaryProgressBg: {
+    height: 8,
+    backgroundColor: COLORS.surfaceHigher,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  summaryProgressFill: {
+    height: 8,
+    backgroundColor: COLORS.success,
+    borderRadius: 4,
+  },
+  summaryBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  summaryStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  summaryStatLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  summaryStatValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
   },
 
   /* ── Empty State ──────────────────────────────────────────────────── */

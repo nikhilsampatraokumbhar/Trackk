@@ -4,6 +4,7 @@ import {
   TouchableOpacity, Alert, NativeModules, Platform, AppState,
   TextInput, Vibration, ScrollView, Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -172,7 +173,7 @@ export default function PersonalExpenseScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <SectionList
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
@@ -370,7 +371,7 @@ export default function PersonalExpenseScreen() {
         items={contextMenu.transaction ? getContextMenuItems(contextMenu.transaction) : []}
         title={contextMenu.transaction?.description}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -387,8 +388,8 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', padding: 22 },
   stat: { flex: 1, alignItems: 'center' },
   statDivider: { width: 1, backgroundColor: COLORS.glassBorder, marginHorizontal: 16 },
-  statLabel: { fontSize: 9, color: COLORS.textSecondary, letterSpacing: 2, fontWeight: '700', marginBottom: 8 },
-  statValue: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+  statLabel: { fontSize: 10, color: COLORS.textSecondary, letterSpacing: 2, fontWeight: '700', marginBottom: 8 },
+  statValue: { fontSize: 32, fontWeight: '800', letterSpacing: -0.5 },
   statCount: { fontSize: 11, color: COLORS.textSecondary, marginTop: 4 },
 
   quickAccessRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },

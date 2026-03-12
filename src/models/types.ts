@@ -27,11 +27,22 @@ export interface Transaction {
   rawMessage?: string;
   trackerType: TrackerType;
   groupId?: string;
+  tripId?: string;
   receiptUri?: string;
   note?: string;
   tags?: string[];
   timestamp: number;
   createdAt: number;
+}
+
+// ─── Reimbursement Trips ─────────────────────────────────────────────────────
+
+export interface ReimbursementTrip {
+  id: string;
+  name: string;
+  status: 'active' | 'completed' | 'archived';
+  createdAt: number;
+  completedAt?: number;
 }
 
 // ─── Budget ──────────────────────────────────────────────────────────────────
@@ -58,6 +69,7 @@ export interface Group {
   createdAt: number;
   isTrip?: boolean;
   tripReminderSent?: boolean;
+  archived?: boolean;
 }
 
 export interface Split {

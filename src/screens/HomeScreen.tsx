@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, AppState, Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,20 +11,16 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
-import { getTransactions, getGoals, computeTodaySpendFromTransactions, deleteTransaction, getTransaction } from '../services/StorageService';
+import { getTransactions, getGoals, computeTodaySpendFromTransactions, deleteTransaction, saveTransaction } from '../services/StorageService';
 import { getOverallBudget, getBudgetStatus, setBudget, deleteBudget, BudgetStatus } from '../services/BudgetService';
 import { getTodayPendingCount } from '../services/TransactionSignalEngine';
 import { Transaction, SavingsGoal } from '../models/types';
-import TransactionCard from '../components/TransactionCard';
 import AnimatedAmount from '../components/AnimatedAmount';
-import { HeroCardSkeleton, TransactionListSkeleton } from '../components/SkeletonLoader';
+import { HeroCardSkeleton } from '../components/SkeletonLoader';
 import ActiveTrackerBanner from '../components/ActiveTrackerBanner';
 import TrackerSelectionDialog from '../components/TrackerSelectionDialog';
 import UndoToast from '../components/UndoToast';
-import ContextMenu, { ContextMenuItem } from '../components/ContextMenu';
-import { useStaggerAnimation } from '../hooks/useStaggerAnimation';
 import { COLORS, formatCurrency } from '../utils/helpers';
-import { saveTransaction } from '../services/StorageService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -37,9 +34,9 @@ export default function HomeScreen() {
     transactionVersion,
   } = useTracker();
 
-  const [recentTxns, setRecentTxns] = useState<Transaction[]>([]);
   const [totalSpent, setTotalSpent] = useState(0);
   const [monthSpent, setMonthSpent] = useState(0);
+  const [monthCount, setMonthCount] = useState(0);
   const [budgetStatus, setBudgetStatusState] = useState<BudgetStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -58,14 +55,8 @@ export default function HomeScreen() {
   // Undo toast
   const [undoState, setUndoState] = useState<{ visible: boolean; message: string; txn: Transaction | null }>({ visible: false, message: '', txn: null });
 
-  // Context menu
-  const [contextMenu, setContextMenu] = useState<{ visible: boolean; transaction: Transaction | null }>({ visible: false, transaction: null });
-
   // Parallax
   const scrollY = useRef(new Animated.Value(0)).current;
-
-  // Staggered animations
-  const stagger = useStaggerAnimation(recentTxns.length, !loading);
 
   const activeTrackers = getActiveTrackers(groups);
 
@@ -89,8 +80,6 @@ export default function HomeScreen() {
   const loadTransactions = useCallback(async () => {
     const all = await getTransactions();
     const personalOnly = all.filter(t => !t.groupId);
-    const sorted = all.sort((a, b) => b.timestamp - a.timestamp).slice(0, 20);
-    setRecentTxns(sorted);
     setTotalSpent(personalOnly.reduce((s, t) => s + t.amount, 0));
 
     const now = new Date();
@@ -100,6 +89,7 @@ export default function HomeScreen() {
     });
     const ms = thisMonth.reduce((s, t) => s + t.amount, 0);
     setMonthSpent(ms);
+    setMonthCount(thisMonth.length);
 
     const budget = await getOverallBudget();
     setBudgetStatusState(budget ? getBudgetStatus(budget, ms) : null);
@@ -113,7 +103,6 @@ export default function HomeScreen() {
       setActiveGoal(null);
     }
 
-    // Load pending review count for nightly review badge
     const pendingCount = await getTodayPendingCount();
     setPendingReviewCount(pendingCount);
 
@@ -178,17 +167,9 @@ export default function HomeScreen() {
     setShowBudgetModal(true);
   };
 
-  // Swipe-to-delete with undo
-  const handleSwipeDelete = async (txn: Transaction) => {
-    await deleteTransaction(txn.id);
-    setUndoState({ visible: true, message: `Deleted: ${txn.description}`, txn });
-    await loadTransactions();
-  };
-
   const handleUndo = async () => {
     if (undoState.txn) {
       const txn = undoState.txn;
-      // Re-save the transaction
       await saveTransaction(
         { amount: txn.amount, type: 'debit', merchant: txn.merchant, rawMessage: txn.rawMessage || '', timestamp: txn.timestamp },
         txn.trackerType,
@@ -200,12 +181,6 @@ export default function HomeScreen() {
     setUndoState({ visible: false, message: '', txn: null });
   };
 
-  // Long-press context menu
-  const getContextMenuItems = (txn: Transaction): ContextMenuItem[] => [
-    { label: 'View Details', icon: '📋', onPress: () => nav.navigate('TransactionDetail', { transactionId: txn.id }) },
-    { label: 'Delete', icon: '🗑️', destructive: true, onPress: () => handleSwipeDelete(txn) },
-  ];
-
   const greeting = () => {
     const h = new Date().getHours();
     if (h < 12) return 'Good morning';
@@ -214,18 +189,9 @@ export default function HomeScreen() {
   };
 
   const contextualSubtext = useMemo(() => {
-    const day = new Date().getDay();
-    const h = new Date().getHours();
     if (budgetStatus && budgetStatus.percentage > 80) return 'Budget\'s getting tight — stay mindful';
-    if (recentTxns.length === 0) return 'Start tracking your expenses';
-    if (day === 0 || day === 6) return 'Weekend vibes — spend wisely';
-    if (h < 12) return 'Let\'s keep spending in check today';
-    if (h >= 21) return 'Wrapping up the day\'s expenses';
     return 'Your finances at a glance';
-  }, [budgetStatus, recentTxns.length]);
-
-  const hasTransactions = recentTxns.length > 0;
-  const userInitial = (user?.displayName || 'U')[0].toUpperCase();
+  }, [budgetStatus]);
 
   // Parallax for hero card
   const heroScale = scrollY.interpolate({
@@ -234,8 +200,13 @@ export default function HomeScreen() {
     extrapolate: 'clamp',
   });
 
+  // Savings jar amount
+  const savingsRemaining = activeGoal
+    ? Math.max(activeGoal.dailyBudget - todaySpend, 0)
+    : 0;
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ActiveTrackerBanner
         activeTrackers={activeTrackers}
         onManage={() => nav.navigate('TrackerSettings')}
@@ -253,30 +224,12 @@ export default function HomeScreen() {
         )}
         scrollEventThrottle={16}
       >
-        {/* Header */}
+        {/* Header — no profile button, already in tab bar */}
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>{greeting()}</Text>
-            <Text style={styles.name}>{user?.displayName || 'User'}</Text>
-            <Text style={styles.contextSub}>{contextualSubtext}</Text>
-          </View>
-          <TouchableOpacity style={styles.profileBtn} onPress={() => (nav as any).navigate('Profile')} activeOpacity={0.7}>
-            <Text style={styles.profileInitial}>{userInitial}</Text>
-          </TouchableOpacity>
+          <Text style={styles.greeting}>{greeting()}</Text>
+          <Text style={styles.name}>{user?.displayName || 'User'}</Text>
+          <Text style={styles.contextSub}>{contextualSubtext}</Text>
         </View>
-
-        {/* Privacy Shield */}
-        {!hasTransactions && (
-          <View style={styles.privacyCard}>
-            <View style={styles.privacyHeader}>
-              <Text style={styles.privacyEmoji}>🛡️</Text>
-              <Text style={styles.privacyTitle}>Privacy Shield</Text>
-            </View>
-            <Text style={styles.privacyText}>
-              Trackk only reads SMS when you enable a tracker. Event-driven detection means zero battery drain. Switch off anytime.
-            </Text>
-          </View>
-        )}
 
         {/* Hero card with parallax */}
         {loading ? (
@@ -293,8 +246,8 @@ export default function HomeScreen() {
               <Text style={styles.heroLabel}>TOTAL SPENT</Text>
               <AnimatedAmount value={totalSpent} style={styles.heroAmount} />
               <Text style={styles.heroSub}>
-                {recentTxns.length > 0
-                  ? `Across ${recentTxns.filter(t => !t.groupId).length} personal transactions`
+                {monthCount > 0
+                  ? `${monthCount} transactions this month`
                   : 'No transactions yet'}
               </Text>
 
@@ -322,99 +275,108 @@ export default function HomeScreen() {
           </Animated.View>
         )}
 
-        {/* Today's Goal Budget */}
-        {activeGoal && (
-          <TouchableOpacity style={styles.goalBudgetCard} onPress={() => nav.navigate('Goals')} activeOpacity={0.7}>
-            <View style={styles.goalBudgetLeft}>
-              <Text style={styles.goalBudgetLabel}>TODAY'S BUDGET</Text>
-              <Text style={styles.goalBudgetName}>{activeGoal.name}</Text>
-            </View>
-            <View style={styles.goalBudgetRight}>
-              <Text style={[styles.goalBudgetAmount, todaySpend > activeGoal.dailyBudget && { color: COLORS.danger }]}>
-                {formatCurrency(Math.max(activeGoal.dailyBudget - todaySpend, 0))}
-              </Text>
-              <Text style={styles.goalBudgetSub}>{formatCurrency(todaySpend)} / {formatCurrency(activeGoal.dailyBudget)}</Text>
-            </View>
+        {/* Metrics Row — savings jar + streak instead of recent transactions */}
+        <View style={styles.metricsRow}>
+          {/* Today's Budget / Savings Jar */}
+          <TouchableOpacity style={styles.metricCard} onPress={() => nav.navigate('Goals')} activeOpacity={0.7}>
+            <Text style={styles.metricIcon}>🏺</Text>
+            <Text style={styles.metricLabel}>TODAY'S JAR</Text>
+            {activeGoal ? (
+              <>
+                <Text style={[styles.metricValue, todaySpend > activeGoal.dailyBudget && { color: COLORS.danger }]}>
+                  {formatCurrency(savingsRemaining)}
+                </Text>
+                <Text style={styles.metricSub}>of {formatCurrency(activeGoal.dailyBudget)}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.metricValue, { fontSize: 14, color: COLORS.textSecondary }]}>No goal set</Text>
+                <Text style={styles.metricSub}>Tap to create</Text>
+              </>
+            )}
           </TouchableOpacity>
-        )}
 
-        {/* Quick Actions */}
+          {/* Streak */}
+          <TouchableOpacity style={styles.metricCard} onPress={() => nav.navigate('Goals')} activeOpacity={0.7}>
+            <Text style={styles.metricIcon}>🔥</Text>
+            <Text style={styles.metricLabel}>STREAK</Text>
+            <Text style={styles.metricValue}>
+              {activeGoal ? `${activeGoal.streak}d` : '0d'}
+            </Text>
+            <Text style={styles.metricSub}>
+              {activeGoal && activeGoal.streak > 0 ? 'Keep it up!' : 'Start saving'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* This Month */}
+          <TouchableOpacity style={styles.metricCard} onPress={() => (nav as any).navigate('Insights')} activeOpacity={0.7}>
+            <Text style={styles.metricIcon}>📊</Text>
+            <Text style={styles.metricLabel}>THIS MONTH</Text>
+            <Text style={styles.metricValue}>{formatCurrency(monthSpent)}</Text>
+            <Text style={styles.metricSub}>{monthCount} txns</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick Actions — only Quick Add and Review */}
         <View style={styles.quickActionsRow}>
           <TouchableOpacity
             style={styles.quickActionBtn}
             onPress={() => nav.navigate('QuickAdd', undefined)}
             activeOpacity={0.7}
           >
-            <View style={[styles.quickActionIcon, { backgroundColor: `${COLORS.primary}20` }]}>
-              <Text style={styles.quickActionEmoji}>+</Text>
-            </View>
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.primaryDark]}
+              style={styles.quickActionGradient}
+            >
+              <Text style={styles.quickActionPlus}>+</Text>
+            </LinearGradient>
             <Text style={styles.quickActionLabel}>Quick Add</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.quickActionBtn}
-            onPress={() => nav.navigate('NightlyReview')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(138,120,240,0.15)' }]}>
-              <Text style={styles.quickActionEmoji}>🌙</Text>
-              {pendingReviewCount > 0 && (
+          {pendingReviewCount > 0 && (
+            <TouchableOpacity
+              style={styles.quickActionBtn}
+              onPress={() => nav.navigate('NightlyReview')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(138,120,240,0.15)' }]}>
+                <Text style={styles.quickActionEmoji}>🌙</Text>
                 <View style={styles.quickActionBadge}>
                   <Text style={styles.quickActionBadgeText}>{pendingReviewCount}</Text>
                 </View>
-              )}
-            </View>
-            <Text style={styles.quickActionLabel}>Review</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickActionBtn}
-            onPress={() => nav.navigate('Reimbursement')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: `${COLORS.reimbursementColor}15` }]}>
-              <Text style={styles.quickActionEmoji}>🧾</Text>
-            </View>
-            <Text style={styles.quickActionLabel}>Reimburse</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickActionBtn}
-            onPress={() => nav.navigate('Goals')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.quickActionIcon, { backgroundColor: `${COLORS.success}15` }]}>
-              <Text style={styles.quickActionEmoji}>🎯</Text>
-            </View>
-            <Text style={styles.quickActionLabel}>Goals</Text>
-          </TouchableOpacity>
+              </View>
+              <Text style={styles.quickActionLabel}>Review</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Recent Transactions */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
-        </View>
+        {/* Goal Budget Card */}
+        {activeGoal && (
+          <TouchableOpacity style={styles.goalBudgetCard} onPress={() => nav.navigate('Goals')} activeOpacity={0.7}>
+            <View style={styles.goalBudgetLeft}>
+              <Text style={styles.goalBudgetLabel}>ACTIVE GOAL</Text>
+              <Text style={styles.goalBudgetName}>{activeGoal.name}</Text>
+            </View>
+            <View style={styles.goalBudgetRight}>
+              <Text style={[styles.goalBudgetAmount, todaySpend > activeGoal.dailyBudget && { color: COLORS.danger }]}>
+                {formatCurrency(Math.max(activeGoal.dailyBudget - todaySpend, 0))}
+              </Text>
+              <Text style={styles.goalBudgetSub}>left today</Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
-        {loading ? (
-          <TransactionListSkeleton count={4} />
-        ) : recentTxns.length === 0 ? (
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}><Text style={styles.emptyEmoji}>💳</Text></View>
-            <Text style={styles.emptyText}>No transactions yet</Text>
-            <Text style={styles.emptySubtext}>Enable a tracker, make a payment</Text>
+        {/* Privacy Shield — only shown when no activity */}
+        {!loading && monthCount === 0 && (
+          <View style={styles.privacyCard}>
+            <View style={styles.privacyHeader}>
+              <Text style={styles.privacyEmoji}>🛡️</Text>
+              <Text style={styles.privacyTitle}>Privacy Shield</Text>
+            </View>
+            <Text style={styles.privacyText}>
+              Trackk only reads SMS when you enable a tracker. Event-driven detection means zero battery drain. Switch off anytime.
+            </Text>
           </View>
-        ) : (
-          recentTxns.map((t, index) => (
-            <Animated.View key={t.id} style={stagger.getStyle(index)}>
-              <TransactionCard
-                transaction={t}
-                showBadge
-                onPress={() => nav.navigate('TransactionDetail', { transactionId: t.id })}
-                onLongPress={() => setContextMenu({ visible: true, transaction: t })}
-                onSwipeDelete={() => handleSwipeDelete(t)}
-              />
-            </Animated.View>
-          ))
         )}
 
         <View style={{ height: 20 }} />
@@ -486,15 +448,7 @@ export default function HomeScreen() {
         onUndo={handleUndo}
         onDismiss={() => setUndoState({ visible: false, message: '', txn: null })}
       />
-
-      {/* Context Menu */}
-      <ContextMenu
-        visible={contextMenu.visible}
-        onClose={() => setContextMenu({ visible: false, transaction: null })}
-        items={contextMenu.transaction ? getContextMenuItems(contextMenu.transaction) : []}
-        title={contextMenu.transaction?.description}
-      />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -502,13 +456,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { padding: 16, paddingBottom: 32 },
 
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, marginTop: 4 },
-  headerLeft: { flex: 1 },
-  greeting: { fontSize: 13, color: COLORS.textSecondary, letterSpacing: 0.3 },
+  header: { marginBottom: 20, marginTop: 4 },
+  greeting: { fontSize: 14, color: COLORS.textSecondary, letterSpacing: 0.3 },
   name: { fontSize: 28, fontWeight: '800', color: COLORS.text, marginTop: 2, letterSpacing: -0.5 },
   contextSub: { fontSize: 12, color: COLORS.textLight, marginTop: 4, letterSpacing: 0.2 },
-  profileBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center', justifyContent: 'center' },
-  profileInitial: { fontSize: 17, fontWeight: '800', color: COLORS.text },
 
   privacyCard: { backgroundColor: COLORS.glass, borderRadius: 20, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: `${COLORS.success}20` },
   privacyHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
@@ -516,37 +467,47 @@ const styles = StyleSheet.create({
   privacyTitle: { fontSize: 14, fontWeight: '700', color: COLORS.success, letterSpacing: 0.3 },
   privacyText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19 },
 
-  heroCard: { borderRadius: 24, padding: 24, marginBottom: 16, borderWidth: 1, borderColor: COLORS.glassBorder, position: 'relative', overflow: 'hidden' },
+  heroCard: { borderRadius: 24, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: COLORS.glassBorder, position: 'relative', overflow: 'hidden' },
   heroGoldLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: COLORS.primary, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   heroLabel: { fontSize: 10, color: COLORS.textSecondary, letterSpacing: 2, fontWeight: '700', marginBottom: 10 },
-  heroAmount: { fontSize: 40, fontWeight: '800', color: COLORS.text, letterSpacing: -1 },
-  heroSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 6 },
+  heroAmount: { fontSize: 42, fontWeight: '800', color: COLORS.text, letterSpacing: -1 },
+  heroSub: { fontSize: 13, color: COLORS.textSecondary, marginTop: 6 },
 
   budgetInline: { marginTop: 18, paddingTop: 16, borderTopWidth: 1, borderTopColor: COLORS.glassBorder },
   budgetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  budgetMessage: { fontSize: 12, fontWeight: '700' },
-  budgetDetail: { fontSize: 11, color: COLORS.textSecondary },
-  budgetTrack: { height: 4, backgroundColor: COLORS.glassHigh, borderRadius: 2, overflow: 'hidden' },
-  budgetFill: { height: '100%', borderRadius: 2 },
+  budgetMessage: { fontSize: 13, fontWeight: '700' },
+  budgetDetail: { fontSize: 12, color: COLORS.textSecondary },
+  budgetTrack: { height: 6, backgroundColor: COLORS.glassHigh, borderRadius: 3, overflow: 'hidden' },
+  budgetFill: { height: '100%', borderRadius: 3 },
   budgetEditHint: { fontSize: 10, color: COLORS.textLight, marginTop: 8, textAlign: 'right' },
   setBudgetText: { fontSize: 13, fontWeight: '600', color: COLORS.primary, textAlign: 'center', paddingVertical: 4 },
 
-  goalBudgetCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.glass, borderRadius: 20, padding: 18, marginBottom: 20, borderWidth: 1, borderColor: COLORS.glassBorder },
-  goalBudgetLeft: { flex: 1 },
-  goalBudgetLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
-  goalBudgetName: { fontSize: 14, fontWeight: '600', color: COLORS.text },
-  goalBudgetRight: { alignItems: 'flex-end' },
-  goalBudgetAmount: { fontSize: 22, fontWeight: '800', color: COLORS.success, letterSpacing: -0.5 },
-  goalBudgetSub: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+  /* Metrics Row */
+  metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  metricCard: { flex: 1, backgroundColor: COLORS.surface, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center' },
+  metricIcon: { fontSize: 22, marginBottom: 8 },
+  metricLabel: { fontSize: 8, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 6 },
+  metricValue: { fontSize: 18, fontWeight: '800', color: COLORS.text, letterSpacing: -0.5 },
+  metricSub: { fontSize: 10, color: COLORS.textSecondary, marginTop: 3 },
 
   /* Quick Actions */
-  quickActionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 16, gap: 8 },
-  quickActionBtn: { flex: 1, alignItems: 'center' },
-  quickActionIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  quickActionEmoji: { fontSize: 20 },
+  quickActionsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  quickActionBtn: { alignItems: 'center' },
+  quickActionGradient: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  quickActionPlus: { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
+  quickActionIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  quickActionEmoji: { fontSize: 22 },
   quickActionLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 0.3 },
   quickActionBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: COLORS.danger, borderRadius: 8, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   quickActionBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFFFFF' },
+
+  goalBudgetCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surface, borderRadius: 20, padding: 18, marginBottom: 20, borderWidth: 1, borderColor: COLORS.border },
+  goalBudgetLeft: { flex: 1 },
+  goalBudgetLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
+  goalBudgetName: { fontSize: 15, fontWeight: '600', color: COLORS.text },
+  goalBudgetRight: { alignItems: 'flex-end' },
+  goalBudgetAmount: { fontSize: 22, fontWeight: '800', color: COLORS.success, letterSpacing: -0.5 },
+  goalBudgetSub: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
 
   budgetModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   budgetModalContainer: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.glassBorder, borderBottomWidth: 0 },
@@ -561,13 +522,4 @@ const styles = StyleSheet.create({
   budgetModalDeleteBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.danger },
   budgetModalCancelBtn: { paddingVertical: 12, alignItems: 'center' },
   budgetModalCancelText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
-
-  sectionHeader: { marginBottom: 12, marginTop: 8 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, textTransform: 'uppercase' },
-
-  empty: { alignItems: 'center', paddingVertical: 40 },
-  emptyIcon: { width: 64, height: 64, borderRadius: 20, backgroundColor: COLORS.glass, alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: COLORS.glassBorder },
-  emptyEmoji: { fontSize: 28 },
-  emptyText: { fontSize: 16, fontWeight: '600', color: COLORS.textSecondary },
-  emptySubtext: { fontSize: 13, color: COLORS.textLight, marginTop: 6, textAlign: 'center' },
 });

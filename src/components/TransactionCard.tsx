@@ -13,23 +13,22 @@ interface Props {
   showBadge?: boolean;
 }
 
-const TRACKER_COLORS: Record<string, string> = {
-  personal: COLORS.personalColor,
-  reimbursement: COLORS.reimbursementColor,
-  group: COLORS.groupColor,
-};
-
 const TRACKER_LABELS: Record<string, string> = {
   personal: 'Personal',
   reimbursement: 'Reimburse',
   group: 'Group',
 };
 
+const TRACKER_COLORS: Record<string, string> = {
+  personal: COLORS.personalColor,
+  reimbursement: COLORS.reimbursementColor,
+  group: COLORS.groupColor,
+};
+
 const SWIPE_THRESHOLD = -80;
 
 function TransactionCardInner({ transaction, onPress, onLongPress, onSwipeDelete, showBadge }: Props) {
-  const color = TRACKER_COLORS[transaction.trackerType] || COLORS.primary;
-  const initial = (transaction.merchant || transaction.description)[0].toUpperCase();
+  const color = TRACKER_COLORS[transaction.trackerType] || COLORS.textSecondary;
   const translateX = useRef(new Animated.Value(0)).current;
 
   const panResponder = useRef(
@@ -81,12 +80,7 @@ function TransactionCardInner({ transaction, onPress, onLongPress, onSwipeDelete
           delayLongPress={400}
           activeOpacity={0.7}
         >
-          {/* Icon */}
-          <View style={[styles.icon, { backgroundColor: `${color}15` }]}>
-            <Text style={[styles.iconText, { color }]}>{initial}</Text>
-          </View>
-
-          {/* Info */}
+          {/* Info — no icon, cleaner layout */}
           <View style={styles.info}>
             <Text style={styles.desc} numberOfLines={1}>{transaction.description}</Text>
             <View style={styles.metaRow}>
@@ -96,35 +90,21 @@ function TransactionCardInner({ transaction, onPress, onLongPress, onSwipeDelete
                   <Text style={styles.categoryText}>{transaction.category}</Text>
                 </View>
               ) : null}
+              {showBadge && (
+                <View style={[styles.badge, { backgroundColor: `${color}12` }]}>
+                  <Text style={[styles.badgeText, { color }]}>
+                    {TRACKER_LABELS[transaction.trackerType] || transaction.trackerType}
+                  </Text>
+                </View>
+              )}
             </View>
             {transaction.note ? (
               <Text style={styles.note} numberOfLines={1}>{transaction.note}</Text>
             ) : null}
-            {transaction.tags && transaction.tags.length > 0 && (
-              <View style={styles.tagRow}>
-                {transaction.tags.slice(0, 3).map(tag => (
-                  <View key={tag} style={styles.tagChip}>
-                    <Text style={styles.tagChipText}>{tag}</Text>
-                  </View>
-                ))}
-                {transaction.tags.length > 3 && (
-                  <Text style={styles.tagMore}>+{transaction.tags.length - 3}</Text>
-                )}
-              </View>
-            )}
           </View>
 
-          {/* Right side */}
-          <View style={styles.right}>
-            <Text style={styles.amount}>-{formatCurrency(transaction.amount)}</Text>
-            {showBadge && (
-              <View style={[styles.badge, { backgroundColor: `${color}12` }]}>
-                <Text style={[styles.badgeText, { color }]}>
-                  {TRACKER_LABELS[transaction.trackerType] || transaction.trackerType}
-                </Text>
-              </View>
-            )}
-          </View>
+          {/* Right side — amount */}
+          <Text style={styles.amount}>-{formatCurrency(transaction.amount)}</Text>
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -134,7 +114,7 @@ function TransactionCardInner({ transaction, onPress, onLongPress, onSwipeDelete
 const styles = StyleSheet.create({
   swipeContainer: {
     position: 'relative',
-    marginBottom: 8,
+    marginBottom: 2,
   },
   deleteBg: {
     position: 'absolute',
@@ -143,7 +123,7 @@ const styles = StyleSheet.create({
     right: 0,
     left: 0,
     backgroundColor: COLORS.danger,
-    borderRadius: 20,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'flex-end',
     paddingRight: 24,
@@ -157,92 +137,62 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: COLORS.glass,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-  },
-  icon: {
-    width: 46,
-    height: 46,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  iconText: { fontSize: 18, fontWeight: '800' },
   info: { flex: 1 },
   desc: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: COLORS.text,
+    marginBottom: 4,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 3,
   },
   date: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textSecondary,
   },
   categoryChip: {
-    backgroundColor: COLORS.glassHigh,
+    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 6,
     paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingVertical: 2,
   },
   categoryText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '600',
     color: COLORS.textSecondary,
   },
   note: {
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.textSecondary,
-    marginTop: 2,
+    marginTop: 3,
     fontStyle: 'italic',
   },
-  tagRow: {
-    flexDirection: 'row',
-    gap: 4,
-    marginTop: 6,
-    alignItems: 'center',
-  },
-  tagChip: {
-    backgroundColor: COLORS.glassHigh,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  tagChipText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  tagMore: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: COLORS.textLight,
-  },
-  right: { alignItems: 'flex-end', gap: 6 },
-  amount: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
   badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   badgeText: {
     fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  amount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginLeft: 12,
   },
 });
 
