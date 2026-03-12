@@ -29,6 +29,7 @@ interface GroupStats {
   total: number;
   settledPercent: number;
   netOwed: number;   // positive = you are owed, negative = you owe
+  txnCount: number;
 }
 
 export default function GroupListScreen() {
@@ -58,9 +59,9 @@ export default function GroupListScreen() {
           const settledPercent = totalSplits > 0 ? Math.round((settledSplits / totalSplits) * 100) : 0;
           const debts = calculateDebts(txns);
           const { totalOwed, totalOwing } = getUserDebtSummary(debts, user.id);
-          stats[g.id] = { total, settledPercent, netOwed: totalOwed - totalOwing };
+          stats[g.id] = { total, settledPercent, netOwed: totalOwed - totalOwing, txnCount: txns.length };
         } catch {
-          stats[g.id] = { total: 0, settledPercent: 0, netOwed: 0 };
+          stats[g.id] = { total: 0, settledPercent: 0, netOwed: 0, txnCount: 0 };
         }
       }
       setGroupStats(stats);
@@ -239,7 +240,9 @@ export default function GroupListScreen() {
                 </View>
                 <View style={styles.groupTextWrap}>
                   <Text style={styles.groupName}>{item.name}</Text>
-                  <Text style={styles.groupMeta}>{item.members.length} members</Text>
+                  <Text style={styles.groupMeta}>
+                    {item.members.length} members{stats && stats.txnCount > 0 ? ` · ${stats.txnCount} txn${stats.txnCount > 1 ? 's' : ''}` : ''}
+                  </Text>
                 </View>
                 <View style={styles.groupStatsRight}>
                   {stats && stats.total > 0 && (
@@ -258,6 +261,34 @@ export default function GroupListScreen() {
                   <Text style={[styles.netValue, { color: netOwed >= 0 ? COLORS.success : COLORS.danger }]}>
                     {netOwed >= 0 ? `You are owed ${formatCurrency(netOwed)}` : `You owe ${formatCurrency(Math.abs(netOwed))}`}
                   </Text>
+                </View>
+              )}
+
+              {/* Budget progress (if set) */}
+              {item.budget && item.budget > 0 && stats && (
+                <View style={styles.budgetRow}>
+                  <View style={styles.budgetLabelRow}>
+                    <Text style={styles.budgetLabel}>Budget</Text>
+                    <Text style={[
+                      styles.budgetAmount,
+                      stats.total > item.budget && { color: COLORS.danger },
+                    ]}>
+                      {formatCurrency(stats.total)} / {formatCurrency(item.budget)}
+                    </Text>
+                  </View>
+                  <View style={styles.budgetTrack}>
+                    <View
+                      style={[
+                        styles.budgetFill,
+                        {
+                          width: `${Math.min((stats.total / item.budget) * 100, 100)}%`,
+                          backgroundColor: stats.total > item.budget ? COLORS.danger
+                            : stats.total > item.budget * 0.8 ? COLORS.warning
+                            : COLORS.success,
+                        },
+                      ]}
+                    />
+                  </View>
                 </View>
               )}
 
@@ -566,6 +597,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
   },
+
+  /* ── Budget Progress ─────────────────────────────────────── */
+  budgetRow: {
+    marginBottom: 14,
+  },
+  budgetLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  budgetLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  budgetAmount: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  budgetTrack: {
+    height: 5,
+    backgroundColor: COLORS.surfaceHigher,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  budgetFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+
   trackBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,

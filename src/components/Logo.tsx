@@ -60,39 +60,50 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
               },
             ]}
           >
-            {/* Decorative accent bar at top */}
-            <View
-              style={[
-                styles.accentBar,
-                {
-                  width: (size - 6 * scale) * 0.6,
-                  height: 3 * scale,
-                  borderRadius: 1.5 * scale,
-                  top: 6 * scale,
-                },
-              ]}
-            />
-
             {/* The T letter */}
             <Text
               style={[
                 styles.letterT,
                 {
-                  fontSize: 42 * scale,
-                  lineHeight: 48 * scale,
+                  fontSize: 38 * scale,
+                  lineHeight: 44 * scale,
+                  marginTop: -2 * scale,
                 },
               ]}
             >
               T
             </Text>
 
-            {/* Decorative upward arrow / chart line at bottom-right */}
+            {/* Rupee symbol at bottom-left — depicts expense */}
+            <View
+              style={[
+                styles.rupeeWrap,
+                {
+                  bottom: 6 * scale,
+                  left: 8 * scale,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.rupeeSymbol,
+                  {
+                    fontSize: 12 * scale,
+                    lineHeight: 14 * scale,
+                  },
+                ]}
+              >
+                ₹
+              </Text>
+            </View>
+
+            {/* Ascending chart bars at bottom-right — depicts tracking/growth */}
             <View
               style={[
                 styles.chartAccent,
                 {
-                  bottom: 8 * scale,
-                  right: 10 * scale,
+                  bottom: 7 * scale,
+                  right: 8 * scale,
                 },
               ]}
             >
@@ -101,7 +112,7 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
                   styles.chartBar,
                   {
                     width: 3 * scale,
-                    height: 8 * scale,
+                    height: 6 * scale,
                     borderRadius: 1.5 * scale,
                     marginRight: 2 * scale,
                   },
@@ -112,7 +123,7 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
                   styles.chartBar,
                   {
                     width: 3 * scale,
-                    height: 12 * scale,
+                    height: 10 * scale,
                     borderRadius: 1.5 * scale,
                     marginRight: 2 * scale,
                   },
@@ -123,7 +134,7 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
                   styles.chartBarAccent,
                   {
                     width: 3 * scale,
-                    height: 16 * scale,
+                    height: 15 * scale,
                     borderRadius: 1.5 * scale,
                   },
                 ]}
@@ -178,15 +189,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  accentBar: {
-    position: 'absolute',
-    backgroundColor: COLORS.primary,
-    opacity: 0.6,
-  },
   letterT: {
     fontWeight: '900',
     color: COLORS.primary,
     letterSpacing: -1,
+  },
+  rupeeWrap: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rupeeSymbol: {
+    fontWeight: '800',
+    color: `${COLORS.primary}70`,
   },
   chartAccent: {
     position: 'absolute',

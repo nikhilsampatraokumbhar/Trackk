@@ -70,6 +70,7 @@ export interface Group {
   isTrip?: boolean;
   tripReminderSent?: boolean;
   archived?: boolean;
+  budget?: number;
 }
 
 export interface Split {

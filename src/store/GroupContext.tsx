@@ -27,7 +27,7 @@ interface GroupContextType {
   groups: Group[];
   loading: boolean;
   refreshGroups: () => Promise<void>;
-  createGroup: (name: string, members: Array<{ displayName: string; phone: string }>, userId: string, isTrip?: boolean) => Promise<Group>;
+  createGroup: (name: string, members: Array<{ displayName: string; phone: string }>, userId: string, isTrip?: boolean, budget?: number) => Promise<Group>;
   activeGroupId: string | null;
   activeGroupTransactions: GroupTransaction[];
   activeGroupDebts: Debt[];
@@ -117,6 +117,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     members: Array<{ displayName: string; phone: string }>,
     userId: string,
     isTrip?: boolean,
+    budget?: number,
   ): Promise<Group> => {
     let group: Group;
 
@@ -126,6 +127,9 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     } else {
       // Create locally (offline fallback)
       group = await createGroupLocal(name, members, userId, isTrip);
+    }
+    if (budget && budget > 0) {
+      group.budget = budget;
     }
 
     setGroups(prev => {
