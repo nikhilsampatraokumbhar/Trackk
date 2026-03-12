@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, BackHandler, Alert, Platform } from 'react-native';
+import { Text, View, BackHandler, Alert, Platform, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -97,6 +97,19 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
         </View>
       )}
     </View>
+  );
+}
+
+function ModalCloseButton() {
+  const nav = useNavigation();
+  return (
+    <TouchableOpacity
+      onPress={() => nav.goBack()}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      style={{ padding: 4 }}
+    >
+      <Text style={{ fontSize: 16, color: COLORS.textSecondary }}>✕</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -223,6 +236,8 @@ export function AppNavigator() {
           },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: COLORS.background },
+          gestureEnabled: true,
+          ...(Platform.OS === 'ios' ? { fullScreenGestureEnabled: true } : {}),
         }}
       >
         {!hasOnboarded ? (
@@ -254,17 +269,29 @@ export function AppNavigator() {
             <Stack.Screen
               name="CreateGroup"
               component={CreateGroupScreen}
-              options={{ title: 'New Group', presentation: 'modal' }}
+              options={{
+                title: 'New Group',
+                presentation: 'modal',
+                headerLeft: () => <ModalCloseButton />,
+              }}
             />
             <Stack.Screen
               name="TransactionDetail"
               component={TransactionDetailScreen}
-              options={{ title: 'Transaction', presentation: 'modal' }}
+              options={{
+                title: 'Transaction',
+                presentation: 'modal',
+                headerLeft: () => <ModalCloseButton />,
+              }}
             />
             <Stack.Screen
               name="TrackerSettings"
               component={TrackerSettingsScreen}
-              options={{ title: 'Tracker Settings', presentation: 'modal' }}
+              options={{
+                title: 'Tracker Settings',
+                presentation: 'modal',
+                headerLeft: () => <ModalCloseButton />,
+              }}
             />
             <Stack.Screen
               name="Reimbursement"
@@ -284,7 +311,11 @@ export function AppNavigator() {
             <Stack.Screen
               name="SplitEditor"
               component={SplitEditorScreen}
-              options={{ title: 'Split Expense', presentation: 'modal' }}
+              options={{
+                title: 'Split Expense',
+                presentation: 'modal',
+                headerLeft: () => <ModalCloseButton />,
+              }}
             />
             <Stack.Screen
               name="NightlyReview"
@@ -300,7 +331,11 @@ export function AppNavigator() {
               <Stack.Screen
                 name="IOSSetup"
                 component={IOSSetupScreen}
-                options={{ title: 'iPhone Setup', presentation: 'modal' }}
+                options={{
+                  title: 'iPhone Setup',
+                  presentation: 'modal',
+                  headerLeft: () => <ModalCloseButton />,
+                }}
               />
             )}
           </>
