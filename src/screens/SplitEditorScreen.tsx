@@ -226,16 +226,19 @@ export default function SplitEditorScreen() {
       }
 
       // Save with custom splits directly
-      const txn = {
+      // Note: Firestore rejects `undefined` values, so we conditionally include optional fields
+      const txn: Record<string, any> = {
         id: generateId(),
         groupId,
         addedBy: userId,
         amount: parsedAmount,
         description: desc,
-        merchant: paramMerchant || undefined,
         timestamp: Date.now(),
         splits,
       };
+      if (paramMerchant) {
+        txn.merchant = paramMerchant;
+      }
 
       if (isAuthenticated) {
         const { db } = require('../services/FirebaseConfig');

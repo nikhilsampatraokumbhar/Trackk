@@ -317,23 +317,9 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Quick Actions — only Quick Add and Review */}
-        <View style={styles.quickActionsRow}>
-          <TouchableOpacity
-            style={styles.quickActionBtn}
-            onPress={() => nav.navigate('QuickAdd', undefined)}
-            activeOpacity={0.7}
-          >
-            <LinearGradient
-              colors={[COLORS.primary, COLORS.primaryDark]}
-              style={styles.quickActionGradient}
-            >
-              <Text style={styles.quickActionPlus}>+</Text>
-            </LinearGradient>
-            <Text style={styles.quickActionLabel}>Quick Add</Text>
-          </TouchableOpacity>
-
-          {pendingReviewCount > 0 && (
+        {/* Review action (only when pending items exist) */}
+        {pendingReviewCount > 0 && (
+          <View style={styles.quickActionsRow}>
             <TouchableOpacity
               style={styles.quickActionBtn}
               onPress={() => nav.navigate('NightlyReview')}
@@ -347,8 +333,8 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.quickActionLabel}>Review</Text>
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
 
         {/* Goal Budget Card */}
         {activeGoal && (
@@ -441,6 +427,16 @@ export default function HomeScreen() {
         onIgnore={clearPendingTransaction}
       />
 
+      {/* Quick Add FAB */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => nav.navigate('QuickAdd', undefined)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabIcon}>+</Text>
+        <Text style={styles.fabText}>Quick Add</Text>
+      </TouchableOpacity>
+
       {/* Undo Toast */}
       <UndoToast
         visible={undoState.visible}
@@ -454,9 +450,9 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { padding: 16, paddingBottom: 32 },
+  scroll: { padding: 16, paddingBottom: 80 },
 
-  header: { marginBottom: 20, marginTop: 4 },
+  header: { marginBottom: 24, marginTop: 8 },
   greeting: { fontSize: 14, color: COLORS.textSecondary, letterSpacing: 0.3 },
   name: { fontSize: 28, fontWeight: '800', color: COLORS.text, marginTop: 2, letterSpacing: -0.5 },
   contextSub: { fontSize: 12, color: COLORS.textLight, marginTop: 4, letterSpacing: 0.2 },
@@ -467,7 +463,7 @@ const styles = StyleSheet.create({
   privacyTitle: { fontSize: 14, fontWeight: '700', color: COLORS.success, letterSpacing: 0.3 },
   privacyText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19 },
 
-  heroCard: { borderRadius: 24, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: COLORS.glassBorder, position: 'relative', overflow: 'hidden' },
+  heroCard: { borderRadius: 24, padding: 24, marginBottom: 24, borderWidth: 1, borderColor: COLORS.glassBorder, position: 'relative', overflow: 'hidden' },
   heroGoldLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: COLORS.primary, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
   heroLabel: { fontSize: 10, color: COLORS.textSecondary, letterSpacing: 2, fontWeight: '700', marginBottom: 10 },
   heroAmount: { fontSize: 42, fontWeight: '800', color: COLORS.text, letterSpacing: -1 },
@@ -483,7 +479,7 @@ const styles = StyleSheet.create({
   setBudgetText: { fontSize: 13, fontWeight: '600', color: COLORS.primary, textAlign: 'center', paddingVertical: 4 },
 
   /* Metrics Row */
-  metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
   metricCard: { flex: 1, backgroundColor: COLORS.surface, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center' },
   metricIcon: { fontSize: 22, marginBottom: 8 },
   metricLabel: { fontSize: 8, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 6 },
@@ -522,4 +518,9 @@ const styles = StyleSheet.create({
   budgetModalDeleteBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.danger },
   budgetModalCancelBtn: { paddingVertical: 12, alignItems: 'center' },
   budgetModalCancelText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+
+  /* Quick Add FAB */
+  fab: { position: 'absolute', right: 20, bottom: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 28, elevation: 8, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 16 },
+  fabIcon: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginRight: 6 },
+  fabText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14, letterSpacing: 0.3 },
 });

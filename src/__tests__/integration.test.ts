@@ -35,6 +35,7 @@ const makeGoal = (overrides: Partial<SavingsGoal> = {}): SavingsGoal => ({
   name: 'Save for Trip',
   targetAmount: 100000,
   targetDate: Date.now() + 365 * 24 * 60 * 60 * 1000,
+  targetMonths: 12,
   salary: 50000,
   emis: 10000,
   expenses: 20000,

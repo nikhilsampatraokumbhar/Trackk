@@ -16,6 +16,7 @@ export default function CreateGroupScreen() {
   const [members, setMembers] = useState([{ name: '', phone: '' }]);
   const [loading, setLoading] = useState(false);
   const [isTrip, setIsTrip] = useState(false);
+  const [budgetInput, setBudgetInput] = useState('');
 
   const addMember = () => setMembers(prev => [...prev, { name: '', phone: '' }]);
 
@@ -50,11 +51,13 @@ export default function CreateGroupScreen() {
     }
     setLoading(true);
     try {
+      const budgetAmount = parseFloat(budgetInput) || undefined;
       await createGroup(
         groupName.trim(),
         validMembers.map(m => ({ displayName: m.name.trim(), phone: m.phone.trim() })),
         user?.id || 'local_user',
         isTrip,
+        budgetAmount,
       );
       nav.goBack();
     } catch {
@@ -113,6 +116,25 @@ export default function CreateGroupScreen() {
             </Text>
           </View>
         </TouchableOpacity>
+      </View>
+
+      {/* Budget (optional) */}
+      <View style={styles.section}>
+        <Text style={styles.label}>BUDGET (OPTIONAL)</Text>
+        <View style={styles.budgetRow}>
+          <Text style={styles.budgetPrefix}>₹</Text>
+          <TextInput
+            style={[styles.input, styles.budgetInput]}
+            placeholder="e.g. 5000 — leave empty to skip"
+            placeholderTextColor={COLORS.textLight}
+            value={budgetInput}
+            onChangeText={setBudgetInput}
+            keyboardType="numeric"
+          />
+        </View>
+        <Text style={styles.budgetHint}>
+          Set a spending limit for this group/trip. Shows progress on the group card.
+        </Text>
       </View>
 
       {/* Members */}
@@ -370,5 +392,26 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 16,
     letterSpacing: 0.3,
+  },
+
+  /* ── Budget ──────────────────────────────────────────────── */
+  budgetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  budgetPrefix: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.primary,
+    marginRight: 8,
+  },
+  budgetInput: {
+    flex: 1,
+  },
+  budgetHint: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 8,
+    lineHeight: 16,
   },
 });

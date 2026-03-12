@@ -220,6 +220,7 @@ describe('StorageService', () => {
       name: 'Save 1 Lakh',
       targetAmount: 100000,
       targetDate: Date.now() + 365 * 24 * 60 * 60 * 1000,
+      targetMonths: 12,
       salary: 50000,
       emis: 10000,
       expenses: 20000,
@@ -316,6 +317,7 @@ describe('StorageService', () => {
     const makeGoal = (): SavingsGoal => ({
       id: 'goal1', name: 'Test', targetAmount: 100000,
       targetDate: Date.now() + 365 * 24 * 60 * 60 * 1000,
+      targetMonths: 12,
       salary: 50000, emis: 0, expenses: 0, maintenance: 0,
       dailyBudget: 500, monthlyBudget: 15000,
       streak: 0, lastStreakDate: '', savingsJar: 0, totalSaved: 0,
