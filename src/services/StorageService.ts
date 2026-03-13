@@ -167,6 +167,33 @@ export async function updateGroup(groupId: string, data: Partial<Group>): Promis
   }
 }
 
+export async function removeGroupMember(groupId: string, memberUserId: string): Promise<void> {
+  // Remove member from group
+  const groups = await getGroups();
+  const idx = groups.findIndex(g => g.id === groupId);
+  if (idx === -1) return;
+  groups[idx] = {
+    ...groups[idx],
+    members: groups[idx].members.filter(m => m.userId !== memberUserId),
+  };
+  await saveGroups(groups);
+
+  // Mark all their unsettled splits as settled in existing transactions
+  const txns = await getGroupTransactions(groupId);
+  let changed = false;
+  for (const txn of txns) {
+    for (const split of txn.splits) {
+      if (split.userId === memberUserId && !split.settled) {
+        split.settled = true;
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    await saveGroupTransactions(groupId, txns);
+  }
+}
+
 export async function archiveGroup(groupId: string): Promise<void> {
   const groups = await getGroups();
   const idx = groups.findIndex(g => g.id === groupId);
@@ -239,16 +266,33 @@ export async function removeSplitMember(
   if (idx === -1) return;
 
   const txn = { ...all[idx] };
+  const removedSplit = txn.splits.find(s => s.userId === memberUserId);
+  if (!removedSplit) return;
+
+  // Remove the member from splits
   const newSplits = txn.splits.filter(s => s.userId !== memberUserId);
   if (newSplits.length === 0) return;
 
-  const perPerson = Math.round((txn.amount / newSplits.length) * 100) / 100;
-  const totalFromSplits = perPerson * newSplits.length;
-  const roundingDiff = Math.round((txn.amount - totalFromSplits) * 100) / 100;
-  txn.splits = newSplits.map((s, i) => ({
-    ...s,
-    amount: i === newSplits.length - 1 ? perPerson + roundingDiff : perPerson,
-  }));
+  // Redistribute the removed member's share among non-payer members only
+  const nonPayerSplits = newSplits.filter(s => s.userId !== txn.addedBy);
+  if (nonPayerSplits.length > 0) {
+    const extraPerPerson = Math.round((removedSplit.amount / nonPayerSplits.length) * 100) / 100;
+    const totalExtra = extraPerPerson * nonPayerSplits.length;
+    const roundingDiff = Math.round((removedSplit.amount - totalExtra) * 100) / 100;
+    let applied = 0;
+    txn.splits = newSplits.map(s => {
+      if (s.userId === txn.addedBy) return s; // payer keeps same amount
+      applied++;
+      return {
+        ...s,
+        amount: s.amount + extraPerPerson + (applied === nonPayerSplits.length ? roundingDiff : 0),
+      };
+    });
+  } else {
+    // Only payer left — just keep their existing split
+    txn.splits = newSplits;
+  }
+
   all[idx] = txn;
   await saveGroupTransactions(groupId, all);
 }

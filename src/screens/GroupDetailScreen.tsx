@@ -11,7 +11,7 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
 import { useAuth } from '../store/AuthContext';
-import { getGroup as getGroupLocal } from '../services/StorageService';
+import { getGroup as getGroupLocal, removeGroupMember } from '../services/StorageService';
 import {
   addSettlementCloud, getSettlementsCloud, removeSplitMemberCloud,
   onSettlementsChanged, onGroupChanged, getGroupCloud,
@@ -267,6 +267,29 @@ export default function GroupDetailScreen() {
     );
   };
 
+  // Handle removing a member from the group entirely
+  const handleRemoveGroupMember = (memberUserId: string, memberName: string) => {
+    if (memberUserId === userId) return; // can't remove yourself
+    const hasUnsettled = activeGroupTransactions.some(txn =>
+      txn.splits.some(s => s.userId === memberUserId && !s.settled),
+    );
+    Alert.alert(
+      'Remove from group?',
+      `Remove ${memberName} from this group?${hasUnsettled ? '\n\nThey have unsettled debts which will be marked as settled.' : ''}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            await removeGroupMember(groupId, memberUserId);
+            await load();
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView
@@ -376,24 +399,31 @@ export default function GroupDetailScreen() {
                 debts={activeGroupDebts}
                 currentUserId={userId}
               />
-              {(totals.totalOwed > 0 || totals.totalOwing > 0) && (
-                <View style={styles.memberTotalRow}>
-                  {totals.totalOwed > 0 && (
-                    <View style={[styles.memberTotalChip, { backgroundColor: `${COLORS.success}12`, borderColor: `${COLORS.success}25` }]}>
-                      <Text style={[styles.memberTotalText, { color: COLORS.success }]}>
-                        Owed: {formatCurrency(totals.totalOwed)}
-                      </Text>
-                    </View>
-                  )}
-                  {totals.totalOwing > 0 && (
-                    <View style={[styles.memberTotalChip, { backgroundColor: `${COLORS.danger}12`, borderColor: `${COLORS.danger}25` }]}>
-                      <Text style={[styles.memberTotalText, { color: COLORS.danger }]}>
-                        Owes: {formatCurrency(totals.totalOwing)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
+              <View style={styles.memberTotalRow}>
+                {totals.totalOwed > 0 && (
+                  <View style={[styles.memberTotalChip, { backgroundColor: `${COLORS.success}12`, borderColor: `${COLORS.success}25` }]}>
+                    <Text style={[styles.memberTotalText, { color: COLORS.success }]}>
+                      Owed: {formatCurrency(totals.totalOwed)}
+                    </Text>
+                  </View>
+                )}
+                {totals.totalOwing > 0 && (
+                  <View style={[styles.memberTotalChip, { backgroundColor: `${COLORS.danger}12`, borderColor: `${COLORS.danger}25` }]}>
+                    <Text style={[styles.memberTotalText, { color: COLORS.danger }]}>
+                      Owes: {formatCurrency(totals.totalOwing)}
+                    </Text>
+                  </View>
+                )}
+                {member.userId !== userId && group.members.length > 2 && (
+                  <TouchableOpacity
+                    style={styles.removeMemberChip}
+                    onPress={() => handleRemoveGroupMember(member.userId, member.displayName)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.removeMemberText}>Remove</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           );
         })}
@@ -757,6 +787,20 @@ const styles = StyleSheet.create({
   memberTotalText: {
     fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  removeMemberChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: `${COLORS.danger}08`,
+    borderColor: `${COLORS.danger}25`,
+  },
+  removeMemberText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.danger,
     letterSpacing: 0.3,
   },
 

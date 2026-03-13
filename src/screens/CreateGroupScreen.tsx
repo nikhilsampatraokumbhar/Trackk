@@ -49,6 +49,19 @@ export default function CreateGroupScreen() {
       );
       return;
     }
+    // Check for duplicate phone numbers
+    const normalizedPhones = validMembers.map(m => m.phone.replace(/\D/g, '').slice(-10));
+    const seen = new Set<string>();
+    for (let i = 0; i < normalizedPhones.length; i++) {
+      if (seen.has(normalizedPhones[i])) {
+        Alert.alert(
+          'Duplicate Phone Number',
+          `${validMembers[i].name.trim()} has the same phone number as another member. Each member must have a unique phone number.`,
+        );
+        return;
+      }
+      seen.add(normalizedPhones[i]);
+    }
     setLoading(true);
     try {
       const budgetAmount = parseFloat(budgetInput) || undefined;

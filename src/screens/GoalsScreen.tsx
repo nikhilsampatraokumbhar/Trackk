@@ -78,6 +78,7 @@ export default function GoalsScreen() {
   const { trackerState, togglePersonal, toggleGroupAffectsGoal } = useTracker();
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
   const [todaySpend, setTodaySpend] = useState(0);
   const [monthSpend, setMonthSpend] = useState(0);
   const [todayDailySpend, setTodayDailySpend] = useState<DailySpend | null>(null);
@@ -153,6 +154,7 @@ export default function GoalsScreen() {
     setExpenses('');
     setMaintenance('');
     setCustomFinances([]);
+    setEditingGoal(null);
     setShowForm(false);
   };
 
@@ -215,9 +217,12 @@ export default function GoalsScreen() {
       customFinances,
     });
 
-    // For multi-goal: total monthly set-aside = sum of existing goals' monthlyBudget + this new goal
+    // For multi-goal: total monthly set-aside = sum of existing goals' monthlyBudget + this goal
     const existingGoals = await getGoals();
-    const existingMonthlySetAside = existingGoals.reduce((s, g) => s + g.monthlyBudget, 0);
+    // When editing, exclude this goal's current set-aside from the total
+    const existingMonthlySetAside = existingGoals
+      .filter(g => !editingGoal || g.id !== editingGoal.id)
+      .reduce((s, g) => s + g.monthlyBudget, 0);
     const monthlySavings = salaryVal - emisVal - expensesVal - maintenanceVal - customTotal;
     const monthlyBudgetForGoal = target / months;
     const totalSetAside = existingMonthlySetAside + monthlyBudgetForGoal;
@@ -248,25 +253,40 @@ export default function GoalsScreen() {
     salaryVal: number, emisVal: number, expensesVal: number,
     maintenanceVal: number, dailyBudget: number, monthlyBudget: number,
   ) => {
-    const goal: SavingsGoal = {
-      id: generateId(),
-      name,
-      targetAmount: target,
-      targetDate,
-      targetMonths: tMonths,
-      salary: salaryVal,
-      emis: emisVal,
-      expenses: expensesVal,
-      maintenance: maintenanceVal,
-      customFinances,
-      dailyBudget: Math.max(dailyBudget, 0),
-      monthlyBudget,
-      streak: 0,
-      lastStreakDate: '',
-      savingsJar: 0,
-      totalSaved: 0,
-      createdAt: Date.now(),
-    };
+    const goal: SavingsGoal = editingGoal
+      ? {
+          ...editingGoal,
+          name,
+          targetAmount: target,
+          targetDate,
+          targetMonths: tMonths,
+          salary: salaryVal,
+          emis: emisVal,
+          expenses: expensesVal,
+          maintenance: maintenanceVal,
+          customFinances,
+          dailyBudget: Math.max(dailyBudget, 0),
+          monthlyBudget,
+        }
+      : {
+          id: generateId(),
+          name,
+          targetAmount: target,
+          targetDate,
+          targetMonths: tMonths,
+          salary: salaryVal,
+          emis: emisVal,
+          expenses: expensesVal,
+          maintenance: maintenanceVal,
+          customFinances,
+          dailyBudget: Math.max(dailyBudget, 0),
+          monthlyBudget,
+          streak: 0,
+          lastStreakDate: '',
+          savingsJar: 0,
+          totalSaved: 0,
+          createdAt: Date.now(),
+        };
     await saveGoal(goal);
 
     // Auto-enable personal tracking if not already on
@@ -296,6 +316,21 @@ export default function GoalsScreen() {
         },
       ],
     );
+  };
+
+  /* ── Edit Goal ──────────────────────────────────────────────────── */
+
+  const handleEditGoal = (goal: SavingsGoal) => {
+    setEditingGoal(goal);
+    setGoalName(goal.name);
+    setTargetAmount(String(goal.targetAmount));
+    setTargetMonths(String(goal.targetMonths));
+    setSalary(goal.salary > 0 ? String(goal.salary) : '');
+    setEmis(goal.emis > 0 ? String(goal.emis) : '');
+    setExpenses(goal.expenses > 0 ? String(goal.expenses) : '');
+    setMaintenance(goal.maintenance > 0 ? String(goal.maintenance) : '');
+    setCustomFinances(goal.customFinances || []);
+    setShowForm(true);
   };
 
   /* ── Streak Logic ─────────────────────────────────────────────────── */
@@ -492,7 +527,7 @@ export default function GoalsScreen() {
               <TouchableOpacity onPress={resetForm} style={styles.modalCancelBtn}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>New Goal</Text>
+              <Text style={styles.modalTitle}>{editingGoal ? 'Edit Goal' : 'New Goal'}</Text>
               <View style={styles.modalCancelBtn}>
                 <Text style={[styles.modalCancelText, { opacity: 0 }]}>Cancel</Text>
               </View>
@@ -714,7 +749,7 @@ export default function GoalsScreen() {
                 end={{ x: 1, y: 0 }}
                 style={styles.submitBtnGradient}
               >
-                <Text style={styles.submitBtnText}>Calculate & Save Goal</Text>
+                <Text style={styles.submitBtnText}>{editingGoal ? 'Update Goal' : 'Calculate & Save Goal'}</Text>
               </LinearGradient>
             </TouchableOpacity>
 
@@ -891,13 +926,22 @@ export default function GoalsScreen() {
                 </View>
               </View>
             </View>
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={() => handleDeleteGoal(goal)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.deleteBtnIcon}>{'\u2715'}</Text>
-            </TouchableOpacity>
+            <View style={styles.goalActions}>
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => handleEditGoal(goal)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.editBtnIcon}>{'\u270E'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => handleDeleteGoal(goal)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.deleteBtnIcon}>{'\u2715'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Savings Progress */}
@@ -1156,6 +1200,7 @@ export default function GoalsScreen() {
                   );
                   return;
                 }
+                prefillFinances();
                 setShowForm(true);
               }}
               activeOpacity={0.7}
@@ -1689,6 +1734,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.primary,
     letterSpacing: 0.3,
+  },
+  goalActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: `${COLORS.primary}12`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}20`,
+  },
+  editBtnIcon: {
+    fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   deleteBtn: {
     width: 36,

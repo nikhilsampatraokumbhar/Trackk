@@ -14,6 +14,16 @@ const DEBIT_KEYWORDS = [
   'payment of rs', 'charged', 'deducted', 'dr',
 ];
 
+const SELF_TRANSFER_PATTERNS = [
+  /self\s*transfer/i,
+  /own\s*account/i,
+  /self\s*a\/?c/i,
+  /transfer\s+to\s+self/i,
+  /fund\s*transfer.*your\s*(a\/?c|account)/i,
+  /transferred.*to\s+your/i,
+  /a\/?c\s*\w{2,4}(\d{4}).*a\/?c\s*\w{2,4}\1/i, // same last 4 digits on both accounts
+];
+
 const BANK_NAME_MAP: Record<string, string> = {
   SBIINB: 'State Bank of India',
   SBIPSG: 'State Bank of India',
@@ -55,6 +65,10 @@ export function parseTransactionSms(body: string, sender: string): ParsedTransac
   // Check if it's a debit transaction
   const isDebit = DEBIT_KEYWORDS.some(keyword => lowerBody.includes(keyword));
   if (!isDebit) return null;
+
+  // Filter out self-transfers (own account to own account)
+  const isSelfTransfer = SELF_TRANSFER_PATTERNS.some(pattern => pattern.test(body));
+  if (isSelfTransfer) return null;
 
   // Extract amount
   let amount = 0;
