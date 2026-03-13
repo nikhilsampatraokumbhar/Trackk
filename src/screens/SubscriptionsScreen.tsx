@@ -1,0 +1,400 @@
+import React, { useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  Modal, TextInput, Alert, KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { UserSubscriptionItem } from '../models/types';
+import {
+  getSubscriptions, saveSubscription, deleteSubscription,
+  hasSubscriptionsOnboarded, setSubscriptionsOnboarded,
+} from '../services/StorageService';
+import { COLORS, formatCurrency, generateId } from '../utils/helpers';
+
+/** Calculate next billing date from a billing day and cycle */
+function calcNextBillingDate(billingDay: number, cycle: 'monthly' | 'yearly'): string {
+  const now = new Date();
+  let next: Date;
+
+  if (cycle === 'monthly') {
+    const day = Math.min(billingDay, 28); // safe for all months
+    next = new Date(now.getFullYear(), now.getMonth(), day);
+    if (next <= now) {
+      next = new Date(now.getFullYear(), now.getMonth() + 1, day);
+    }
+  } else {
+    const day = Math.min(billingDay, 28);
+    next = new Date(now.getFullYear(), now.getMonth(), day);
+    if (next <= now) {
+      next = new Date(now.getFullYear() + 1, now.getMonth(), day);
+    }
+  }
+  return next.toISOString().slice(0, 10);
+}
+
+function daysUntil(dateStr: string): number {
+  const target = new Date(dateStr + 'T00:00:00');
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+export default function SubscriptionsScreen() {
+  const nav = useNavigation();
+  const [items, setItems] = useState<UserSubscriptionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Add form
+  const [formName, setFormName] = useState('');
+  const [formAmount, setFormAmount] = useState('');
+  const [formCycle, setFormCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [formDay, setFormDay] = useState('');
+  const [formShared, setFormShared] = useState(false);
+  const [formSharedCount, setFormSharedCount] = useState('');
+  const [editingItem, setEditingItem] = useState<UserSubscriptionItem | null>(null);
+
+  const load = useCallback(async () => {
+    const subs = await getSubscriptions();
+    setItems(subs.filter(s => s.active));
+
+    const onboarded = await hasSubscriptionsOnboarded();
+    if (!onboarded && subs.length === 0) {
+      setShowOnboarding(true);
+    }
+
+    setLoading(false);
+  }, []);
+
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const totalMonthly = items.reduce((sum, item) => {
+    if (item.cycle === 'monthly') return sum + item.amount;
+    return sum + item.amount / 12;
+  }, 0);
+
+  const handleSave = async () => {
+    const name = formName.trim();
+    const amount = parseFloat(formAmount);
+    const day = parseInt(formDay) || new Date().getDate();
+
+    if (!name) { Alert.alert('Required', 'Enter subscription name'); return; }
+    if (!amount || amount <= 0) { Alert.alert('Required', 'Enter valid amount'); return; }
+    if (day < 1 || day > 31) { Alert.alert('Invalid', 'Billing day must be 1-31'); return; }
+
+    const item: UserSubscriptionItem = {
+      id: editingItem?.id || generateId(),
+      name,
+      amount,
+      cycle: formCycle,
+      billingDay: day,
+      nextBillingDate: calcNextBillingDate(day, formCycle),
+      isShared: formShared,
+      sharedCount: formShared ? parseInt(formSharedCount) || 2 : undefined,
+      source: 'manual',
+      confirmed: true,
+      active: true,
+      createdAt: editingItem?.createdAt || Date.now(),
+    };
+
+    await saveSubscription(item);
+    resetForm();
+    load();
+  };
+
+  const resetForm = () => {
+    setFormName('');
+    setFormAmount('');
+    setFormCycle('monthly');
+    setFormDay('');
+    setFormShared(false);
+    setFormSharedCount('');
+    setEditingItem(null);
+    setShowAddModal(false);
+  };
+
+  const handleEdit = (item: UserSubscriptionItem) => {
+    setEditingItem(item);
+    setFormName(item.name);
+    setFormAmount(String(item.amount));
+    setFormCycle(item.cycle);
+    setFormDay(String(item.billingDay));
+    setFormShared(item.isShared);
+    setFormSharedCount(item.sharedCount ? String(item.sharedCount) : '');
+    setShowAddModal(true);
+  };
+
+  const handleDelete = (item: UserSubscriptionItem) => {
+    Alert.alert('Remove Subscription', `Remove ${item.name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove', style: 'destructive',
+        onPress: async () => { await deleteSubscription(item.id); load(); },
+      },
+    ]);
+  };
+
+  const handleOnboardingDismiss = async () => {
+    await setSubscriptionsOnboarded();
+    setShowOnboarding(false);
+    setShowAddModal(true);
+  };
+
+  const renderItem = ({ item }: { item: UserSubscriptionItem }) => {
+    const days = daysUntil(item.nextBillingDate);
+    const isUrgent = days <= 3;
+
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => handleEdit(item)}
+        onLongPress={() => handleDelete(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.cardLeft}>
+          <Text style={styles.cardName}>{item.name}</Text>
+          <Text style={styles.cardCycle}>
+            {item.cycle === 'monthly' ? 'Monthly' : 'Yearly'}
+            {item.isShared ? ` (shared by ${item.sharedCount || 2})` : ''}
+          </Text>
+        </View>
+        <View style={styles.cardRight}>
+          <Text style={styles.cardAmount}>{formatCurrency(item.amount)}</Text>
+          <Text style={[styles.cardDays, isUrgent && { color: COLORS.danger }]}>
+            {days === 0 ? 'Due today' : `${days}d left`}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <LinearGradient
+        colors={['#1A1210', '#100C0A', COLORS.background]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <View style={styles.headerAccent} />
+        <Text style={styles.headerTitle}>Subscriptions</Text>
+        <Text style={styles.headerSub}>All your subscriptions in one place</Text>
+        {items.length > 0 && (
+          <View style={styles.headerStats}>
+            <View>
+              <Text style={styles.headerStatLabel}>MONTHLY COST</Text>
+              <Text style={styles.headerStatValue}>{formatCurrency(totalMonthly)}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.headerStatLabel}>ACTIVE</Text>
+              <Text style={styles.headerStatValue}>{items.length}</Text>
+            </View>
+          </View>
+        )}
+      </LinearGradient>
+
+      {/* List */}
+      <FlatList
+        data={items}
+        keyExtractor={item => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyEmoji}>🔄</Text>
+              <Text style={styles.emptyText}>No subscriptions yet</Text>
+              <Text style={styles.emptySub}>Tap + to add your first subscription</Text>
+            </View>
+          ) : null
+        }
+      />
+
+      {/* Add FAB */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setShowAddModal(true)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabIcon}>+</Text>
+      </TouchableOpacity>
+
+      {/* Onboarding Modal */}
+      <Modal visible={showOnboarding} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.onboardingContent}>
+            <Text style={styles.onboardingEmoji}>🔄</Text>
+            <Text style={styles.onboardingTitle}>All your subscriptions in one place</Text>
+            <Text style={styles.onboardingSub}>
+              Enter once, we'll take care of all the tracking hereafter.
+              {'\n\n'}Never miss a renewal or get surprised by a charge again.
+            </Text>
+            <TouchableOpacity style={styles.onboardingBtn} onPress={handleOnboardingDismiss} activeOpacity={0.8}>
+              <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
+                <Text style={styles.onboardingBtnText}>Add my subscriptions</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setSubscriptionsOnboarded(); setShowOnboarding(false); }} style={{ padding: 12 }}>
+              <Text style={styles.onboardingSkip}>Maybe later</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add/Edit Modal */}
+      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={resetForm}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+          <View style={styles.formContainer}>
+            <View style={styles.formHandle} />
+            <Text style={styles.formTitle}>{editingItem ? 'Edit Subscription' : 'Add Subscription'}</Text>
+
+            <TextInput
+              style={styles.input}
+              value={formName}
+              onChangeText={setFormName}
+              placeholder="Subscription name (e.g. Netflix)"
+              placeholderTextColor={COLORS.textLight}
+              selectionColor={COLORS.primary}
+            />
+            <TextInput
+              style={styles.input}
+              value={formAmount}
+              onChangeText={setFormAmount}
+              placeholder="Amount"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="numeric"
+              selectionColor={COLORS.primary}
+            />
+
+            <View style={styles.cycleRow}>
+              <TouchableOpacity
+                style={[styles.cycleBtn, formCycle === 'monthly' && styles.cycleBtnActive]}
+                onPress={() => setFormCycle('monthly')}
+              >
+                <Text style={[styles.cycleBtnText, formCycle === 'monthly' && styles.cycleBtnTextActive]}>Monthly</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.cycleBtn, formCycle === 'yearly' && styles.cycleBtnActive]}
+                onPress={() => setFormCycle('yearly')}
+              >
+                <Text style={[styles.cycleBtnText, formCycle === 'yearly' && styles.cycleBtnTextActive]}>Yearly</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.input}
+              value={formDay}
+              onChangeText={setFormDay}
+              placeholder="Billing day of month (1-31)"
+              placeholderTextColor={COLORS.textLight}
+              keyboardType="numeric"
+              selectionColor={COLORS.primary}
+            />
+
+            <TouchableOpacity
+              style={styles.sharedToggle}
+              onPress={() => setFormShared(!formShared)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, formShared && styles.checkboxActive]}>
+                {formShared && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+              <Text style={styles.sharedLabel}>Shared subscription (others may pay next month)</Text>
+            </TouchableOpacity>
+
+            {formShared && (
+              <TextInput
+                style={styles.input}
+                value={formSharedCount}
+                onChangeText={setFormSharedCount}
+                placeholder="How many people share this?"
+                placeholderTextColor={COLORS.textLight}
+                keyboardType="numeric"
+                selectionColor={COLORS.primary}
+              />
+            )}
+
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.8}>
+              <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtnGrad}>
+                <Text style={styles.saveBtnText}>{editingItem ? 'Update' : 'Add Subscription'}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.cancelBtn} onPress={resetForm}>
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+
+  header: { borderRadius: 20, padding: 24, margin: 16, marginBottom: 8, borderWidth: 1, borderColor: COLORS.glassBorder, overflow: 'hidden' },
+  headerAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: COLORS.primary },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
+  headerSub: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 },
+  headerStats: { flexDirection: 'row', justifyContent: 'space-between' },
+  headerStatLabel: { fontSize: 9, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
+  headerStatValue: { fontSize: 22, fontWeight: '800', color: COLORS.primary },
+
+  list: { padding: 16, paddingTop: 8, paddingBottom: 100 },
+
+  card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surfaceHigh, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: COLORS.border },
+  cardLeft: { flex: 1 },
+  cardName: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
+  cardCycle: { fontSize: 12, color: COLORS.textSecondary },
+  cardRight: { alignItems: 'flex-end' },
+  cardAmount: { fontSize: 16, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
+  cardDays: { fontSize: 12, color: COLORS.success, fontWeight: '600' },
+
+  empty: { alignItems: 'center', paddingVertical: 60 },
+  emptyEmoji: { fontSize: 48, marginBottom: 16 },
+  emptyText: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 8 },
+  emptySub: { fontSize: 13, color: COLORS.textSecondary },
+
+  fab: { position: 'absolute', right: 20, bottom: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', elevation: 8 },
+  fabIcon: { color: '#FFF', fontSize: 28, fontWeight: '700' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+
+  onboardingContent: { backgroundColor: COLORS.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 32, paddingBottom: 40, alignItems: 'center', borderWidth: 1, borderColor: COLORS.glassBorder, borderBottomWidth: 0 },
+  onboardingEmoji: { fontSize: 48, marginBottom: 16 },
+  onboardingTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 12 },
+  onboardingSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  onboardingBtn: { borderRadius: 30, overflow: 'hidden', width: '100%', marginBottom: 8 },
+  onboardingBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
+  onboardingBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  onboardingSkip: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '600' },
+
+  formContainer: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.glassBorder, borderBottomWidth: 0 },
+  formHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.surfaceHigher, alignSelf: 'center', marginBottom: 20 },
+  formTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 20 },
+
+  input: { backgroundColor: COLORS.glass, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: COLORS.text, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: 12 },
+
+  cycleRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  cycleBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center' },
+  cycleBtnActive: { backgroundColor: `${COLORS.primary}20`, borderColor: COLORS.primary },
+  cycleBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  cycleBtnTextActive: { color: COLORS.primary },
+
+  sharedToggle: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: COLORS.textSecondary, alignItems: 'center', justifyContent: 'center' },
+  checkboxActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  checkmark: { color: '#FFF', fontSize: 13, fontWeight: '800' },
+  sharedLabel: { fontSize: 13, color: COLORS.textSecondary, flex: 1 },
+
+  saveBtn: { borderRadius: 30, overflow: 'hidden', marginTop: 8, marginBottom: 12 },
+  saveBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
+  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+
+  cancelBtn: { paddingVertical: 12, alignItems: 'center' },
+  cancelBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+});

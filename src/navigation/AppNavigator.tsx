@@ -23,6 +23,9 @@ import ReferralScreen from '../screens/ReferralScreen';
 import SplitEditorScreen from '../screens/SplitEditorScreen';
 import NightlyReviewScreen from '../screens/NightlyReviewScreen';
 import QuickAddScreen from '../screens/QuickAddScreen';
+import SubscriptionsScreen from '../screens/SubscriptionsScreen';
+import InvestmentsScreen from '../screens/InvestmentsScreen';
+import EMIsScreen from '../screens/EMIsScreen';
 import LoginScreen from '../screens/LoginScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 
@@ -53,6 +56,9 @@ export type RootStackParamList = {
   QuickAdd: { amount?: number; description?: string } | undefined;
   Pricing: undefined;
   Referral: undefined;
+  Subscriptions: undefined;
+  Investments: undefined;
+  EMIs: undefined;
 };
 
 export type TabParamList = {
@@ -326,6 +332,21 @@ export function AppNavigator() {
               name="QuickAdd"
               component={QuickAddScreen}
               options={{ title: 'Quick Add', presentation: 'modal', headerShown: false }}
+            />
+            <Stack.Screen
+              name="Subscriptions"
+              component={SubscriptionsScreen}
+              options={{ title: 'Subscriptions', headerBackTitle: '' }}
+            />
+            <Stack.Screen
+              name="Investments"
+              component={InvestmentsScreen}
+              options={{ title: 'Investments', headerBackTitle: '' }}
+            />
+            <Stack.Screen
+              name="EMIs"
+              component={EMIsScreen}
+              options={{ title: 'EMIs', headerBackTitle: '' }}
             />
             {Platform.OS === 'ios' && (
               <Stack.Screen

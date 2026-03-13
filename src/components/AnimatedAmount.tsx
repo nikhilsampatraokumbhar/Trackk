@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, TextStyle } from 'react-native';
+import { Animated, TextStyle, StyleSheet } from 'react-native';
 import { formatCurrency } from '../utils/helpers';
 
 interface Props {
   value: number;
-  style?: TextStyle;
+  style?: TextStyle | TextStyle[];
   duration?: number;
 }
 
@@ -68,8 +68,10 @@ export default function AnimatedAmount({ value, style, duration = 600 }: Props) 
     return () => clearTimeout(timer);
   }, [value]);
 
+  const flatStyle = Array.isArray(style) ? StyleSheet.flatten(style) : style;
+
   return (
-    <Animated.Text style={style}>
+    <Animated.Text style={flatStyle}>
       {displayText}
     </Animated.Text>
   );

@@ -227,3 +227,63 @@ export interface Settlement {
   method: 'upi' | 'cash';
   timestamp: number;
 }
+
+// ─── Subscriptions Tracking ─────────────────────────────────────────────────
+
+export interface UserSubscriptionItem {
+  id: string;
+  name: string;
+  amount: number;
+  cycle: 'monthly' | 'yearly';
+  /** Day of month (1-31) or day of year when billing recurs */
+  billingDay: number;
+  /** ISO date string of the next expected billing date */
+  nextBillingDate: string;
+  /** Whether this subscription is shared and someone else may pay next */
+  isShared: boolean;
+  /** Number of people sharing (for split display) */
+  sharedCount?: number;
+  /** Source: 'manual' or 'auto' (detected from transaction history) */
+  source: 'manual' | 'auto';
+  /** Whether user has confirmed/acknowledged this subscription */
+  confirmed: boolean;
+  active: boolean;
+  createdAt: number;
+}
+
+// ─── Investments Tracking ───────────────────────────────────────────────────
+
+export interface InvestmentItem {
+  id: string;
+  name: string;
+  amount: number;
+  cycle: 'monthly' | 'yearly' | 'one-time';
+  /** Day of month when SIP/recurring investment is debited */
+  billingDay?: number;
+  nextBillingDate?: string;
+  source: 'manual' | 'auto';
+  confirmed: boolean;
+  active: boolean;
+  createdAt: number;
+}
+
+// ─── EMI Tracking ───────────────────────────────────────────────────────────
+
+export interface EMIItem {
+  id: string;
+  name: string;
+  amount: number;
+  /** Total months for the EMI */
+  totalMonths: number;
+  /** Months already paid */
+  monthsPaid: number;
+  /** Months remaining */
+  monthsLeft: number;
+  /** Day of month when EMI is debited */
+  billingDay: number;
+  nextBillingDate: string;
+  source: 'manual' | 'auto';
+  confirmed: boolean;
+  active: boolean;
+  createdAt: number;
+}

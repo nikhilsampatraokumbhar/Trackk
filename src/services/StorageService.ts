@@ -3,6 +3,7 @@ import {
   User, Transaction, Group, GroupTransaction, Split,
   TrackerType, ParsedTransaction, SavingsGoal, DailySpend, Settlement,
   SavingsJarEntry, FinanceItem, ReimbursementTrip,
+  UserSubscriptionItem, InvestmentItem, EMIItem,
 } from '../models/types';
 import { generateId } from '../utils/helpers';
 import { buildDescription } from './TransactionParser';
@@ -18,6 +19,12 @@ const KEYS = {
   SETTLEMENTS: (groupId: string) => `@et_settlements_${groupId}`,
   SHARED_FINANCES: '@et_shared_finances',
   REIMBURSEMENT_TRIPS: '@et_reimbursement_trips',
+  SUBSCRIPTIONS: '@et_subscriptions',
+  INVESTMENTS: '@et_investments',
+  EMIS: '@et_emis',
+  SUBSCRIPTIONS_ONBOARDED: '@et_subscriptions_onboarded',
+  INVESTMENTS_ONBOARDED: '@et_investments_onboarded',
+  EMIS_ONBOARDED: '@et_emis_onboarded',
 };
 
 // ─── User ────────────────────────────────────────────────────────────────────
@@ -611,12 +618,109 @@ export async function saveReimbursementExpense(
   return txn;
 }
 
+// ─── Subscriptions ──────────────────────────────────────────────────────
+
+export async function getSubscriptions(): Promise<UserSubscriptionItem[]> {
+  const raw = await AsyncStorage.getItem(KEYS.SUBSCRIPTIONS);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function saveSubscription(item: UserSubscriptionItem): Promise<void> {
+  const all = await getSubscriptions();
+  const idx = all.findIndex(s => s.id === item.id);
+  if (idx !== -1) {
+    all[idx] = item;
+  } else {
+    all.push(item);
+  }
+  await AsyncStorage.setItem(KEYS.SUBSCRIPTIONS, JSON.stringify(all));
+}
+
+export async function deleteSubscription(id: string): Promise<void> {
+  const all = await getSubscriptions();
+  await AsyncStorage.setItem(KEYS.SUBSCRIPTIONS, JSON.stringify(all.filter(s => s.id !== id)));
+}
+
+export async function hasSubscriptionsOnboarded(): Promise<boolean> {
+  const val = await AsyncStorage.getItem(KEYS.SUBSCRIPTIONS_ONBOARDED);
+  return val === 'true';
+}
+
+export async function setSubscriptionsOnboarded(): Promise<void> {
+  await AsyncStorage.setItem(KEYS.SUBSCRIPTIONS_ONBOARDED, 'true');
+}
+
+// ─── Investments ────────────────────────────────────────────────────────
+
+export async function getInvestments(): Promise<InvestmentItem[]> {
+  const raw = await AsyncStorage.getItem(KEYS.INVESTMENTS);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function saveInvestment(item: InvestmentItem): Promise<void> {
+  const all = await getInvestments();
+  const idx = all.findIndex(s => s.id === item.id);
+  if (idx !== -1) {
+    all[idx] = item;
+  } else {
+    all.push(item);
+  }
+  await AsyncStorage.setItem(KEYS.INVESTMENTS, JSON.stringify(all));
+}
+
+export async function deleteInvestment(id: string): Promise<void> {
+  const all = await getInvestments();
+  await AsyncStorage.setItem(KEYS.INVESTMENTS, JSON.stringify(all.filter(s => s.id !== id)));
+}
+
+export async function hasInvestmentsOnboarded(): Promise<boolean> {
+  const val = await AsyncStorage.getItem(KEYS.INVESTMENTS_ONBOARDED);
+  return val === 'true';
+}
+
+export async function setInvestmentsOnboarded(): Promise<void> {
+  await AsyncStorage.setItem(KEYS.INVESTMENTS_ONBOARDED, 'true');
+}
+
+// ─── EMIs ───────────────────────────────────────────────────────────────
+
+export async function getEMIs(): Promise<EMIItem[]> {
+  const raw = await AsyncStorage.getItem(KEYS.EMIS);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function saveEMI(item: EMIItem): Promise<void> {
+  const all = await getEMIs();
+  const idx = all.findIndex(s => s.id === item.id);
+  if (idx !== -1) {
+    all[idx] = item;
+  } else {
+    all.push(item);
+  }
+  await AsyncStorage.setItem(KEYS.EMIS, JSON.stringify(all));
+}
+
+export async function deleteEMI(id: string): Promise<void> {
+  const all = await getEMIs();
+  await AsyncStorage.setItem(KEYS.EMIS, JSON.stringify(all.filter(s => s.id !== id)));
+}
+
+export async function hasEMIsOnboarded(): Promise<boolean> {
+  const val = await AsyncStorage.getItem(KEYS.EMIS_ONBOARDED);
+  return val === 'true';
+}
+
+export async function setEMIsOnboarded(): Promise<void> {
+  await AsyncStorage.setItem(KEYS.EMIS_ONBOARDED, 'true');
+}
+
 // ─── Clear all data ──────────────────────────────────────────────────────────
 
 export async function clearAllData(): Promise<void> {
   const groups = await getGroups();
   const keys = [
     KEYS.USER, KEYS.TRANSACTIONS, KEYS.GROUPS, KEYS.GOALS, KEYS.DAILY_SPENDS, KEYS.SAVINGS_JAR, KEYS.SHARED_FINANCES, KEYS.REIMBURSEMENT_TRIPS,
+    KEYS.SUBSCRIPTIONS, KEYS.INVESTMENTS, KEYS.EMIS, KEYS.SUBSCRIPTIONS_ONBOARDED, KEYS.INVESTMENTS_ONBOARDED, KEYS.EMIS_ONBOARDED,
     ...groups.map(g => KEYS.GROUP_TRANSACTIONS(g.id)),
     ...groups.map(g => KEYS.SETTLEMENTS(g.id)),
     // Also clear cache, tracker state, and premium data

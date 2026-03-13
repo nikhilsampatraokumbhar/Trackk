@@ -1,5 +1,5 @@
 import { Share, Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Transaction } from '../models/types';
 import { formatCurrency } from '../utils/helpers';
