@@ -314,6 +314,23 @@ export async function settleSplit(
   await saveGroupTransactions(groupId, all);
 }
 
+export async function unsettleSplit(
+  groupId: string,
+  transactionId: string,
+  userId: string,
+): Promise<void> {
+  const all = await getGroupTransactions(groupId);
+  const idx = all.findIndex(t => t.id === transactionId);
+  if (idx === -1) return;
+
+  const txn = { ...all[idx] };
+  txn.splits = txn.splits.map(s =>
+    s.userId === userId ? { ...s, settled: false } : s,
+  );
+  all[idx] = txn;
+  await saveGroupTransactions(groupId, all);
+}
+
 // ─── Settlements ─────────────────────────────────────────────────────────────
 
 export async function getSettlements(groupId: string): Promise<Settlement[]> {

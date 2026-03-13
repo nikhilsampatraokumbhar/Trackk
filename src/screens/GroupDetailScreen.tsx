@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, ActivityIndicator, Linking, Alert,
+  TextInput, AppState, AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -36,14 +37,17 @@ export default function GroupDetailScreen() {
   const nav = useNavigation<Nav>();
   const { groupId } = route.params;
   const { user } = useAuth();
-  const { activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit, groups } = useGroups();
+  const { activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit, unsettleSplit, groups } = useGroups();
   const { trackerState, toggleGroup } = useTracker();
 
   const [group, setGroup] = useState<Group | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [settleModalVisible, setSettleModalVisible] = useState(false);
   const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
+  const [settleAmount, setSettleAmount] = useState('');
   const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [pendingUPISettle, setPendingUPISettle] = useState<{ debt: Debt; amount: number } | null>(null);
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
 
   const { isAuthenticated } = useAuth();
 
@@ -90,6 +94,19 @@ export default function GroupDetailScreen() {
     });
     return () => unsub();
   }, [groupId, isAuthenticated]);
+
+  // Detect return from UPI app — show confirmation popup
+  useEffect(() => {
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === 'active' && pendingUPISettle) {
+        // User returned from UPI app, show confirmation
+        setConfirmModalVisible(true);
+      }
+    };
+
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
+  }, [pendingUPISettle]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -138,108 +155,156 @@ export default function GroupDetailScreen() {
   // Open settle modal for a specific debt
   const openSettleModal = (debt: Debt) => {
     setSettleTarget({ debt });
+    setSettleAmount(debt.amount.toString());
     setSettleModalVisible(true);
   };
 
-  // Handle settlement via UPI
-  const handleUPISettle = () => {
+  // Get the parsed settle amount (with validation)
+  const getSettleAmountValue = (): number => {
+    const parsed = parseFloat(settleAmount);
+    if (isNaN(parsed) || parsed <= 0) return 0;
+    return Math.round(parsed * 100) / 100;
+  };
+
+  // Handle settlement via UPI — open app, DON'T auto-settle
+  const handleUPISettle = async () => {
     if (!settleTarget) return;
+    const amount = getSettleAmountValue();
+    if (amount <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+      return;
+    }
 
-    Alert.alert(
-      'Mark as settled?',
-      `Confirm settlement of ${formatCurrency(settleTarget.debt.amount)} to ${settleTarget.debt.toName} via UPI?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes, Open UPI',
-          onPress: async () => {
-            // Try to open UPI intent
-            const upiUrl = `upi://pay?pa=&pn=${encodeURIComponent(settleTarget.debt.toName)}&am=${settleTarget.debt.amount}&cu=INR&tn=Settlement`;
-            try {
-              const canOpen = await Linking.canOpenURL(upiUrl);
-              if (canOpen) {
-                await Linking.openURL(upiUrl);
-              } else {
-                Alert.alert(
-                  'UPI Not Available',
-                  'No UPI app found on your device. Please pay using your preferred UPI app and come back to mark as settled.',
-                );
-              }
-            } catch {
-              Alert.alert('Error', 'Could not open UPI app. Please pay manually.');
-            }
+    const upiUrl = `upi://pay?pa=&pn=${encodeURIComponent(settleTarget.debt.toName)}&am=${amount}&cu=INR&tn=Settlement`;
+    try {
+      const canOpen = await Linking.canOpenURL(upiUrl);
+      if (canOpen) {
+        // Store pending settlement info BEFORE opening UPI app
+        setPendingUPISettle({ debt: settleTarget.debt, amount });
+        setSettleModalVisible(false);
+        setSettleTarget(null);
+        await Linking.openURL(upiUrl);
+      } else {
+        Alert.alert(
+          'UPI Not Available',
+          'No UPI app found on your device. Please pay using your preferred UPI app and come back to mark as settled.',
+        );
+      }
+    } catch {
+      Alert.alert('Error', 'Could not open UPI app. Please pay manually.');
+    }
+  };
 
-            // Mark all splits for that person as settled and record settlement
-            await settleAllForUser(settleTarget.debt, 'upi');
-          },
-        },
-      ],
-    );
+  // Handle UPI return confirmation — user confirms payment was done
+  const handleUPIConfirmDone = async () => {
+    if (!pendingUPISettle) return;
+    setConfirmModalVisible(false);
+    await settleForAmount(pendingUPISettle.debt, pendingUPISettle.amount, 'upi');
+    setPendingUPISettle(null);
+  };
+
+  // Handle UPI return — payment was NOT done
+  const handleUPIConfirmNotDone = () => {
+    setConfirmModalVisible(false);
+    setPendingUPISettle(null);
   };
 
   // Handle settlement via cash
   const handleCashSettle = () => {
     if (!settleTarget) return;
+    const amount = getSettleAmountValue();
+    if (amount <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+      return;
+    }
 
     Alert.alert(
       'Mark as settled?',
-      `Confirm that ${formatCurrency(settleTarget.debt.amount)} has been settled by cash to ${settleTarget.debt.toName}?`,
+      `Confirm that ${formatCurrency(amount)} has been settled by cash to ${settleTarget.debt.toName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Yes, Mark Settled',
           onPress: async () => {
-            await settleAllForUser(settleTarget.debt, 'cash');
+            await settleForAmount(settleTarget!.debt, amount, 'cash');
           },
         },
       ],
     );
   };
 
-  // Settle all splits for a given debt and record settlement
-  const settleAllForUser = async (debt: Debt, method: 'upi' | 'cash') => {
-    // Settle all individual splits where this user owes the creditor
+  // Settle splits up to the specified amount and record settlement
+  const settleForAmount = async (debt: Debt, amount: number, method: 'upi' | 'cash') => {
+    const isFullSettlement = amount >= debt.amount;
+    let remaining = amount;
+
+    // Settle individual splits up to the paid amount
     for (const txn of activeGroupTransactions) {
+      if (remaining <= 0) break;
       if (txn.addedBy === debt.toUserId) {
         const split = txn.splits.find(s => s.userId === debt.fromUserId && !s.settled);
         if (split) {
-          await settleSplit(groupId, txn.id, debt.fromUserId);
+          if (remaining >= split.amount) {
+            // Fully settle this split
+            await settleSplit(groupId, txn.id, debt.fromUserId);
+            remaining -= split.amount;
+          } else {
+            // Partial — still mark as settled for this split (remaining doesn't cover full split)
+            // For simplicity, settle splits fully in order until amount runs out
+            // Don't settle this split since we can't partially settle a single split
+            break;
+          }
         }
       }
     }
 
-    // Record the settlement (synced to Firestore - other user sees it in real-time)
-    // Falls back to local storage if not authenticated
+    // Record the settlement
+    const settlementData = {
+      groupId,
+      fromUserId: debt.fromUserId,
+      fromName: debt.fromName,
+      toUserId: debt.toUserId,
+      toName: debt.toName,
+      amount,
+      method,
+    };
+
     if (isAuthenticated) {
-      await addSettlementCloud({
-        groupId,
-        fromUserId: debt.fromUserId,
-        fromName: debt.fromName,
-        toUserId: debt.toUserId,
-        toName: debt.toName,
-        amount: debt.amount,
-        method,
-      });
+      await addSettlementCloud(settlementData);
     } else {
       const { addSettlement } = require('../services/StorageService');
-      await addSettlement({
-        groupId,
-        fromUserId: debt.fromUserId,
-        fromName: debt.fromName,
-        toUserId: debt.toUserId,
-        toName: debt.toName,
-        amount: debt.amount,
-        method,
-      });
+      await addSettlement(settlementData);
     }
 
     setSettleModalVisible(false);
     setSettleTarget(null);
     await load();
 
+    const statusText = isFullSettlement ? 'Fully Settled' : 'Partially Settled';
     Alert.alert(
-      'Settlement Recorded',
-      `${formatCurrency(debt.amount)} to ${debt.toName} has been settled via ${method === 'upi' ? 'UPI' : 'Cash'}.`,
+      statusText,
+      `${formatCurrency(amount)} to ${debt.toName} has been settled via ${method === 'upi' ? 'UPI' : 'Cash'}.${
+        !isFullSettlement ? `\n\nRemaining: ${formatCurrency(debt.amount - amount)}` : ''
+      }`,
+    );
+  };
+
+  // Unsettled a split (undo accidental settlement)
+  const handleUnsettleSplit = (transactionId: string, splitUserId: string, splitName: string) => {
+    Alert.alert(
+      'Mark as Unsettled?',
+      `Undo settlement for ${splitName}? This will mark their split as unpaid.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, Unsettled',
+          style: 'destructive',
+          onPress: async () => {
+            await unsettleSplit(groupId, transactionId, splitUserId);
+            await load();
+          },
+        },
+      ],
     );
   };
 
@@ -487,7 +552,15 @@ export default function GroupDetailScreen() {
                     </View>
                   </View>
                   <View style={styles.splitActions}>
-                    {split.settled ? (
+                    {split.settled && split.userId !== txn.addedBy ? (
+                      <TouchableOpacity
+                        style={styles.settledBadge}
+                        onPress={() => handleUnsettleSplit(txn.id, split.userId, split.displayName)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.settledText}>Settled</Text>
+                      </TouchableOpacity>
+                    ) : split.settled ? (
                       <View style={styles.settledBadge}>
                         <Text style={styles.settledText}>Settled</Text>
                       </View>
@@ -595,9 +668,69 @@ export default function GroupDetailScreen() {
         <Text style={styles.modalTitle}>Settle Payment</Text>
         {settleTarget && (
           <Text style={styles.modalSubtitle}>
-            Pay {formatCurrency(settleTarget.debt.amount)} to{' '}
-            {settleTarget.debt.toUserId === userId ? 'yourself' : settleTarget.debt.toName}
+            Pay to {settleTarget.debt.toUserId === userId ? 'yourself' : settleTarget.debt.toName}
           </Text>
+        )}
+
+        {settleTarget && (
+          <View style={styles.amountEditWrap}>
+            {/* Total debt — read-only */}
+            <View style={styles.totalDebtRow}>
+              <Text style={styles.amountLabel}>TOTAL DEBT</Text>
+              <Text style={styles.totalDebtValue}>{formatCurrency(settleTarget.debt.amount)}</Text>
+            </View>
+
+            {/* Settle amount — editable */}
+            <View style={styles.settleAmountSection}>
+              <Text style={styles.amountLabel}>SETTLE AMOUNT</Text>
+              <View style={styles.amountInputRow}>
+                <Text style={styles.amountCurrency}>₹</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={settleAmount}
+                  onChangeText={setSettleAmount}
+                  keyboardType="numeric"
+                  selectTextOnFocus
+                  placeholder="0"
+                  placeholderTextColor={COLORS.textLight}
+                />
+              </View>
+            </View>
+
+            {/* Settlement type badge — determined upfront */}
+            {getSettleAmountValue() > 0 && (
+              <View style={[
+                styles.settlementTypeBadge,
+                {
+                  backgroundColor: getSettleAmountValue() >= settleTarget.debt.amount
+                    ? `${COLORS.success}15`
+                    : `${COLORS.warning}15`,
+                  borderColor: getSettleAmountValue() >= settleTarget.debt.amount
+                    ? `${COLORS.success}30`
+                    : `${COLORS.warning}30`,
+                },
+              ]}>
+                <Text style={[
+                  styles.settlementTypeText,
+                  {
+                    color: getSettleAmountValue() >= settleTarget.debt.amount
+                      ? COLORS.success
+                      : COLORS.warning,
+                  },
+                ]}>
+                  {getSettleAmountValue() >= settleTarget.debt.amount
+                    ? 'Full Settlement'
+                    : `Partial Settlement · Remaining: ${formatCurrency(settleTarget.debt.amount - getSettleAmountValue())}`
+                  }
+                </Text>
+              </View>
+            )}
+            {getSettleAmountValue() > settleTarget.debt.amount && (
+              <Text style={[styles.partialHint, { color: COLORS.danger }]}>
+                Amount exceeds total debt
+              </Text>
+            )}
+          </View>
         )}
 
         <View style={styles.modalOptions}>
@@ -606,8 +739,8 @@ export default function GroupDetailScreen() {
               <Text style={styles.modalOptionEmoji}>📱</Text>
             </View>
             <View style={styles.modalOptionInfo}>
-              <Text style={styles.modalOptionTitle}>Pay via UPI</Text>
-              <Text style={styles.modalOptionSubtitle}>Opens your UPI app to complete payment</Text>
+              <Text style={styles.modalOptionTitle}>Pay via UPI / Card</Text>
+              <Text style={styles.modalOptionSubtitle}>Opens your payment app</Text>
             </View>
           </TouchableOpacity>
 
@@ -629,6 +762,74 @@ export default function GroupDetailScreen() {
         >
           <Text style={styles.modalCancelText}>Cancel</Text>
         </TouchableOpacity>
+      </BottomSheet>
+
+      {/* UPI Return Confirmation Bottom Sheet */}
+      <BottomSheet
+        visible={confirmModalVisible}
+        onClose={() => { setConfirmModalVisible(false); setPendingUPISettle(null); }}
+      >
+        <Text style={styles.modalTitle}>Was the payment done?</Text>
+        {pendingUPISettle && (
+          <>
+            <Text style={styles.modalSubtitle}>
+              {formatCurrency(pendingUPISettle.amount)} to {pendingUPISettle.debt.toName}
+            </Text>
+            <View style={[
+              styles.settlementTypeBadge,
+              {
+                backgroundColor: pendingUPISettle.amount >= pendingUPISettle.debt.amount
+                  ? `${COLORS.success}15` : `${COLORS.warning}15`,
+                borderColor: pendingUPISettle.amount >= pendingUPISettle.debt.amount
+                  ? `${COLORS.success}30` : `${COLORS.warning}30`,
+                marginBottom: 16,
+              },
+            ]}>
+              <Text style={[
+                styles.settlementTypeText,
+                {
+                  color: pendingUPISettle.amount >= pendingUPISettle.debt.amount
+                    ? COLORS.success : COLORS.warning,
+                },
+              ]}>
+                {pendingUPISettle.amount >= pendingUPISettle.debt.amount
+                  ? 'Full Settlement'
+                  : `Partial · Remaining: ${formatCurrency(pendingUPISettle.debt.amount - pendingUPISettle.amount)}`
+                }
+              </Text>
+            </View>
+          </>
+        )}
+
+        <View style={styles.modalOptions}>
+          <TouchableOpacity
+            style={[styles.modalOption, { borderColor: `${COLORS.success}30` }]}
+            onPress={handleUPIConfirmDone}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.modalOptionIcon, { backgroundColor: `${COLORS.success}18` }]}>
+              <Text style={styles.modalOptionEmoji}>✅</Text>
+            </View>
+            <View style={styles.modalOptionInfo}>
+              <Text style={styles.modalOptionTitle}>Yes, Payment Done</Text>
+              <Text style={styles.modalOptionSubtitle}>Mark as settled</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.modalOption, { borderColor: `${COLORS.danger}30` }]}
+            onPress={handleUPIConfirmNotDone}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.modalOptionIcon, { backgroundColor: `${COLORS.danger}18` }]}>
+              <Text style={styles.modalOptionEmoji}>❌</Text>
+            </View>
+            <View style={styles.modalOptionInfo}>
+              <Text style={styles.modalOptionTitle}>No, Payment Failed</Text>
+              <Text style={styles.modalOptionSubtitle}>Don't mark as settled</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </BottomSheet>
     </SafeAreaView>
   );
@@ -1040,6 +1241,74 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+
+  // Amount editor in settle modal
+  amountEditWrap: {
+    backgroundColor: COLORS.surfaceHigh,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  totalDebtRow: {
+    marginBottom: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  totalDebtValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  settleAmountSection: {
+    marginBottom: 4,
+  },
+  amountLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  amountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  amountCurrency: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginRight: 4,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.text,
+    padding: 0,
+  },
+  settlementTypeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  settlementTypeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  partialHint: {
+    fontSize: 11,
+    color: COLORS.warning,
+    fontWeight: '600',
+    marginTop: 8,
   },
 
   // Settlement Bottom Sheet content

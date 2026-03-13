@@ -111,6 +111,70 @@ const flowStyles = StyleSheet.create({
   },
 });
 
+/* ── Feature Card (non-sequential, for slide 4) ─────────────────── */
+
+function FeatureCard({
+  emoji,
+  label,
+  sublabel,
+  color,
+}: {
+  emoji: string;
+  label: string;
+  sublabel?: string;
+  color: string;
+}) {
+  return (
+    <View style={[featureStyles.card, { borderColor: `${color}25` }]}>
+      <View style={[featureStyles.iconWrap, { backgroundColor: `${color}15` }]}>
+        <Text style={featureStyles.emoji}>{emoji}</Text>
+      </View>
+      <View style={featureStyles.cardText}>
+        <Text style={featureStyles.label}>{label}</Text>
+        {sublabel && <Text style={featureStyles.sublabel}>{sublabel}</Text>}
+      </View>
+    </View>
+  );
+}
+
+const featureStyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.glass,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 10,
+  },
+  iconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  emoji: {
+    fontSize: 22,
+  },
+  cardText: {
+    flex: 1,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+    letterSpacing: 0.1,
+  },
+  sublabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+});
+
 /* ── Pill Badge ──────────────────────────────────────────────────── */
 
 function PillBadge({ text, color }: { text: string; color: string }) {
@@ -187,7 +251,7 @@ const SLIDES = [
       { emoji: '🏦', label: 'Watch your jar grow', sublabel: 'Leftover rolls into your savings jar' },
     ],
   },
-  // Slide 4: Subscriptions, EMIs, Investments
+  // Slide 4: Subscriptions, EMIs, Investments (individual features, not a flow)
   {
     gradient: ['#101218', '#0A0A0F'] as [string, string],
     badge: 'AUTO-DETECTED',
@@ -196,7 +260,8 @@ const SLIDES = [
     title: 'Subscriptions, EMIs\n& Investments',
     subtitle: 'All tracked automatically from your SMS.',
     accentColor: COLORS.personalColor,
-    steps: [
+    isFlow: false,
+    features: [
       { emoji: '📺', label: 'Subscriptions', sublabel: 'Netflix, Spotify, YouTube — auto-detected' },
       { emoji: '🏠', label: 'EMIs', sublabel: 'Home, car, personal loans — with countdown' },
       { emoji: '📈', label: 'Investments', sublabel: 'SIPs & mutual funds — amount auto-updates' },
@@ -270,19 +335,38 @@ export default function OnboardingScreen({ onComplete }: Props) {
               <Text style={styles.title}>{slide.title}</Text>
               <Text style={styles.subtitle}>{slide.subtitle}</Text>
 
-              {/* Flow steps */}
+              {/* Flow steps or feature cards */}
               <View style={styles.flowContainer}>
-                {slide.steps.map((step, i) => (
-                  <FlowStep
-                    key={i}
-                    step={i + 1}
-                    emoji={step.emoji}
-                    label={step.label}
-                    sublabel={step.sublabel}
-                    color={slide.accentColor}
-                    isLast={i === slide.steps.length - 1}
-                  />
-                ))}
+                {(slide as any).isFlow === false ? (
+                  /* Independent feature cards (no numbering/connectors) */
+                  (slide as any).features?.map((item: any, i: number) => (
+                    <FeatureCard
+                      key={i}
+                      emoji={item.emoji}
+                      label={item.label}
+                      sublabel={item.sublabel}
+                      color={slide.accentColor}
+                    />
+                  ))
+                ) : (
+                  /* Sequential flow steps */
+                  <>
+                    {slide.steps?.map((step, i) => (
+                      <FlowStep
+                        key={i}
+                        step={i + 1}
+                        emoji={step.emoji}
+                        label={step.label}
+                        sublabel={step.sublabel}
+                        color={slide.accentColor}
+                        isLast={i === slide.steps.length - 1}
+                      />
+                    ))}
+                    <Text style={[styles.flowFooter, { color: slide.accentColor }]}>
+                      Everything in one place
+                    </Text>
+                  </>
+                )}
               </View>
             </View>
           </LinearGradient>
@@ -404,6 +488,14 @@ const styles = StyleSheet.create({
   /* ── Flow Container ──────────────────────────────────────────── */
   flowContainer: {
     paddingLeft: 4,
+  },
+  flowFooter: {
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 12,
+    letterSpacing: 0.5,
+    opacity: 0.7,
   },
 
   /* ── Bottom Bar ──────────────────────────────────────────────── */
