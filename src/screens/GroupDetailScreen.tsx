@@ -672,30 +672,62 @@ export default function GroupDetailScreen() {
           </Text>
         )}
 
-        {/* Editable amount field */}
         {settleTarget && (
           <View style={styles.amountEditWrap}>
-            <Text style={styles.amountLabel}>Amount</Text>
-            <View style={styles.amountInputRow}>
-              <Text style={styles.amountCurrency}>₹</Text>
-              <TextInput
-                style={styles.amountInput}
-                value={settleAmount}
-                onChangeText={setSettleAmount}
-                keyboardType="numeric"
-                selectTextOnFocus
-                placeholder="0"
-                placeholderTextColor={COLORS.textLight}
-              />
+            {/* Total debt — read-only */}
+            <View style={styles.totalDebtRow}>
+              <Text style={styles.amountLabel}>TOTAL DEBT</Text>
+              <Text style={styles.totalDebtValue}>{formatCurrency(settleTarget.debt.amount)}</Text>
             </View>
-            {getSettleAmountValue() > 0 && getSettleAmountValue() < settleTarget.debt.amount && (
-              <Text style={styles.partialHint}>
-                Partial settlement · Remaining: {formatCurrency(settleTarget.debt.amount - getSettleAmountValue())}
-              </Text>
+
+            {/* Settle amount — editable */}
+            <View style={styles.settleAmountSection}>
+              <Text style={styles.amountLabel}>SETTLE AMOUNT</Text>
+              <View style={styles.amountInputRow}>
+                <Text style={styles.amountCurrency}>₹</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={settleAmount}
+                  onChangeText={setSettleAmount}
+                  keyboardType="numeric"
+                  selectTextOnFocus
+                  placeholder="0"
+                  placeholderTextColor={COLORS.textLight}
+                />
+              </View>
+            </View>
+
+            {/* Settlement type badge — determined upfront */}
+            {getSettleAmountValue() > 0 && (
+              <View style={[
+                styles.settlementTypeBadge,
+                {
+                  backgroundColor: getSettleAmountValue() >= settleTarget.debt.amount
+                    ? `${COLORS.success}15`
+                    : `${COLORS.warning}15`,
+                  borderColor: getSettleAmountValue() >= settleTarget.debt.amount
+                    ? `${COLORS.success}30`
+                    : `${COLORS.warning}30`,
+                },
+              ]}>
+                <Text style={[
+                  styles.settlementTypeText,
+                  {
+                    color: getSettleAmountValue() >= settleTarget.debt.amount
+                      ? COLORS.success
+                      : COLORS.warning,
+                  },
+                ]}>
+                  {getSettleAmountValue() >= settleTarget.debt.amount
+                    ? 'Full Settlement'
+                    : `Partial Settlement · Remaining: ${formatCurrency(settleTarget.debt.amount - getSettleAmountValue())}`
+                  }
+                </Text>
+              </View>
             )}
             {getSettleAmountValue() > settleTarget.debt.amount && (
               <Text style={[styles.partialHint, { color: COLORS.danger }]}>
-                Amount exceeds total debt of {formatCurrency(settleTarget.debt.amount)}
+                Amount exceeds total debt
               </Text>
             )}
           </View>
@@ -739,9 +771,34 @@ export default function GroupDetailScreen() {
       >
         <Text style={styles.modalTitle}>Was the payment done?</Text>
         {pendingUPISettle && (
-          <Text style={styles.modalSubtitle}>
-            {formatCurrency(pendingUPISettle.amount)} to {pendingUPISettle.debt.toName}
-          </Text>
+          <>
+            <Text style={styles.modalSubtitle}>
+              {formatCurrency(pendingUPISettle.amount)} to {pendingUPISettle.debt.toName}
+            </Text>
+            <View style={[
+              styles.settlementTypeBadge,
+              {
+                backgroundColor: pendingUPISettle.amount >= pendingUPISettle.debt.amount
+                  ? `${COLORS.success}15` : `${COLORS.warning}15`,
+                borderColor: pendingUPISettle.amount >= pendingUPISettle.debt.amount
+                  ? `${COLORS.success}30` : `${COLORS.warning}30`,
+                marginBottom: 16,
+              },
+            ]}>
+              <Text style={[
+                styles.settlementTypeText,
+                {
+                  color: pendingUPISettle.amount >= pendingUPISettle.debt.amount
+                    ? COLORS.success : COLORS.warning,
+                },
+              ]}>
+                {pendingUPISettle.amount >= pendingUPISettle.debt.amount
+                  ? 'Full Settlement'
+                  : `Partial · Remaining: ${formatCurrency(pendingUPISettle.debt.amount - pendingUPISettle.amount)}`
+                }
+              </Text>
+            </View>
+          </>
         )}
 
         <View style={styles.modalOptions}>
@@ -1195,12 +1252,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
+  totalDebtRow: {
+    marginBottom: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  totalDebtValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  settleAmountSection: {
+    marginBottom: 4,
+  },
   amountLabel: {
     fontSize: 10,
     fontWeight: '700',
     color: COLORS.textSecondary,
     letterSpacing: 1,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   amountInputRow: {
     flexDirection: 'row',
@@ -1218,6 +1290,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.text,
     padding: 0,
+  },
+  settlementTypeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  settlementTypeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   partialHint: {
     fontSize: 11,
