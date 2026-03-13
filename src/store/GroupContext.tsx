@@ -6,13 +6,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Group, GroupTransaction, Debt } from '../models/types';
 import {
   createGroupCloud, getGroupsCloud,
-  getGroupTransactionsCloud, settleSplitCloud,
+  getGroupTransactionsCloud, settleSplitCloud, unsettleSplitCloud,
   onGroupTransactionsChanged,
 } from '../services/SyncService';
 import {
   getGroups as getGroupsLocal, createGroup as createGroupLocal,
   getGroupTransactions as getGroupTransactionsLocal,
   settleSplit as settleSplitLocal,
+  unsettleSplit as unsettleSplitLocal,
 } from '../services/StorageService';
 import { calculateDebts } from '../services/DebtCalculator';
 import { useAuth } from './AuthContext';
@@ -33,6 +34,7 @@ interface GroupContextType {
   activeGroupDebts: Debt[];
   loadGroupTransactions: (groupId: string) => Promise<void>;
   settleSplit: (groupId: string, transactionId: string, userId: string) => Promise<void>;
+  unsettleSplit: (groupId: string, transactionId: string, userId: string) => Promise<void>;
 }
 
 const GroupContext = createContext<GroupContextType>({
@@ -45,6 +47,7 @@ const GroupContext = createContext<GroupContextType>({
   activeGroupDebts: [],
   loadGroupTransactions: async () => {},
   settleSplit: async () => {},
+  unsettleSplit: async () => {},
 });
 
 export function GroupProvider({ children }: { children: ReactNode }) {
@@ -206,6 +209,19 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, loadGroupTransactions]);
 
+  const unsettleSplit = useCallback(async (
+    groupId: string,
+    transactionId: string,
+    userId: string,
+  ) => {
+    if (isAuthenticated) {
+      await unsettleSplitCloud(groupId, transactionId, userId);
+    } else {
+      await unsettleSplitLocal(groupId, transactionId, userId);
+      await loadGroupTransactions(groupId);
+    }
+  }, [isAuthenticated, loadGroupTransactions]);
+
   const value = useMemo(() => ({
     groups,
     loading,
@@ -216,7 +232,8 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     activeGroupDebts,
     loadGroupTransactions,
     settleSplit,
-  }), [groups, loading, refreshGroups, createGroup, activeGroupId, activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit]);
+    unsettleSplit,
+  }), [groups, loading, refreshGroups, createGroup, activeGroupId, activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit, unsettleSplit]);
 
   return (
     <GroupContext.Provider value={value}>

@@ -288,6 +288,24 @@ export async function settleSplitCloud(
   await docRef.update({ splits: updatedSplits });
 }
 
+/** Unsettle a split in a group transaction (in Firestore) */
+export async function unsettleSplitCloud(
+  groupId: string,
+  transactionId: string,
+  userId: string,
+): Promise<void> {
+  const docRef = db.groupTransaction(groupId, transactionId);
+  const doc = await docRef.get();
+  if (!doc.exists) return;
+
+  const txn = doc.data() as GroupTransaction;
+  const updatedSplits = txn.splits.map(s =>
+    s.userId === userId ? { ...s, settled: false } : s,
+  );
+
+  await docRef.update({ splits: updatedSplits });
+}
+
 /** Remove a member from a split (in Firestore) */
 export async function removeSplitMemberCloud(
   groupId: string,
