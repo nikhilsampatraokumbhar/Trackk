@@ -21,6 +21,7 @@ import { HeroCardSkeleton } from '../components/SkeletonLoader';
 import ActiveTrackerBanner from '../components/ActiveTrackerBanner';
 import TrackerSelectionDialog from '../components/TrackerSelectionDialog';
 import UndoToast from '../components/UndoToast';
+import { checkOverdueSubscriptions, skipOverdueSubscription, removeOverdueSubscription, checkEMICompletions, OverdueSubscription, EMICompletionResult } from '../services/AutoDetectionService';
 import { COLORS, formatCurrency } from '../utils/helpers';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -58,6 +59,14 @@ export default function HomeScreen() {
   const [subscriptions, setSubscriptions] = useState<UserSubscriptionItem[]>([]);
   const [investments, setInvestments] = useState<InvestmentItem[]>([]);
   const [emis, setEMIs] = useState<EMIItem[]>([]);
+
+  // Overdue subscription popup
+  const [overdueItems, setOverdueItems] = useState<OverdueSubscription[]>([]);
+  const [showOverdueModal, setShowOverdueModal] = useState(false);
+
+  // EMI completion celebration
+  const [showEMICelebration, setShowEMICelebration] = useState(false);
+  const [completedEMI, setCompletedEMI] = useState<EMICompletionResult | null>(null);
 
   // Undo toast
   const [undoState, setUndoState] = useState<{ visible: boolean; message: string; txn: Transaction | null }>({ visible: false, message: '', txn: null });
@@ -120,6 +129,20 @@ export default function HomeScreen() {
     setInvestments(invs.filter(i => i.active));
     const ems = await getEMIs();
     setEMIs(ems.filter(e => e.active));
+
+    // Check for completed EMIs (celebration)
+    const completedEMIs = await checkEMICompletions();
+    if (completedEMIs.length > 0) {
+      setCompletedEMI(completedEMIs[0]);
+      setShowEMICelebration(true);
+    }
+
+    // Check for overdue subscriptions (missed payment popup)
+    const overdue = await checkOverdueSubscriptions();
+    if (overdue.length > 0) {
+      setOverdueItems(overdue);
+      setShowOverdueModal(true);
+    }
 
     setLoading(false);
   }, []);
@@ -462,7 +485,7 @@ export default function HomeScreen() {
 
       {/* Budget editing modal */}
       <Modal visible={showBudgetModal} animationType="slide" transparent onRequestClose={() => setShowBudgetModal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.budgetModalOverlay}>
+        <KeyboardAvoidingView behavior="padding" style={styles.budgetModalOverlay}>
           <View style={styles.budgetModalContainer}>
             <View style={styles.budgetModalHandle} />
             <Text style={styles.budgetModalTitle}>{budgetStatus ? 'Edit Monthly Budget' : 'Set Monthly Budget'}</Text>
@@ -528,6 +551,73 @@ export default function HomeScreen() {
         <Text style={styles.fabIcon}>+</Text>
         <Text style={styles.fabText}>Quick Add</Text>
       </TouchableOpacity>
+
+      {/* Overdue Subscription Popup */}
+      <Modal visible={showOverdueModal} transparent animationType="fade">
+        <View style={styles.overdueOverlay}>
+          <View style={styles.overdueContent}>
+            {overdueItems.length > 0 && (
+              <>
+                <Text style={styles.overdueEmoji}>⚠️</Text>
+                <Text style={styles.overdueTitle}>
+                  {overdueItems[0].subscription.name} payment not detected
+                </Text>
+                <Text style={styles.overdueSub}>
+                  {overdueItems[0].daysPastDue} days past billing date
+                  {overdueItems[0].possiblyPaidByOther ? '\nSomeone else in the group may have paid' : ''}
+                </Text>
+                <TouchableOpacity
+                  style={styles.overdueRemoveBtn}
+                  onPress={async () => {
+                    await removeOverdueSubscription(overdueItems[0].subscription.id);
+                    const remaining = overdueItems.slice(1);
+                    setOverdueItems(remaining);
+                    if (remaining.length === 0) setShowOverdueModal(false);
+                    loadTransactions();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.overdueRemoveText}>Remove subscription</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.overdueSkipBtn}
+                  onPress={async () => {
+                    await skipOverdueSubscription(overdueItems[0].subscription.id);
+                    const remaining = overdueItems.slice(1);
+                    setOverdueItems(remaining);
+                    if (remaining.length === 0) setShowOverdueModal(false);
+                    loadTransactions();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.overdueSkipText}>Skip — show next month's date</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* EMI Completion Celebration */}
+      <Modal visible={showEMICelebration} transparent animationType="fade">
+        <View style={styles.overdueOverlay}>
+          <View style={styles.celebrationContent}>
+            <Text style={styles.celebrationEmoji}>🎉</Text>
+            <Text style={styles.celebrationTitle}>Bravoooo!</Text>
+            <Text style={styles.celebrationSub}>
+              Your {completedEMI?.name} EMI is fully paid!{'\n'}One less thing to worry about.
+            </Text>
+            <View style={styles.celebrationBadge}>
+              <Text style={styles.celebrationBadgeText}>EMI CLOSED</Text>
+            </View>
+            <TouchableOpacity style={styles.celebrationBtn} onPress={() => setShowEMICelebration(false)} activeOpacity={0.8}>
+              <LinearGradient colors={[COLORS.success, '#2A9A6A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.celebrationBtnGrad}>
+                <Text style={styles.celebrationBtnText}>Amazing!</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Undo Toast */}
       <UndoToast
@@ -630,4 +720,26 @@ const styles = StyleSheet.create({
   fab: { position: 'absolute', right: 20, bottom: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 28, elevation: 8, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 16 },
   fabIcon: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginRight: 6 },
   fabText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14, letterSpacing: 0.3 },
+
+  /* Overdue Subscription Popup */
+  overdueOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  overdueContent: { backgroundColor: COLORS.surface, borderRadius: 24, padding: 28, margin: 24, width: '85%', alignItems: 'center', borderWidth: 1, borderColor: COLORS.glassBorder },
+  overdueEmoji: { fontSize: 40, marginBottom: 12 },
+  overdueTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 8 },
+  overdueSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  overdueRemoveBtn: { backgroundColor: `${COLORS.danger}15`, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 24, width: '100%', alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: `${COLORS.danger}30` },
+  overdueRemoveText: { fontSize: 15, fontWeight: '700', color: COLORS.danger },
+  overdueSkipBtn: { backgroundColor: COLORS.glass, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 24, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: COLORS.glassBorder },
+  overdueSkipText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+
+  /* EMI Celebration */
+  celebrationContent: { backgroundColor: COLORS.surface, borderRadius: 28, padding: 32, margin: 24, width: '85%', alignItems: 'center', borderWidth: 1, borderColor: COLORS.glassBorder },
+  celebrationEmoji: { fontSize: 64, marginBottom: 16 },
+  celebrationTitle: { fontSize: 28, fontWeight: '800', color: COLORS.success, textAlign: 'center', marginBottom: 8 },
+  celebrationSub: { fontSize: 16, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 24, marginBottom: 16 },
+  celebrationBadge: { backgroundColor: `${COLORS.success}20`, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginBottom: 24 },
+  celebrationBadgeText: { fontSize: 13, fontWeight: '800', color: COLORS.success, letterSpacing: 1 },
+  celebrationBtn: { borderRadius: 30, overflow: 'hidden', width: '100%' },
+  celebrationBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
+  celebrationBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
 });

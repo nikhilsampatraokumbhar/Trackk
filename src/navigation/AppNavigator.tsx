@@ -134,15 +134,53 @@ function useExitConfirmation() {
 
   useFocusEffect(
     useCallback(() => {
+      if (Platform.OS !== 'android') return;
       const sub = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
       return () => sub.remove();
     }, [handleBackPress]),
   );
 }
 
+/** On non-Home tabs, back button navigates to Home instead of exiting the app */
+function useBackToHome() {
+  const navigation = useNavigation<any>();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return;
+      const onBack = () => {
+        navigation.navigate('Home');
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+      return () => sub.remove();
+    }, [navigation]),
+  );
+}
+
 function HomeWithExitConfirmation() {
   useExitConfirmation();
   return <HomeScreen />;
+}
+
+function PersonalWithBackToHome() {
+  useBackToHome();
+  return <PersonalExpenseScreen />;
+}
+
+function GroupsWithBackToHome() {
+  useBackToHome();
+  return <GroupListScreen />;
+}
+
+function InsightsWithBackToHome() {
+  useBackToHome();
+  return <InsightsScreen />;
+}
+
+function ProfileWithBackToHome() {
+  useBackToHome();
+  return <ProfileScreen />;
 }
 
 function MainTabs() {
@@ -183,10 +221,10 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Home" component={HomeWithExitConfirmation} />
-      <Tab.Screen name="Personal" component={PersonalExpenseScreen} />
-      <Tab.Screen name="Groups" component={GroupListScreen} />
-      <Tab.Screen name="Insights" component={InsightsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Personal" component={PersonalWithBackToHome} />
+      <Tab.Screen name="Groups" component={GroupsWithBackToHome} />
+      <Tab.Screen name="Insights" component={InsightsWithBackToHome} />
+      <Tab.Screen name="Profile" component={ProfileWithBackToHome} />
     </Tab.Navigator>
   );
 }

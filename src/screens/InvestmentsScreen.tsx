@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Modal, TextInput, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +12,8 @@ import {
   getInvestments, saveInvestment, deleteInvestment,
   hasInvestmentsOnboarded, setInvestmentsOnboarded,
 } from '../services/StorageService';
+import { scanHistoricalSMS } from '../services/AutoDetectionService';
+import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
 
 function calcNextBillingDate(billingDay: number, cycle: 'monthly' | 'yearly' | 'one-time'): string {
@@ -39,6 +42,8 @@ export default function InvestmentsScreen() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResultText, setScanResultText] = useState('');
 
   const [formName, setFormName] = useState('');
   const [formAmount, setFormAmount] = useState('');
@@ -63,6 +68,46 @@ export default function InvestmentsScreen() {
     if (item.cycle === 'monthly') return sum + item.amount;
     return sum + item.amount / 12;
   }, 0);
+
+  const handleSyncSMS = async () => {
+    const hasPerm = await checkSmsPermission();
+    if (!hasPerm) {
+      const granted = await requestSmsPermission();
+      if (!granted) {
+        Alert.alert(
+          'SMS Permission Required',
+          'We need SMS access to scan your transaction history and find investments automatically.',
+          [
+            { text: 'Add Manually', onPress: () => { setShowOnboarding(false); setShowAddModal(true); } },
+            { text: 'Try Again', onPress: handleSyncSMS },
+          ],
+        );
+        return;
+      }
+    }
+
+    setScanning(true);
+    setScanResultText('');
+    try {
+      const result = await scanHistoricalSMS('investments');
+      await setInvestmentsOnboarded();
+      setShowOnboarding(false);
+
+      if (result.investments.length > 0) {
+        setScanResultText(`Found ${result.investments.length} investment${result.investments.length > 1 ? 's' : ''}`);
+      } else {
+        setScanResultText('No investments found in your SMS history');
+        setShowAddModal(true);
+      }
+      await load();
+    } catch (e) {
+      Alert.alert('Scan Failed', 'Could not scan SMS history. You can add investments manually.');
+      setShowOnboarding(false);
+      setShowAddModal(true);
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const handleSave = async () => {
     const name = formName.trim();
@@ -190,6 +235,15 @@ export default function InvestmentsScreen() {
         )}
       </LinearGradient>
 
+      {scanResultText ? (
+        <View style={styles.scanResultBar}>
+          <Text style={styles.scanResultText}>{scanResultText}</Text>
+          <TouchableOpacity onPress={() => setScanResultText('')}>
+            <Text style={styles.scanResultDismiss}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       <FlatList
         data={items}
         keyExtractor={item => item.id}
@@ -210,31 +264,40 @@ export default function InvestmentsScreen() {
         <Text style={styles.fabIcon}>+</Text>
       </TouchableOpacity>
 
-      {/* Onboarding */}
+      {/* Onboarding — One-time sync */}
       <Modal visible={showOnboarding} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.onboardingContent}>
             <Text style={styles.onboardingEmoji}>📈</Text>
-            <Text style={styles.onboardingTitle}>All your investments in one place</Text>
+            <Text style={styles.onboardingTitle}>Let's get all your investments</Text>
             <Text style={styles.onboardingSub}>
-              Enter once, we'll take care of all the tracking hereafter.
-              {'\n\n'}Track SIPs, mutual funds, and all recurring investments.
+              We'll scan your SMS history (past 1 year) to find all SIPs, mutual funds, and recurring investments.
+              {'\n\n'}Enter once, we'll track hereafter.
             </Text>
-            <TouchableOpacity style={styles.onboardingBtn} onPress={handleOnboardingDismiss} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.success, '#2A9A6A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
-                <Text style={styles.onboardingBtnText}>Add my investments</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setInvestmentsOnboarded(); setShowOnboarding(false); }} style={{ padding: 12 }}>
-              <Text style={styles.onboardingSkip}>Maybe later</Text>
-            </TouchableOpacity>
+            {scanning ? (
+              <View style={styles.scanningContainer}>
+                <ActivityIndicator size="large" color={COLORS.success} />
+                <Text style={styles.scanningText}>Scanning your messages...</Text>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.onboardingBtn} onPress={handleSyncSMS} activeOpacity={0.8}>
+                  <LinearGradient colors={[COLORS.success, '#2A9A6A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
+                    <Text style={styles.onboardingBtnText}>Scan & Find Investments</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleOnboardingDismiss} style={{ padding: 12 }}>
+                  <Text style={styles.onboardingSkip}>Add manually instead</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>
 
       {/* Add/Edit Modal */}
       <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={resetForm}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+        <KeyboardAvoidingView behavior="padding" style={styles.modalOverlay}>
           <View style={styles.formContainer}>
             <View style={styles.formHandle} />
             <Text style={styles.formTitle}>{editingItem ? 'Edit Investment' : 'Add Investment'}</Text>
@@ -283,6 +346,11 @@ const styles = StyleSheet.create({
   headerStats: { flexDirection: 'row', justifyContent: 'space-between' },
   headerStatLabel: { fontSize: 9, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
   headerStatValue: { fontSize: 22, fontWeight: '800' },
+
+  scanResultBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: `${COLORS.success}15`, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+  scanResultText: { fontSize: 13, fontWeight: '600', color: COLORS.success, flex: 1 },
+  scanResultDismiss: { fontSize: 13, fontWeight: '700', color: COLORS.success, marginLeft: 12 },
+
   list: { padding: 16, paddingTop: 8, paddingBottom: 100 },
   card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surfaceHigh, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: COLORS.border },
   cardAutoDetected: { borderColor: `${COLORS.success}40`, borderStyle: 'dashed' as const },
@@ -314,6 +382,8 @@ const styles = StyleSheet.create({
   onboardingBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
   onboardingBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   onboardingSkip: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '600' },
+  scanningContainer: { alignItems: 'center', paddingVertical: 20 },
+  scanningText: { fontSize: 14, color: COLORS.textSecondary, marginTop: 12 },
   formContainer: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.glassBorder, borderBottomWidth: 0 },
   formHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.surfaceHigher, alignSelf: 'center', marginBottom: 20 },
   formTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 20 },

@@ -3,19 +3,24 @@
  *
  * This service:
  * 1. Classifies incoming transactions as subscription/EMI/investment based on SMS keywords + merchant
- * 2. Auto-matches incoming transactions to existing tracked items (updates next billing date)
- * 3. Detects new recurring patterns from transaction history
+ * 2. Auto-matches incoming transactions to existing tracked items (updates next billing date, amount)
+ * 3. Historical SMS scan for one-time sync (reads 1 year of SMS to bootstrap tracking)
  * 4. Handles shared subscription logic (someone else paying this month)
- * 5. Handles EMI completion (auto-deactivate when all months paid)
+ * 5. Handles EMI completion with celebration (auto-deactivate when all months paid)
+ * 6. Detects overdue/missed subscriptions and prompts user
+ * 7. Supports yearly pattern detection for annual subscriptions
+ * 8. Handles variable SIP amounts (auto-updates amount on match)
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NativeModules, Platform } from 'react-native';
 import { ParsedTransaction, UserSubscriptionItem, InvestmentItem, EMIItem, Transaction } from '../models/types';
 import {
   getSubscriptions, saveSubscription,
   getInvestments, saveInvestment,
   getEMIs, saveEMI,
 } from './StorageService';
+import { isBankSender, parseTransactionSms } from './TransactionParser';
 import { generateId } from '../utils/helpers';
 
 // ─── Known Merchants & Keywords ────────────────────────────────────────────
@@ -204,8 +209,8 @@ function namesMatch(a: string, b: string): boolean {
   if (na === nb) return true;
   if (na.includes(nb) || nb.includes(na)) return true;
   // Check if one is a known alias of the other
-  const aliasA = normalize(SUBSCRIPTION_MERCHANTS[a.toLowerCase()] || a);
-  const aliasB = normalize(SUBSCRIPTION_MERCHANTS[b.toLowerCase()] || b);
+  const aliasA = normalize(SUBSCRIPTION_MERCHANTS[a.toLowerCase()] || INVESTMENT_MERCHANTS[a.toLowerCase()] || a);
+  const aliasB = normalize(SUBSCRIPTION_MERCHANTS[b.toLowerCase()] || INVESTMENT_MERCHANTS[b.toLowerCase()] || b);
   return aliasA === aliasB || aliasA.includes(aliasB) || aliasB.includes(aliasA);
 }
 
@@ -231,10 +236,8 @@ function calcNextBillingDate(billingDay: number, cycle: 'monthly' | 'yearly'): s
 
 /**
  * When a transaction comes in, try to match it to an existing subscription/EMI/investment.
- * If matched, update the next billing date and confirm it's active.
+ * If matched, update the next billing date, amount (if changed), and confirm it's active.
  * If not matched but classified, create a pending suggestion.
- *
- * Returns what was matched/suggested so the caller can notify the user.
  */
 export async function processTransactionForTracking(
   parsed: ParsedTransaction,
@@ -242,8 +245,9 @@ export async function processTransactionForTracking(
   matched: boolean;
   type: TransactionCategory;
   itemName: string | null;
-  isNew: boolean; // true = new suggestion created
+  isNew: boolean;
   suggestedItemId: string | null;
+  emiCompleted?: boolean; // true if EMI just hit 0 months left
 }> {
   const classification = classifyTransaction(parsed);
 
@@ -252,8 +256,8 @@ export async function processTransactionForTracking(
   }
 
   const merchantName = classification.matchedMerchant || parsed.merchant || 'Unknown';
-  const today = new Date();
-  const billingDay = today.getDate();
+  const txnDate = new Date(parsed.timestamp);
+  const billingDay = txnDate.getDate();
 
   if (classification.category === 'subscription') {
     return await matchOrCreateSubscription(parsed, merchantName, billingDay, classification.confidence);
@@ -280,21 +284,21 @@ async function matchOrCreateSubscription(
   const match = existing.find(s => s.active && namesMatch(s.name, merchantName));
 
   if (match) {
-    // Update existing subscription
+    // Update existing subscription — amount, billing day, next date
     const amountChanged = Math.abs(match.amount - parsed.amount) > 1;
     match.nextBillingDate = calcNextBillingDate(billingDay, match.cycle);
     match.billingDay = billingDay;
     match.confirmed = true;
 
-    // Handle amount change (price increase/decrease)
+    // Handle amount change (price increase/decrease — e.g. Netflix 199 → 249)
     if (amountChanged) {
       match.amount = parsed.amount;
     }
 
     // Handle shared subscription: mark that we paid this cycle
     if (match.isShared) {
-      // Store that current user paid this billing cycle
-      await setSharedPaymentRecord(match.id, today().toISOString().slice(0, 7)); // YYYY-MM
+      const month = new Date(parsed.timestamp).toISOString().slice(0, 7);
+      await setSharedPaymentRecord(match.id, month);
     }
 
     await saveSubscription(match);
@@ -303,16 +307,27 @@ async function matchOrCreateSubscription(
 
   // No match — create suggestion (unconfirmed)
   if (confidence >= 0.7) {
+    // Check if we already have an unconfirmed suggestion for this name
+    const existingUnconfirmed = existing.find(s => !s.confirmed && namesMatch(s.name, merchantName));
+    if (existingUnconfirmed) {
+      // Update existing unconfirmed — don't create duplicates
+      existingUnconfirmed.amount = parsed.amount;
+      existingUnconfirmed.billingDay = billingDay;
+      existingUnconfirmed.nextBillingDate = calcNextBillingDate(billingDay, 'monthly');
+      await saveSubscription(existingUnconfirmed);
+      return { matched: false, type: 'subscription', itemName: merchantName, isNew: false, suggestedItemId: existingUnconfirmed.id };
+    }
+
     const newItem: UserSubscriptionItem = {
       id: generateId(),
       name: merchantName,
       amount: parsed.amount,
-      cycle: 'monthly', // default assumption
+      cycle: 'monthly',
       billingDay,
       nextBillingDate: calcNextBillingDate(billingDay, 'monthly'),
       isShared: false,
       source: 'auto',
-      confirmed: false, // needs user confirmation
+      confirmed: false,
       active: true,
       createdAt: Date.now(),
     };
@@ -337,18 +352,27 @@ async function matchOrCreateInvestment(
 
   if (match) {
     if (match.cycle !== 'one-time' && match.billingDay) {
-      match.nextBillingDate = calcNextBillingDate(match.billingDay, match.cycle === 'monthly' ? 'monthly' : 'yearly');
+      match.billingDay = billingDay;
+      match.nextBillingDate = calcNextBillingDate(billingDay, match.cycle === 'monthly' ? 'monthly' : 'yearly');
     }
-    // Update amount if changed (variable SIPs)
-    if (Math.abs(match.amount - parsed.amount) > 1) {
-      match.amount = parsed.amount;
-    }
+    // Update amount (variable SIPs — ₹5000 one month, ₹10000 next)
+    match.amount = parsed.amount;
     match.confirmed = true;
     await saveInvestment(match);
     return { matched: true, type: 'investment', itemName: match.name, isNew: false, suggestedItemId: null };
   }
 
   if (confidence >= 0.7) {
+    // Check for existing unconfirmed
+    const existingUnconfirmed = existing.find(i => !i.confirmed && namesMatch(i.name, merchantName));
+    if (existingUnconfirmed) {
+      existingUnconfirmed.amount = parsed.amount;
+      existingUnconfirmed.billingDay = billingDay;
+      existingUnconfirmed.nextBillingDate = calcNextBillingDate(billingDay, 'monthly');
+      await saveInvestment(existingUnconfirmed);
+      return { matched: false, type: 'investment', itemName: merchantName, isNew: false, suggestedItemId: existingUnconfirmed.id };
+    }
+
     const newItem: InvestmentItem = {
       id: generateId(),
       name: merchantName,
@@ -375,7 +399,7 @@ async function matchOrCreateEMI(
   merchantName: string,
   billingDay: number,
   confidence: number,
-): Promise<{ matched: boolean; type: TransactionCategory; itemName: string | null; isNew: boolean; suggestedItemId: string | null }> {
+): Promise<{ matched: boolean; type: TransactionCategory; itemName: string | null; isNew: boolean; suggestedItemId: string | null; emiCompleted?: boolean }> {
   const existing = await getEMIs();
 
   // Match by name OR by similar amount on similar billing day
@@ -383,8 +407,8 @@ async function matchOrCreateEMI(
     if (!e.active) return false;
     if (namesMatch(e.name, merchantName)) return true;
     // Also match by amount + billing day proximity (EMIs are fixed amounts)
-    const amountClose = Math.abs(e.amount - parsed.amount) < 5; // within ₹5
-    const dayClose = Math.abs(e.billingDay - billingDay) <= 2; // within 2 days
+    const amountClose = Math.abs(e.amount - parsed.amount) < 5;
+    const dayClose = Math.abs(e.billingDay - billingDay) <= 2;
     return amountClose && dayClose;
   });
 
@@ -395,16 +419,27 @@ async function matchOrCreateEMI(
     match.nextBillingDate = calcNextBillingDate(match.billingDay, 'monthly');
     match.confirmed = true;
 
+    let emiCompleted = false;
     // Auto-deactivate if all months paid
-    if (match.monthsLeft === 0) {
+    if (match.monthsLeft === 0 && match.totalMonths > 0) {
       match.active = false;
+      emiCompleted = true;
     }
 
     await saveEMI(match);
-    return { matched: true, type: 'emi', itemName: match.name, isNew: false, suggestedItemId: null };
+    return { matched: true, type: 'emi', itemName: match.name, isNew: false, suggestedItemId: null, emiCompleted };
   }
 
-  if (confidence >= 0.8) { // Higher threshold for EMIs since we need user to fill months
+  if (confidence >= 0.8) {
+    // Check for existing unconfirmed
+    const existingUnconfirmed = existing.find(e => !e.confirmed && namesMatch(e.name, merchantName));
+    if (existingUnconfirmed) {
+      existingUnconfirmed.monthsPaid += 1;
+      existingUnconfirmed.amount = parsed.amount;
+      await saveEMI(existingUnconfirmed);
+      return { matched: false, type: 'emi', itemName: merchantName, isNew: false, suggestedItemId: existingUnconfirmed.id };
+    }
+
     const newItem: EMIItem = {
       id: generateId(),
       name: merchantName,
@@ -437,10 +472,6 @@ interface SharedPaymentRecord {
   timestamp: number;
 }
 
-function today(): Date {
-  return new Date();
-}
-
 async function getSharedPayments(): Promise<SharedPaymentRecord[]> {
   const raw = await AsyncStorage.getItem(SHARED_PAYMENTS_KEY);
   return raw ? JSON.parse(raw) : [];
@@ -448,7 +479,6 @@ async function getSharedPayments(): Promise<SharedPaymentRecord[]> {
 
 async function setSharedPaymentRecord(subscriptionId: string, billingMonth: string): Promise<void> {
   const records = await getSharedPayments();
-  // Remove old record for same sub + month if exists
   const filtered = records.filter(r => !(r.subscriptionId === subscriptionId && r.billingMonth === billingMonth));
   filtered.push({
     subscriptionId,
@@ -459,21 +489,16 @@ async function setSharedPaymentRecord(subscriptionId: string, billingMonth: stri
   await AsyncStorage.setItem(SHARED_PAYMENTS_KEY, JSON.stringify(filtered));
 }
 
-/**
- * Check if a shared subscription was paid by the user this month.
- * If not, it means someone else may have paid.
- */
 export async function checkSharedSubscriptionStatus(subscriptionId: string): Promise<{
   paidByUser: boolean;
   lastPaidMonth: string | null;
 }> {
   const records = await getSharedPayments();
-  const currentMonth = today().toISOString().slice(0, 7);
+  const currentMonth = new Date().toISOString().slice(0, 7);
   const thisMonthRecord = records.find(
     r => r.subscriptionId === subscriptionId && r.billingMonth === currentMonth,
   );
 
-  // Find last time user paid
   const userRecords = records
     .filter(r => r.subscriptionId === subscriptionId && r.paidByUser)
     .sort((a, b) => b.timestamp - a.timestamp);
@@ -484,18 +509,204 @@ export async function checkSharedSubscriptionStatus(subscriptionId: string): Pro
   };
 }
 
-// ─── Recurring Pattern Detection (connects existing RecurringService) ──────
+// ─── Historical SMS Scan (One-Time Sync) ───────────────────────────────────
+
+export interface ScanResult {
+  subscriptions: UserSubscriptionItem[];
+  investments: InvestmentItem[];
+  emis: EMIItem[];
+  totalSmsScanned: number;
+  totalMatched: number;
+}
+
+/**
+ * Scan historical SMS messages (up to 1 year back) to detect subscriptions,
+ * investments, and EMIs. Creates unconfirmed items for each detected pattern.
+ *
+ * @param filter 'all' | 'subscriptions' | 'investments' | 'emis' — which category to scan for
+ */
+export async function scanHistoricalSMS(
+  filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+): Promise<ScanResult> {
+  const result: ScanResult = {
+    subscriptions: [],
+    investments: [],
+    emis: [],
+    totalSmsScanned: 0,
+    totalMatched: 0,
+  };
+
+  if (Platform.OS !== 'android' || !NativeModules.SmsAndroid) {
+    return result;
+  }
+
+  // Read up to 5000 SMS from the last year
+  const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
+
+  const messages = await new Promise<Array<{ body: string; address: string; date: string }>>((resolve) => {
+    const smsFilter = {
+      box: 'inbox',
+      maxCount: 5000,
+      minDate: oneYearAgo,
+    };
+
+    NativeModules.SmsAndroid.list(
+      JSON.stringify(smsFilter),
+      (_fail: string) => resolve([]),
+      (_count: number, smsList: string) => {
+        try {
+          resolve(JSON.parse(smsList));
+        } catch {
+          resolve([]);
+        }
+      },
+    );
+  });
+
+  result.totalSmsScanned = messages.length;
+
+  // Parse all bank SMS into transactions with correct timestamps
+  const parsed: Array<{ txn: ParsedTransaction; date: number }> = [];
+  for (const sms of messages) {
+    if (!isBankSender(sms.address)) continue;
+    const p = parseTransactionSms(sms.body, sms.address);
+    if (p) {
+      // Use actual SMS date instead of Date.now()
+      p.timestamp = parseInt(sms.date, 10);
+      p.rawMessage = sms.body;
+      parsed.push({ txn: p, date: parseInt(sms.date, 10) });
+    }
+  }
+
+  // Group by classification and merchant
+  interface DetectedGroup {
+    category: TransactionCategory;
+    merchantName: string;
+    amounts: number[];
+    dates: number[];
+  }
+
+  const groups: Record<string, DetectedGroup> = {};
+
+  for (const { txn, date } of parsed) {
+    const classification = classifyTransaction(txn);
+    if (!classification.category) continue;
+    if (filter !== 'all' && filter !== `${classification.category}s` as string) continue;
+
+    const name = classification.matchedMerchant || txn.merchant || 'Unknown';
+    const key = `${classification.category}_${normalize(name)}`;
+
+    if (!groups[key]) {
+      groups[key] = {
+        category: classification.category,
+        merchantName: name,
+        amounts: [],
+        dates: [],
+      };
+    }
+    groups[key].amounts.push(txn.amount);
+    groups[key].dates.push(date);
+  }
+
+  // Load existing items to avoid duplicates
+  const existingSubs = await getSubscriptions();
+  const existingInvs = await getInvestments();
+  const existingEMIs = await getEMIs();
+
+  for (const group of Object.values(groups)) {
+    // Skip if already tracked
+    const alreadyTracked =
+      existingSubs.some(s => namesMatch(s.name, group.merchantName)) ||
+      existingInvs.some(i => namesMatch(i.name, group.merchantName)) ||
+      existingEMIs.some(e => namesMatch(e.name, group.merchantName));
+    if (alreadyTracked) continue;
+
+    const sortedDates = [...group.dates].sort((a, b) => a - b);
+    const latestAmount = group.amounts[group.amounts.length - 1];
+    const latestDate = new Date(sortedDates[sortedDates.length - 1]);
+    const billingDay = latestDate.getDate();
+
+    // Determine cycle from intervals
+    let cycle: 'monthly' | 'yearly' = 'monthly';
+    if (sortedDates.length >= 2) {
+      const intervals: number[] = [];
+      for (let i = 1; i < sortedDates.length; i++) {
+        intervals.push((sortedDates[i] - sortedDates[i - 1]) / (1000 * 60 * 60 * 24));
+      }
+      const avgInterval = intervals.reduce((s, v) => s + v, 0) / intervals.length;
+      // Yearly: average interval 300-400 days
+      if (avgInterval > 300) {
+        cycle = 'yearly';
+      }
+    }
+
+    result.totalMatched++;
+
+    if (group.category === 'subscription') {
+      const item: UserSubscriptionItem = {
+        id: generateId(),
+        name: group.merchantName,
+        amount: latestAmount,
+        cycle,
+        billingDay,
+        nextBillingDate: calcNextBillingDate(billingDay, cycle),
+        isShared: false,
+        source: 'auto',
+        confirmed: false,
+        active: true,
+        createdAt: Date.now(),
+      };
+      await saveSubscription(item);
+      result.subscriptions.push(item);
+    } else if (group.category === 'investment') {
+      const item: InvestmentItem = {
+        id: generateId(),
+        name: group.merchantName,
+        amount: latestAmount,
+        cycle: cycle === 'yearly' ? 'yearly' : 'monthly',
+        billingDay,
+        nextBillingDate: calcNextBillingDate(billingDay, cycle),
+        source: 'auto',
+        confirmed: false,
+        active: true,
+        createdAt: Date.now(),
+      };
+      await saveInvestment(item);
+      result.investments.push(item);
+    } else if (group.category === 'emi') {
+      // For EMIs, count occurrences as months paid
+      const item: EMIItem = {
+        id: generateId(),
+        name: group.merchantName,
+        amount: latestAmount,
+        totalMonths: 0, // user needs to set
+        monthsPaid: group.dates.length,
+        monthsLeft: 0,
+        billingDay,
+        nextBillingDate: calcNextBillingDate(billingDay, 'monthly'),
+        source: 'auto',
+        confirmed: false,
+        active: true,
+        createdAt: Date.now(),
+      };
+      await saveEMI(item);
+      result.emis.push(item);
+    }
+  }
+
+  return result;
+}
+
+// ─── Recurring Pattern Detection ───────────────────────────────────────────
 
 /**
  * Analyze transaction history to find potential subscriptions/investments/EMIs
- * that haven't been tracked yet.
- *
- * This runs on app startup or manual sync and suggests new items.
+ * that haven't been tracked yet. Supports weekly, monthly, and yearly patterns.
  */
 export async function detectUntracked(
   transactions: Transaction[],
 ): Promise<{
-  subscriptions: Array<{ name: string; amount: number; frequency: 'monthly' | 'weekly'; occurrences: number }>;
+  subscriptions: Array<{ name: string; amount: number; frequency: 'monthly' | 'weekly' | 'yearly'; occurrences: number }>;
   emis: Array<{ name: string; amount: number; occurrences: number }>;
   investments: Array<{ name: string; amount: number; occurrences: number }>;
 }> {
@@ -512,12 +723,12 @@ export async function detectUntracked(
     groups[key].push(txn);
   }
 
-  const suggestedSubs: Array<{ name: string; amount: number; frequency: 'monthly' | 'weekly'; occurrences: number }> = [];
+  const suggestedSubs: Array<{ name: string; amount: number; frequency: 'monthly' | 'weekly' | 'yearly'; occurrences: number }> = [];
   const suggestedEMIs: Array<{ name: string; amount: number; occurrences: number }> = [];
   const suggestedInvestments: Array<{ name: string; amount: number; occurrences: number }> = [];
 
-  for (const [key, txns] of Object.entries(groups)) {
-    if (txns.length < 2) continue; // Need at least 2 occurrences
+  for (const [_key, txns] of Object.entries(groups)) {
+    if (txns.length < 2) continue;
 
     const sorted = txns.sort((a, b) => a.timestamp - b.timestamp);
     const displayName = txns[0].merchant || txns[0].description;
@@ -552,7 +763,7 @@ export async function detectUntracked(
       amount: avgAmount,
       type: 'debit',
       merchant: displayName,
-      rawMessage: displayName, // Use merchant name for keyword matching
+      rawMessage: displayName,
       timestamp: Date.now(),
     });
 
@@ -560,11 +771,14 @@ export async function detectUntracked(
       suggestedEMIs.push({ name: displayName, amount: Math.round(avgAmount), occurrences: txns.length });
     } else if (classification.category === 'investment') {
       suggestedInvestments.push({ name: displayName, amount: Math.round(avgAmount), occurrences: txns.length });
+    } else if (avgInterval >= 300 && avgInterval <= 400) {
+      // Yearly pattern → annual subscription
+      suggestedSubs.push({ name: displayName, amount: Math.round(avgAmount * 100) / 100, frequency: 'yearly', occurrences: txns.length });
     } else if (avgInterval >= 25 && avgInterval <= 35) {
-      // Monthly pattern → likely subscription
+      // Monthly pattern
       suggestedSubs.push({ name: displayName, amount: Math.round(avgAmount * 100) / 100, frequency: 'monthly', occurrences: txns.length });
     } else if (avgInterval >= 5 && avgInterval <= 10) {
-      // Weekly pattern → could be subscription
+      // Weekly pattern
       suggestedSubs.push({ name: displayName, amount: Math.round(avgAmount * 100) / 100, frequency: 'weekly', occurrences: txns.length });
     }
   }
@@ -578,44 +792,53 @@ export async function detectUntracked(
 
 // ─── EMI Completion Check ──────────────────────────────────────────────────
 
+export interface EMICompletionResult {
+  name: string;
+  totalMonths: number;
+  amount: number;
+}
+
 /**
  * Check all EMIs and deactivate completed ones.
- * Should run on app startup.
+ * Returns completed EMI details for celebration UI.
  */
-export async function checkEMICompletions(): Promise<string[]> {
+export async function checkEMICompletions(): Promise<EMICompletionResult[]> {
   const emis = await getEMIs();
-  const completed: string[] = [];
+  const completed: EMICompletionResult[] = [];
 
   for (const emi of emis) {
     if (emi.active && emi.monthsLeft <= 0 && emi.totalMonths > 0) {
       emi.active = false;
       await saveEMI(emi);
-      completed.push(emi.name);
+      completed.push({
+        name: emi.name,
+        totalMonths: emi.totalMonths,
+        amount: emi.amount,
+      });
     }
   }
 
   return completed;
 }
 
-// ─── Subscription Overdue Check ────────────────────────────────────────────
+// ─── Overdue / Missed Payment Detection ────────────────────────────────────
 
-/**
- * Check for subscriptions that are past their billing date.
- * For shared subscriptions, this means someone else may have paid.
- */
-export async function checkOverdueSubscriptions(): Promise<Array<{
+export interface OverdueSubscription {
   subscription: UserSubscriptionItem;
   daysPastDue: number;
   possiblyPaidByOther: boolean;
-}>> {
+}
+
+/**
+ * Check for subscriptions that are past their billing date without a payment detected.
+ * Returns overdue items for popup UI:
+ * - "Netflix payment not detected" → Remove / Skip (push next billing date)
+ */
+export async function checkOverdueSubscriptions(): Promise<OverdueSubscription[]> {
   const subs = await getSubscriptions();
   const now = new Date();
   now.setHours(0, 0, 0, 0);
-  const overdue: Array<{
-    subscription: UserSubscriptionItem;
-    daysPastDue: number;
-    possiblyPaidByOther: boolean;
-  }> = [];
+  const overdue: OverdueSubscription[] = [];
 
   for (const sub of subs) {
     if (!sub.active || !sub.confirmed) continue;
@@ -624,9 +847,11 @@ export async function checkOverdueSubscriptions(): Promise<Array<{
     if (billingDate < now) {
       const daysPastDue = Math.ceil((now.getTime() - billingDate.getTime()) / (1000 * 60 * 60 * 24));
 
-      // For shared subscriptions, check if someone else might have paid
+      // Only flag if 3+ days overdue (give some buffer)
+      if (daysPastDue < 3) continue;
+
       let possiblyPaidByOther = false;
-      if (sub.isShared && daysPastDue >= 3) {
+      if (sub.isShared) {
         const status = await checkSharedSubscriptionStatus(sub.id);
         possiblyPaidByOther = !status.paidByUser;
       }
@@ -636,4 +861,28 @@ export async function checkOverdueSubscriptions(): Promise<Array<{
   }
 
   return overdue;
+}
+
+/**
+ * Skip an overdue subscription — push next billing date forward
+ */
+export async function skipOverdueSubscription(subscriptionId: string): Promise<void> {
+  const subs = await getSubscriptions();
+  const sub = subs.find(s => s.id === subscriptionId);
+  if (!sub) return;
+
+  sub.nextBillingDate = calcNextBillingDate(sub.billingDay, sub.cycle);
+  await saveSubscription(sub);
+}
+
+/**
+ * Remove (deactivate) an overdue subscription
+ */
+export async function removeOverdueSubscription(subscriptionId: string): Promise<void> {
+  const subs = await getSubscriptions();
+  const sub = subs.find(s => s.id === subscriptionId);
+  if (!sub) return;
+
+  sub.active = false;
+  await saveSubscription(sub);
 }

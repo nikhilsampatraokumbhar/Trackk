@@ -2,16 +2,18 @@ import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Modal, TextInput, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { UserSubscriptionItem } from '../models/types';
 import {
   getSubscriptions, saveSubscription, deleteSubscription,
   hasSubscriptionsOnboarded, setSubscriptionsOnboarded,
 } from '../services/StorageService';
-import { checkSharedSubscriptionStatus } from '../services/AutoDetectionService';
+import { checkSharedSubscriptionStatus, scanHistoricalSMS } from '../services/AutoDetectionService';
+import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
 
 /** Calculate next billing date from a billing day and cycle */
@@ -20,7 +22,7 @@ function calcNextBillingDate(billingDay: number, cycle: 'monthly' | 'yearly'): s
   let next: Date;
 
   if (cycle === 'monthly') {
-    const day = Math.min(billingDay, 28); // safe for all months
+    const day = Math.min(billingDay, 28);
     next = new Date(now.getFullYear(), now.getMonth(), day);
     if (next <= now) {
       next = new Date(now.getFullYear(), now.getMonth() + 1, day);
@@ -43,11 +45,12 @@ function daysUntil(dateStr: string): number {
 }
 
 export default function SubscriptionsScreen() {
-  const nav = useNavigation();
   const [items, setItems] = useState<UserSubscriptionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResultText, setScanResultText] = useState('');
 
   // Add form
   const [formName, setFormName] = useState('');
@@ -60,11 +63,10 @@ export default function SubscriptionsScreen() {
 
   const load = useCallback(async () => {
     const subs = await getSubscriptions();
-    // Show confirmed first, then unconfirmed (auto-detected suggestions)
     const active = subs.filter(s => s.active);
     active.sort((a, b) => {
       if (a.confirmed === b.confirmed) return 0;
-      return a.confirmed ? -1 : 1; // confirmed first
+      return a.confirmed ? -1 : 1;
     });
     setItems(active);
 
@@ -82,6 +84,47 @@ export default function SubscriptionsScreen() {
     if (item.cycle === 'monthly') return sum + item.amount;
     return sum + item.amount / 12;
   }, 0);
+
+  const handleSyncSMS = async () => {
+    // Check SMS permission
+    const hasPerm = await checkSmsPermission();
+    if (!hasPerm) {
+      const granted = await requestSmsPermission();
+      if (!granted) {
+        Alert.alert(
+          'SMS Permission Required',
+          'We need SMS access to scan your transaction history and find subscriptions automatically.',
+          [
+            { text: 'Add Manually', onPress: () => { setShowOnboarding(false); setShowAddModal(true); } },
+            { text: 'Try Again', onPress: handleSyncSMS },
+          ],
+        );
+        return;
+      }
+    }
+
+    setScanning(true);
+    setScanResultText('');
+    try {
+      const result = await scanHistoricalSMS('subscriptions');
+      await setSubscriptionsOnboarded();
+      setShowOnboarding(false);
+
+      if (result.subscriptions.length > 0) {
+        setScanResultText(`Found ${result.subscriptions.length} subscription${result.subscriptions.length > 1 ? 's' : ''}`);
+      } else {
+        setScanResultText('No subscriptions found in your SMS history');
+        setShowAddModal(true);
+      }
+      await load();
+    } catch (e) {
+      Alert.alert('Scan Failed', 'Could not scan SMS history. You can add subscriptions manually.');
+      setShowOnboarding(false);
+      setShowAddModal(true);
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const handleSave = async () => {
     const name = formName.trim();
@@ -233,6 +276,16 @@ export default function SubscriptionsScreen() {
         )}
       </LinearGradient>
 
+      {/* Scan result feedback */}
+      {scanResultText ? (
+        <View style={styles.scanResultBar}>
+          <Text style={styles.scanResultText}>{scanResultText}</Text>
+          <TouchableOpacity onPress={() => setScanResultText('')}>
+            <Text style={styles.scanResultDismiss}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       {/* List */}
       <FlatList
         data={items}
@@ -259,31 +312,40 @@ export default function SubscriptionsScreen() {
         <Text style={styles.fabIcon}>+</Text>
       </TouchableOpacity>
 
-      {/* Onboarding Modal */}
+      {/* Onboarding Modal — One-time sync */}
       <Modal visible={showOnboarding} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.onboardingContent}>
             <Text style={styles.onboardingEmoji}>🔄</Text>
-            <Text style={styles.onboardingTitle}>All your subscriptions in one place</Text>
+            <Text style={styles.onboardingTitle}>Let's get all your subscriptions</Text>
             <Text style={styles.onboardingSub}>
-              Enter once, we'll take care of all the tracking hereafter.
-              {'\n\n'}Never miss a renewal or get surprised by a charge again.
+              We'll scan your SMS history (past 1 year) to find all recurring subscriptions automatically.
+              {'\n\n'}Netflix, Spotify, YouTube Premium — we'll catch them all.
             </Text>
-            <TouchableOpacity style={styles.onboardingBtn} onPress={handleOnboardingDismiss} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
-                <Text style={styles.onboardingBtnText}>Add my subscriptions</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setSubscriptionsOnboarded(); setShowOnboarding(false); }} style={{ padding: 12 }}>
-              <Text style={styles.onboardingSkip}>Maybe later</Text>
-            </TouchableOpacity>
+            {scanning ? (
+              <View style={styles.scanningContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.scanningText}>Scanning your messages...</Text>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.onboardingBtn} onPress={handleSyncSMS} activeOpacity={0.8}>
+                  <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
+                    <Text style={styles.onboardingBtnText}>Scan & Find Subscriptions</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleOnboardingDismiss} style={{ padding: 12 }}>
+                  <Text style={styles.onboardingSkip}>Add manually instead</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>
 
       {/* Add/Edit Modal */}
       <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={resetForm}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+        <KeyboardAvoidingView behavior="padding" style={styles.modalOverlay}>
           <View style={styles.formContainer}>
             <View style={styles.formHandle} />
             <Text style={styles.formTitle}>{editingItem ? 'Edit Subscription' : 'Add Subscription'}</Text>
@@ -381,6 +443,10 @@ const styles = StyleSheet.create({
   headerStatLabel: { fontSize: 9, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
   headerStatValue: { fontSize: 22, fontWeight: '800', color: COLORS.primary },
 
+  scanResultBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: `${COLORS.success}15`, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+  scanResultText: { fontSize: 13, fontWeight: '600', color: COLORS.success, flex: 1 },
+  scanResultDismiss: { fontSize: 13, fontWeight: '700', color: COLORS.primary, marginLeft: 12 },
+
   list: { padding: 16, paddingTop: 8, paddingBottom: 100 },
 
   card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surfaceHigh, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: COLORS.border },
@@ -417,6 +483,9 @@ const styles = StyleSheet.create({
   onboardingBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
   onboardingBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   onboardingSkip: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '600' },
+
+  scanningContainer: { alignItems: 'center', paddingVertical: 20 },
+  scanningText: { fontSize: 14, color: COLORS.textSecondary, marginTop: 12 },
 
   formContainer: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.glassBorder, borderBottomWidth: 0 },
   formHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.surfaceHigher, alignSelf: 'center', marginBottom: 20 },
