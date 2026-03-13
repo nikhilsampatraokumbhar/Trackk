@@ -24,6 +24,7 @@ import {
   addToPendingReview,
   TransactionSource,
 } from '../services/TransactionSignalEngine';
+import { processTransactionForTracking, checkEMICompletions } from '../services/AutoDetectionService';
 import { useGroups } from './GroupContext';
 import { usePremium } from './PremiumContext';
 
@@ -139,6 +140,9 @@ export function TrackerProvider({ children, groups, userId }: Props) {
         }
       }
 
+      // Check for completed EMIs on startup
+      try { await checkEMICompletions(); } catch {}
+
       const initial = await notifee.getInitialNotification();
       if (initial?.pressAction?.id && initial?.notification?.data) {
         const actionId = initial.pressAction.id;
@@ -220,6 +224,11 @@ export function TrackerProvider({ children, groups, userId }: Props) {
 
       const signal = ingestTransaction(parsed, 'email');
       if (!signal) return; // duplicate
+
+      // Auto-detect subscriptions/EMIs/investments from email content
+      try {
+        await processTransactionForTracking(parsed);
+      } catch {}
 
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
@@ -314,6 +323,14 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     startSmsListener(async (parsed) => {
       const signal = ingestTransaction(parsed, 'sms');
       if (!signal) return; // duplicate — already handled from another source
+
+      // Auto-detect subscriptions/EMIs/investments from SMS content
+      try {
+        await processTransactionForTracking(parsed);
+      } catch {
+        // Silent fail — auto-detection is best-effort
+      }
+
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);

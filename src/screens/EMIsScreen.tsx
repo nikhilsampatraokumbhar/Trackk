@@ -45,9 +45,11 @@ export default function EMIsScreen() {
 
   const load = useCallback(async () => {
     const emis = await getEMIs();
-    setItems(emis.filter(e => e.active));
+    const active = emis.filter(e => e.active);
+    active.sort((a, b) => (a.confirmed === b.confirmed ? 0 : a.confirmed ? -1 : 1));
+    setItems(active);
     const onboarded = await hasEMIsOnboarded();
-    if (!onboarded && emis.length === 0) setShowOnboarding(true);
+    if (!onboarded && emis.filter(e => e.confirmed).length === 0) setShowOnboarding(true);
     setLoading(false);
   }, []);
 
@@ -114,30 +116,60 @@ export default function EMIsScreen() {
     setShowAddModal(true);
   };
 
+  const handleConfirmAutoDetected = async (item: EMIItem) => {
+    item.confirmed = true;
+    await saveEMI(item);
+    load();
+  };
+
+  const handleDismissAutoDetected = async (item: EMIItem) => {
+    await deleteEMI(item.id);
+    load();
+  };
+
   const renderItem = ({ item }: { item: EMIItem }) => {
     const days = daysUntil(item.nextBillingDate);
     const progress = item.totalMonths > 0 ? (item.monthsPaid / item.totalMonths) * 100 : 0;
+    const isAutoDetected = !item.confirmed && item.source === 'auto';
 
     return (
-      <TouchableOpacity style={styles.card} onPress={() => handleEdit(item)} onLongPress={() => handleDelete(item)} activeOpacity={0.7}>
-        <View style={styles.cardTop}>
-          <View style={styles.cardLeft}>
-            <Text style={styles.cardName}>{item.name}</Text>
-            <Text style={styles.cardCycle}>{item.monthsLeft} months remaining</Text>
+      <View>
+        {isAutoDetected && (
+          <View style={styles.autoDetectedBanner}>
+            <Text style={styles.autoDetectedText}>Auto-detected from your transactions</Text>
           </View>
-          <View style={styles.cardRight}>
-            <Text style={styles.cardAmount}>{formatCurrency(item.amount)}/mo</Text>
-            <Text style={[styles.cardDays, days <= 3 && { color: COLORS.danger }]}>
-              {days === 0 ? 'Due today' : `${days}d left`}
-            </Text>
+        )}
+        <TouchableOpacity style={[styles.card, isAutoDetected && styles.cardAutoDetected]} onPress={() => isAutoDetected ? handleConfirmAutoDetected(item) : handleEdit(item)} onLongPress={() => handleDelete(item)} activeOpacity={0.7}>
+          <View style={styles.cardTop}>
+            <View style={styles.cardLeft}>
+              <Text style={styles.cardName}>{item.name}</Text>
+              <Text style={styles.cardCycle}>{item.monthsLeft} months remaining</Text>
+            </View>
+            <View style={styles.cardRight}>
+              <Text style={styles.cardAmount}>{formatCurrency(item.amount)}/mo</Text>
+              {isAutoDetected ? (
+                <View style={styles.autoDetectedActions}>
+                  <TouchableOpacity style={styles.confirmBtn} onPress={() => handleConfirmAutoDetected(item)}>
+                    <Text style={styles.confirmBtnText}>Confirm</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.dismissBtn} onPress={() => handleDismissAutoDetected(item)}>
+                    <Text style={styles.dismissBtnText}>Dismiss</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <Text style={[styles.cardDays, days <= 3 && { color: COLORS.danger }]}>
+                  {days === 0 ? 'Due today' : `${days}d left`}
+                </Text>
+              )}
+            </View>
           </View>
-        </View>
-        {/* Progress bar */}
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${Math.min(progress, 100)}%` }]} />
-        </View>
-        <Text style={styles.progressText}>{item.monthsPaid}/{item.totalMonths} months paid</Text>
-      </TouchableOpacity>
+          {/* Progress bar */}
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${Math.min(progress, 100)}%` }]} />
+          </View>
+          <Text style={styles.progressText}>{item.monthsPaid}/{item.totalMonths} months paid</Text>
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -247,6 +279,14 @@ const styles = StyleSheet.create({
   headerStatValue: { fontSize: 22, fontWeight: '800' },
   list: { padding: 16, paddingTop: 8, paddingBottom: 100 },
   card: { backgroundColor: COLORS.surfaceHigh, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: COLORS.border },
+  cardAutoDetected: { borderColor: `${COLORS.warning}40`, borderStyle: 'dashed' as const },
+  autoDetectedBanner: { backgroundColor: `${COLORS.warning}12`, paddingHorizontal: 12, paddingVertical: 4, borderTopLeftRadius: 12, borderTopRightRadius: 12, marginBottom: -4 },
+  autoDetectedText: { fontSize: 10, fontWeight: '700', color: COLORS.warning, letterSpacing: 0.3 },
+  autoDetectedActions: { flexDirection: 'row', gap: 6 },
+  confirmBtn: { backgroundColor: `${COLORS.success}20`, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  confirmBtnText: { fontSize: 11, fontWeight: '700', color: COLORS.success },
+  dismissBtn: { backgroundColor: COLORS.glass, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8 },
+  dismissBtnText: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   cardLeft: { flex: 1 },
   cardName: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 4 },

@@ -11,6 +11,7 @@ import {
   getSubscriptions, saveSubscription, deleteSubscription,
   hasSubscriptionsOnboarded, setSubscriptionsOnboarded,
 } from '../services/StorageService';
+import { checkSharedSubscriptionStatus } from '../services/AutoDetectionService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
 
 /** Calculate next billing date from a billing day and cycle */
@@ -59,10 +60,16 @@ export default function SubscriptionsScreen() {
 
   const load = useCallback(async () => {
     const subs = await getSubscriptions();
-    setItems(subs.filter(s => s.active));
+    // Show confirmed first, then unconfirmed (auto-detected suggestions)
+    const active = subs.filter(s => s.active);
+    active.sort((a, b) => {
+      if (a.confirmed === b.confirmed) return 0;
+      return a.confirmed ? -1 : 1; // confirmed first
+    });
+    setItems(active);
 
     const onboarded = await hasSubscriptionsOnboarded();
-    if (!onboarded && subs.length === 0) {
+    if (!onboarded && subs.filter(s => s.confirmed).length === 0) {
       setShowOnboarding(true);
     }
 
@@ -143,31 +150,61 @@ export default function SubscriptionsScreen() {
     setShowAddModal(true);
   };
 
+  const handleConfirmAutoDetected = async (item: UserSubscriptionItem) => {
+    item.confirmed = true;
+    await saveSubscription(item);
+    load();
+  };
+
+  const handleDismissAutoDetected = async (item: UserSubscriptionItem) => {
+    await deleteSubscription(item.id);
+    load();
+  };
+
   const renderItem = ({ item }: { item: UserSubscriptionItem }) => {
     const days = daysUntil(item.nextBillingDate);
     const isUrgent = days <= 3;
+    const isAutoDetected = !item.confirmed && item.source === 'auto';
 
     return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => handleEdit(item)}
-        onLongPress={() => handleDelete(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.cardLeft}>
-          <Text style={styles.cardName}>{item.name}</Text>
-          <Text style={styles.cardCycle}>
-            {item.cycle === 'monthly' ? 'Monthly' : 'Yearly'}
-            {item.isShared ? ` (shared by ${item.sharedCount || 2})` : ''}
-          </Text>
-        </View>
-        <View style={styles.cardRight}>
-          <Text style={styles.cardAmount}>{formatCurrency(item.amount)}</Text>
-          <Text style={[styles.cardDays, isUrgent && { color: COLORS.danger }]}>
-            {days === 0 ? 'Due today' : `${days}d left`}
-          </Text>
-        </View>
-      </TouchableOpacity>
+      <View>
+        {isAutoDetected && (
+          <View style={styles.autoDetectedBanner}>
+            <Text style={styles.autoDetectedText}>Auto-detected from your transactions</Text>
+          </View>
+        )}
+        <TouchableOpacity
+          style={[styles.card, isAutoDetected && styles.cardAutoDetected]}
+          onPress={() => isAutoDetected ? handleConfirmAutoDetected(item) : handleEdit(item)}
+          onLongPress={() => handleDelete(item)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.cardLeft}>
+            <Text style={styles.cardName}>{item.name}</Text>
+            <Text style={styles.cardCycle}>
+              {item.cycle === 'monthly' ? 'Monthly' : 'Yearly'}
+              {item.isShared ? ` (shared by ${item.sharedCount || 2})` : ''}
+            </Text>
+          </View>
+          <View style={styles.cardRight}>
+            <Text style={styles.cardAmount}>{formatCurrency(item.amount)}</Text>
+            {isAutoDetected ? (
+              <View style={styles.autoDetectedActions}>
+                <TouchableOpacity style={styles.confirmBtn} onPress={() => handleConfirmAutoDetected(item)}>
+                  <Text style={styles.confirmBtnText}>Confirm</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.dismissBtn} onPress={() => handleDismissAutoDetected(item)}>
+                  <Text style={styles.dismissBtnText}>Dismiss</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={[styles.cardDays, isUrgent && { color: COLORS.danger }]}>
+                {days === 0 ? 'Due today' : `${days}d left`}
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -347,6 +384,14 @@ const styles = StyleSheet.create({
   list: { padding: 16, paddingTop: 8, paddingBottom: 100 },
 
   card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surfaceHigh, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: COLORS.border },
+  cardAutoDetected: { borderColor: `${COLORS.primary}40`, borderStyle: 'dashed' as const },
+  autoDetectedBanner: { backgroundColor: `${COLORS.primary}12`, paddingHorizontal: 12, paddingVertical: 4, borderTopLeftRadius: 12, borderTopRightRadius: 12, marginBottom: -4 },
+  autoDetectedText: { fontSize: 10, fontWeight: '700', color: COLORS.primary, letterSpacing: 0.3 },
+  autoDetectedActions: { flexDirection: 'row', gap: 6 },
+  confirmBtn: { backgroundColor: `${COLORS.success}20`, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  confirmBtnText: { fontSize: 11, fontWeight: '700', color: COLORS.success },
+  dismissBtn: { backgroundColor: COLORS.glass, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8 },
+  dismissBtnText: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
   cardLeft: { flex: 1 },
   cardName: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
   cardCycle: { fontSize: 12, color: COLORS.textSecondary },
