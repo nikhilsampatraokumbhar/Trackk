@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Modal,
+  View, Text, StyleSheet, TouchableOpacity, Modal, Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { COLORS } from '../utils/helpers';
+import { TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../utils/theme';
+import { SPRING, DURATION, EASING, fadeIn } from '../utils/motion';
+import { hapticMedium } from '../utils/haptics';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -27,34 +30,104 @@ export default function PremiumGate({ visible, onClose, feature, description }: 
   const nav = useNavigation<Nav>();
   const nudge = CLEVER_NUDGES[Math.floor(Math.random() * CLEVER_NUDGES.length)];
 
+  // Animation values
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(0.85)).current;
+  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const iconScale = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      // Reset
+      backdropOpacity.setValue(0);
+      cardScale.setValue(0.85);
+      cardOpacity.setValue(0);
+      iconScale.setValue(0);
+      contentOpacity.setValue(0);
+
+      hapticMedium();
+
+      Animated.sequence([
+        // Backdrop fade
+        Animated.timing(backdropOpacity, {
+          toValue: 1, duration: DURATION.fast, useNativeDriver: true,
+        }),
+        // Card springs in
+        Animated.parallel([
+          Animated.spring(cardScale, { toValue: 1, ...SPRING.responsive }),
+          fadeIn(cardOpacity, DURATION.normal),
+        ]),
+        // Lock icon pops
+        Animated.spring(iconScale, { toValue: 1, ...SPRING.bouncy }),
+        // Content fades in
+        fadeIn(contentOpacity, DURATION.fast),
+      ]).start();
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(backdropOpacity, {
+        toValue: 0, duration: DURATION.fast, useNativeDriver: true,
+      }),
+      Animated.timing(cardOpacity, {
+        toValue: 0, duration: DURATION.fast, useNativeDriver: true,
+      }),
+      Animated.timing(cardScale, {
+        toValue: 0.9, duration: DURATION.fast, useNativeDriver: true,
+      }),
+    ]).start(() => onClose());
+  };
+
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <View style={styles.content}>
-          <Text style={styles.lockIcon}>🔒</Text>
-          <Text style={styles.title}>{feature}</Text>
-          <Text style={styles.description}>{description}</Text>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
+      <Animated.View style={[styles.overlay, { opacity: backdropOpacity }]}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={handleClose} />
 
-          <View style={styles.divider} />
+        <Animated.View style={[
+          styles.content,
+          { opacity: cardOpacity, transform: [{ scale: cardScale }] },
+        ]}>
+          {/* Top accent line */}
+          <View style={styles.accentLine} />
 
-          <Text style={styles.nudge}>{nudge}</Text>
+          {/* Lock icon with ring */}
+          <Animated.View style={[styles.iconRing, { transform: [{ scale: iconScale }] }]}>
+            <Text style={styles.lockIcon}>🔒</Text>
+          </Animated.View>
 
-          <TouchableOpacity
-            style={styles.upgradeBtn}
-            onPress={() => {
-              onClose();
-              nav.navigate('Pricing' as any);
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.upgradeBtnText}>See Premium Plans</Text>
-          </TouchableOpacity>
+          <Animated.View style={{ opacity: contentOpacity, alignItems: 'center', width: '100%' }}>
+            <Text style={styles.title}>{feature}</Text>
+            <Text style={styles.description}>{description}</Text>
 
-          <TouchableOpacity style={styles.laterBtn} onPress={onClose}>
-            <Text style={styles.laterBtnText}>Maybe Later</Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
+            <View style={styles.divider} />
+
+            {/* Nudge with sparkle */}
+            <View style={styles.nudgeRow}>
+              <Text style={styles.nudgeIcon}>✨</Text>
+              <Text style={styles.nudge}>{nudge}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.upgradeBtn}
+              onPress={() => {
+                handleClose();
+                setTimeout(() => nav.navigate('Pricing' as any), 300);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.upgradeBtnText}>See Premium Plans</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.laterBtn} onPress={handleClose}>
+              <Text style={styles.laterBtnText}>Maybe Later</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -62,31 +135,49 @@ export default function PremiumGate({ visible, onClose, feature, description }: 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: SPACING._24,
   },
   content: {
     backgroundColor: COLORS.surface,
-    borderRadius: 24,
-    padding: 28,
+    borderRadius: RADIUS.sheet,
+    padding: SPACING._28,
     width: '100%',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: `${COLORS.primary}30`,
+    overflow: 'hidden',
+    ...SHADOWS.heavy,
   },
-  lockIcon: { fontSize: 48, marginBottom: 16 },
+  accentLine: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: COLORS.primary,
+  },
+  iconRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: `${COLORS.primary}12`,
+    borderWidth: 2,
+    borderColor: `${COLORS.primary}30`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.xl,
+  },
+  lockIcon: { fontSize: 32 },
   title: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginBottom: 8,
+    ...TYPOGRAPHY.title,
     textAlign: 'center',
+    marginBottom: SPACING.md,
   },
   description: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
+    ...TYPOGRAPHY.bodySm,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -94,23 +185,30 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.border,
     width: '100%',
-    marginVertical: 20,
+    marginVertical: SPACING.xxl,
   },
+  nudgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xxl,
+    gap: SPACING.md,
+  },
+  nudgeIcon: { fontSize: 16 },
   nudge: {
     fontSize: 14,
     color: COLORS.primaryLight,
     fontStyle: 'italic',
-    textAlign: 'center',
-    marginBottom: 20,
+    fontWeight: '600',
   },
   upgradeBtn: {
     backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
+    borderRadius: RADIUS.xl,
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING._32,
     width: '100%',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: SPACING._10,
+    ...SHADOWS.glow,
   },
   upgradeBtnText: {
     fontSize: 15,
@@ -118,11 +216,10 @@ const styles = StyleSheet.create({
     color: COLORS.background,
   },
   laterBtn: {
-    paddingVertical: 12,
+    paddingVertical: SPACING.lg,
   },
   laterBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    ...TYPOGRAPHY.body,
     color: COLORS.textSecondary,
   },
 });

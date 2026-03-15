@@ -34,6 +34,7 @@ import { saveTransaction } from '../services/StorageService';
 import { buildDescription } from '../services/TransactionParser';
 import { ParsedTransaction, TrackerType } from '../models/types';
 import { COLORS, formatCurrency } from '../utils/helpers';
+import EmptyState from '../components/EmptyState';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -270,13 +271,12 @@ export default function NightlyReviewScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           !loading ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>🎉</Text>
-              <Text style={styles.emptyText}>No transactions to review</Text>
-              <Text style={styles.emptySubtext}>
-                Transactions detected via SMS, email, or Shortcuts will appear here
-              </Text>
-            </View>
+            <EmptyState
+              icon="🎉"
+              title="All caught up!"
+              subtitle="Transactions detected via SMS, email, or Shortcuts will appear here"
+              accent={COLORS.success}
+            />
           ) : null
         }
       />

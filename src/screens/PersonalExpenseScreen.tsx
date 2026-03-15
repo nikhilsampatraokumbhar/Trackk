@@ -12,6 +12,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useTracker } from '../store/TrackerContext';
+import EmptyState from '../components/EmptyState';
+import PressableScale from '../components/PressableScale';
 import { getTransactions, saveTransaction, deleteTransaction } from '../services/StorageService';
 import { Transaction, ParsedTransaction } from '../models/types';
 import TrackerToggle from '../components/TrackerToggle';
@@ -270,28 +272,29 @@ export default function PersonalExpenseScreen() {
             </LinearGradient>
 
             <View style={styles.quickAccessRow}>
-              <TouchableOpacity style={styles.quickAccessCard} onPress={() => nav.navigate('Goals')} activeOpacity={0.8}>
+              <PressableScale style={styles.quickAccessCard} onPress={() => nav.navigate('Goals')}>
                 <View style={[styles.quickAccessIconWrap, { backgroundColor: `${COLORS.success}18`, borderColor: `${COLORS.success}30` }]}>
                   <Text style={styles.quickAccessIcon}>🎯</Text>
                 </View>
                 <Text style={styles.quickAccessTitle}>Savings Goals</Text>
                 <Text style={styles.quickAccessSub}>Set targets & daily budgets</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.quickAccessCard} onPress={() => nav.navigate('Reimbursement')} activeOpacity={0.8}>
+              </PressableScale>
+              <PressableScale style={styles.quickAccessCard} onPress={() => nav.navigate('Reimbursement')}>
                 <View style={[styles.quickAccessIconWrap, { backgroundColor: `${COLORS.reimbursementColor}18`, borderColor: `${COLORS.reimbursementColor}30` }]}>
                   <Text style={styles.quickAccessIcon}>🧾</Text>
                 </View>
                 <Text style={styles.quickAccessTitle}>Reimbursement</Text>
                 <Text style={styles.quickAccessSub}>Track office expenses</Text>
-              </TouchableOpacity>
+              </PressableScale>
             </View>
 
             {transactions.length === 0 && (
-              <View style={styles.empty}>
-                <View style={styles.emptyIcon}><Text style={styles.emptyEmoji}>💳</Text></View>
-                <Text style={styles.emptyTitle}>{trackerState.personal ? 'No expenses yet' : 'Start tracking'}</Text>
-                <Text style={styles.emptyText}>{trackerState.personal ? 'Your expenses will show up here automatically' : 'Enable the tracker above or add manually'}</Text>
-              </View>
+              <EmptyState
+                icon="💳"
+                title={trackerState.personal ? 'No expenses yet' : 'Start tracking'}
+                subtitle={trackerState.personal ? 'Your expenses will show up here automatically' : 'Enable the tracker above or add manually'}
+                accent={COLORS.personalColor}
+              />
             )}
           </>
         }

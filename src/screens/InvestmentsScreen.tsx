@@ -15,6 +15,7 @@ import {
 import { scanHistoricalSMS } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
+import EmptyState from '../components/EmptyState';
 
 function calcNextBillingDate(billingDay: number, cycle: 'monthly' | 'yearly' | 'one-time'): string {
   if (cycle === 'one-time') return '';
@@ -251,11 +252,12 @@ export default function InvestmentsScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           !loading ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>📈</Text>
-              <Text style={styles.emptyText}>No investments yet</Text>
-              <Text style={styles.emptySub}>Tap + to add your first investment</Text>
-            </View>
+            <EmptyState
+              icon="📈"
+              title="No investments yet"
+              subtitle="Tap + to add your first investment"
+              accent={COLORS.success}
+            />
           ) : null
         }
       />

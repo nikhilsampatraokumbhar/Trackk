@@ -15,6 +15,7 @@ import {
 import { scanHistoricalSMS, checkEMICompletions } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
+import EmptyState from '../components/EmptyState';
 
 function calcNextBillingDate(billingDay: number): string {
   const now = new Date();
@@ -264,11 +265,12 @@ export default function EMIsScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           !loading ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>🏦</Text>
-              <Text style={styles.emptyText}>No EMIs yet</Text>
-              <Text style={styles.emptySub}>Tap + to add your first EMI</Text>
-            </View>
+            <EmptyState
+              icon="🏦"
+              title="No EMIs yet"
+              subtitle="Tap + to add your first EMI"
+              accent={COLORS.warning}
+            />
           ) : null
         }
       />

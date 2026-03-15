@@ -13,6 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useTracker } from '../store/TrackerContext';
+import EmptyState from '../components/EmptyState';
 import { usePremium } from '../store/PremiumContext';
 import {
   getReimbursementTrips, createReimbursementTrip, completeReimbursementTrip,
@@ -362,10 +363,12 @@ export default function ReimbursementScreen() {
               </View>
 
               {tripTransactions.length === 0 && (
-                <View style={styles.empty}>
-                  <Text style={styles.emptyEmoji}>🧾</Text>
-                  <Text style={styles.emptyText}>No expenses yet. Tap + to add one.</Text>
-                </View>
+                <EmptyState
+                  icon="🧾"
+                  title="No expenses yet"
+                  subtitle="Tap + to add your first reimbursable expense"
+                  accent={COLORS.reimbursementColor}
+                />
               )}
             </>
           }

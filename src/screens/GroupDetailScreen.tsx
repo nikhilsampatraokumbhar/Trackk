@@ -22,6 +22,7 @@ import { simplifyDebts } from '../services/DebtCalculator';
 import TrackerToggle from '../components/TrackerToggle';
 import DebtSummary from '../components/DebtSummary';
 import GroupMemberCard from '../components/GroupMemberCard';
+import EmptyState from '../components/EmptyState';
 import { COLORS, formatCurrency, formatDate, getColorForId } from '../utils/helpers';
 import BottomSheet from '../components/BottomSheet';
 
@@ -499,15 +500,12 @@ export default function GroupDetailScreen() {
         </Text>
 
         {activeGroupTransactions.length === 0 ? (
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <Text style={styles.emptyEmoji}>💸</Text>
-            </View>
-            <Text style={styles.emptyText}>No group expenses yet</Text>
-            <Text style={styles.emptySubtext}>
-              Enable tracking above and make a payment to see it here
-            </Text>
-          </View>
+          <EmptyState
+            icon="💸"
+            title="No group expenses yet"
+            subtitle="Enable tracking above and make a payment to see it here"
+            accent={COLORS.groupColor}
+          />
         ) : (
           activeGroupTransactions.map(txn => (
             <View key={txn.id} style={styles.txnCard}>

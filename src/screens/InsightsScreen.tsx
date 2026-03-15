@@ -11,6 +11,7 @@ import { getTransactions } from '../services/StorageService';
 import { Transaction } from '../models/types';
 import { usePremium } from '../store/PremiumContext';
 import { COLORS, formatCurrency, formatDate } from '../utils/helpers';
+import EmptyState from '../components/EmptyState';
 import { detectCategory, CATEGORY_COLORS, CATEGORY_ICONS } from '../services/CategoryService';
 import { detectRecurringExpenses, RecurringExpense } from '../services/RecurringService';
 import { shareCSV, shareTextReport } from '../services/ExportService';
@@ -242,9 +243,12 @@ export default function InsightsScreen() {
         {/* Category breakdown */}
         <Text style={styles.sectionTitle}>WHERE YOUR MONEY GOES</Text>
         {categories.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No transactions to analyze</Text>
-          </View>
+          <EmptyState
+            icon="📊"
+            title="No transactions to analyze"
+            subtitle="Start tracking expenses to see spending insights"
+            accent={COLORS.primary}
+          />
         ) : (
           <View style={styles.categoriesCard}>
             <View style={styles.barChart}>

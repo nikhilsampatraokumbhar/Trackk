@@ -15,6 +15,7 @@ import {
 import { checkSharedSubscriptionStatus, scanHistoricalSMS } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
+import EmptyState from '../components/EmptyState';
 
 /** Calculate next billing date from a billing day and cycle */
 function calcNextBillingDate(billingDay: number, cycle: 'monthly' | 'yearly'): string {
@@ -294,11 +295,12 @@ export default function SubscriptionsScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           !loading ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>🔄</Text>
-              <Text style={styles.emptyText}>No subscriptions yet</Text>
-              <Text style={styles.emptySub}>Tap + to add your first subscription</Text>
-            </View>
+            <EmptyState
+              icon="🔄"
+              title="No subscriptions yet"
+              subtitle="Tap + to add your first subscription"
+              accent={COLORS.personalColor}
+            />
           ) : null
         }
       />

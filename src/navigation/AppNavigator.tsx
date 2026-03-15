@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, BackHandler, Alert, Platform, TouchableOpacity } from 'react-native';
+import { Text, View, BackHandler, Alert, Platform, TouchableOpacity, Animated } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -281,6 +281,8 @@ export function AppNavigator() {
           headerShadowVisible: false,
           contentStyle: { backgroundColor: COLORS.background },
           gestureEnabled: true,
+          animation: 'slide_from_right',
+          animationDuration: 250,
           ...(Platform.OS === 'ios' ? { fullScreenGestureEnabled: true } : {}),
         }}
       >
@@ -316,6 +318,7 @@ export function AppNavigator() {
               options={{
                 title: 'New Group',
                 presentation: 'modal',
+                animation: 'slide_from_bottom',
                 headerLeft: () => <ModalCloseButton />,
               }}
             />
@@ -325,6 +328,7 @@ export function AppNavigator() {
               options={{
                 title: 'Transaction',
                 presentation: 'modal',
+                animation: 'slide_from_bottom',
                 headerLeft: () => <ModalCloseButton />,
               }}
             />
@@ -334,6 +338,7 @@ export function AppNavigator() {
               options={{
                 title: 'Tracker Settings',
                 presentation: 'modal',
+                animation: 'slide_from_bottom',
                 headerLeft: () => <ModalCloseButton />,
               }}
             />
@@ -358,6 +363,7 @@ export function AppNavigator() {
               options={{
                 title: 'Split Expense',
                 presentation: 'modal',
+                animation: 'slide_from_bottom',
                 headerLeft: () => <ModalCloseButton />,
               }}
             />
@@ -369,7 +375,7 @@ export function AppNavigator() {
             <Stack.Screen
               name="QuickAdd"
               component={QuickAddScreen}
-              options={{ title: 'Quick Add', presentation: 'modal', headerShown: false }}
+              options={{ title: 'Quick Add', presentation: 'modal', animation: 'fade_from_bottom', headerShown: false }}
             />
             <Stack.Screen
               name="Subscriptions"
@@ -393,6 +399,7 @@ export function AppNavigator() {
                 options={{
                   title: 'iPhone Setup',
                   presentation: 'modal',
+                  animation: 'slide_from_bottom',
                   headerLeft: () => <ModalCloseButton />,
                 }}
               />

@@ -12,6 +12,7 @@ import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
 import { usePremium } from '../store/PremiumContext';
 import TrackerToggle from '../components/TrackerToggle';
+import EmptyState from '../components/EmptyState';
 import { COLORS, getColorForId, formatCurrency } from '../utils/helpers';
 import {
   RetentionStatus,
@@ -205,15 +206,12 @@ export default function GroupListScreen() {
           </>
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <Text style={styles.emptyEmoji}>👥</Text>
-            </View>
-            <Text style={styles.emptyText}>No groups yet</Text>
-            <Text style={styles.emptySubtext}>
-              Create a group to split expenses with friends
-            </Text>
-          </View>
+          <EmptyState
+            icon="👥"
+            title="No groups yet"
+            subtitle="Create a group to split expenses with friends"
+            accent={COLORS.groupColor}
+          />
         }
         data={activeGroups}
         keyExtractor={item => item.id}

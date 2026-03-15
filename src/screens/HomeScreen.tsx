@@ -23,6 +23,7 @@ import TrackerSelectionDialog from '../components/TrackerSelectionDialog';
 import UndoToast from '../components/UndoToast';
 import { checkOverdueSubscriptions, skipOverdueSubscription, removeOverdueSubscription, checkEMICompletions, OverdueSubscription, EMICompletionResult } from '../services/AutoDetectionService';
 import { COLORS, formatCurrency } from '../utils/helpers';
+import PressableScale from '../components/PressableScale';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -341,7 +342,7 @@ export default function HomeScreen() {
         {/* Metrics Row — Today's Jar + This Month (no streak card) */}
         <View style={styles.metricsRow}>
           {/* Today's Budget / Savings Jar */}
-          <TouchableOpacity style={styles.metricCard} onPress={() => nav.navigate('Goals')} activeOpacity={0.7}>
+          <PressableScale style={styles.metricCard} onPress={() => nav.navigate('Goals')}>
             <Text style={styles.metricIcon}>🏺</Text>
             <Text style={styles.metricLabel}>TODAY'S JAR</Text>
             {activeGoal ? (
@@ -357,22 +358,21 @@ export default function HomeScreen() {
                 <Text style={styles.metricSub}>Tap to create</Text>
               </>
             )}
-          </TouchableOpacity>
+          </PressableScale>
 
           {/* This Month */}
-          <TouchableOpacity style={styles.metricCard} onPress={() => (nav as any).navigate('Insights')} activeOpacity={0.7}>
+          <PressableScale style={styles.metricCard} onPress={() => (nav as any).navigate('Insights')}>
             <Text style={styles.metricIcon}>📊</Text>
             <Text style={styles.metricLabel}>THIS MONTH</Text>
             <Text style={styles.metricValue}>{formatCurrency(monthSpent)}</Text>
             <Text style={styles.metricSub}>{monthCount} txns</Text>
-          </TouchableOpacity>
+          </PressableScale>
         </View>
 
         {/* Review Expenses — always visible, premium-gated */}
-        <TouchableOpacity
+        <PressableScale
           style={styles.reviewCard}
           onPress={() => nav.navigate('NightlyReview')}
-          activeOpacity={0.7}
         >
           <View style={styles.reviewLeft}>
             <View style={styles.reviewIconRow}>
@@ -395,11 +395,11 @@ export default function HomeScreen() {
               <Text style={styles.reviewBadgeText}>{pendingReviewCount}</Text>
             </View>
           )}
-        </TouchableOpacity>
+        </PressableScale>
 
         {/* Goal Budget Card */}
         {activeGoal && (
-          <TouchableOpacity style={styles.goalBudgetCard} onPress={() => nav.navigate('Goals')} activeOpacity={0.7}>
+          <PressableScale style={styles.goalBudgetCard} onPress={() => nav.navigate('Goals')}>
             <View style={styles.goalBudgetLeft}>
               <Text style={styles.goalBudgetLabel}>ACTIVE GOAL</Text>
               <Text style={styles.goalBudgetName}>{activeGoal.name}</Text>
@@ -410,14 +410,13 @@ export default function HomeScreen() {
               </Text>
               <Text style={styles.goalBudgetSub}>left today</Text>
             </View>
-          </TouchableOpacity>
+          </PressableScale>
         )}
 
         {/* Subscriptions Card */}
-        <TouchableOpacity
+        <PressableScale
           style={styles.financeCard}
           onPress={() => nav.navigate('Subscriptions')}
-          activeOpacity={0.7}
         >
           <View style={styles.financeLeft}>
             <Text style={styles.financeEmoji}>🔄</Text>
@@ -431,13 +430,12 @@ export default function HomeScreen() {
             </View>
           </View>
           <Text style={styles.financeArrow}>›</Text>
-        </TouchableOpacity>
+        </PressableScale>
 
         {/* Investments Card */}
-        <TouchableOpacity
+        <PressableScale
           style={styles.financeCard}
           onPress={() => nav.navigate('Investments')}
-          activeOpacity={0.7}
         >
           <View style={styles.financeLeft}>
             <Text style={styles.financeEmoji}>📈</Text>
@@ -451,13 +449,12 @@ export default function HomeScreen() {
             </View>
           </View>
           <Text style={styles.financeArrow}>›</Text>
-        </TouchableOpacity>
+        </PressableScale>
 
         {/* EMIs Card */}
-        <TouchableOpacity
+        <PressableScale
           style={styles.financeCard}
           onPress={() => nav.navigate('EMIs')}
-          activeOpacity={0.7}
         >
           <View style={styles.financeLeft}>
             <Text style={styles.financeEmoji}>🏦</Text>
@@ -471,7 +468,7 @@ export default function HomeScreen() {
             </View>
           </View>
           <Text style={styles.financeArrow}>›</Text>
-        </TouchableOpacity>
+        </PressableScale>
 
         {/* Privacy Shield — subtle, hidden for premium users */}
         {!loading && !isPremium && monthCount === 0 && (
