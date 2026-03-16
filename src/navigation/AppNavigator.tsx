@@ -122,24 +122,35 @@ function ModalCloseButton() {
 }
 
 function useExitConfirmation() {
-  const handleBackPress = useCallback(() => {
-    Alert.alert(
-      'Exit Trackk?',
-      'Are you sure you want to exit the app?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
-      ],
-    );
-    return true;
-  }, []);
+  const navigation = useNavigation<any>();
 
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS !== 'android') return;
-      const sub = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+      const onBack = () => {
+        // If there are screens above MainTabs in the stack, let the stack navigator handle it
+        const parent = navigation.getParent?.();
+        if (parent) {
+          const state = parent.getState?.();
+          if (state && state.index > 0) {
+            // There's a screen above MainTabs — let the default back behavior pop it
+            return false;
+          }
+        }
+        // We're at the root (Home tab on MainTabs) — show exit confirmation
+        Alert.alert(
+          'Exit Trackk?',
+          'Are you sure you want to exit the app?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
+          ],
+        );
+        return true;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
       return () => sub.remove();
-    }, [handleBackPress]),
+    }, [navigation]),
   );
 }
 
@@ -151,6 +162,14 @@ function useBackToHome() {
     useCallback(() => {
       if (Platform.OS !== 'android') return;
       const onBack = () => {
+        // If there are screens above MainTabs in the stack, let the stack navigator handle it
+        const parent = navigation.getParent?.();
+        if (parent) {
+          const state = parent.getState?.();
+          if (state && state.index > 0) {
+            return false;
+          }
+        }
         navigation.navigate('Home');
         return true;
       };
@@ -387,17 +406,17 @@ export function AppNavigator() {
             <Stack.Screen
               name="Subscriptions"
               component={SubscriptionsScreen}
-              options={{ title: 'Subscriptions', headerBackTitle: '' }}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="Investments"
               component={InvestmentsScreen}
-              options={{ title: 'Investments', headerBackTitle: '' }}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="EMIs"
               component={EMIsScreen}
-              options={{ title: 'EMIs', headerBackTitle: '' }}
+              options={{ headerShown: false }}
             />
             {Platform.OS === 'ios' && (
               <Stack.Screen
