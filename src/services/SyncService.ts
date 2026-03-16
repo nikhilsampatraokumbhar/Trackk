@@ -460,6 +460,11 @@ export async function addSettlementCloud(
   return full;
 }
 
+/** Delete a settlement from Firestore */
+export async function deleteSettlementCloud(groupId: string, settlementId: string): Promise<void> {
+  await db.settlement(groupId, settlementId).delete();
+}
+
 /** Get all settlements for a group */
 export async function getSettlementsCloud(groupId: string): Promise<Settlement[]> {
   const snapshot = await db.settlements(groupId)

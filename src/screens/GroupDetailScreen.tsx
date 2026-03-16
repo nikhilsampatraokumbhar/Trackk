@@ -16,6 +16,7 @@ import { getGroup as getGroupLocal } from '../services/StorageService';
 import {
   addSettlementCloud, getSettlementsCloud,
   onSettlementsChanged, onGroupChanged, getGroupCloud,
+  deleteSettlementCloud,
 } from '../services/SyncService';
 import { Group, GroupTransaction, Split, Settlement, Debt, ExpenseComment } from '../models/types';
 import { simplifyDebts, calculateDebts } from '../services/DebtCalculator';
@@ -38,6 +39,7 @@ interface EditingTxn {
   description: string;
   note: string;
   category: string;
+  paidBy: string;
   members: Array<{ userId: string; displayName: string; included: boolean }>;
 }
 
@@ -83,6 +85,7 @@ export default function GroupDetailScreen() {
   const [settleModalVisible, setSettleModalVisible] = useState(false);
   const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
   const [settleAmount, setSettleAmount] = useState('');
+  const [settleNote, setSettleNote] = useState('');
   const [pendingUPISettle, setPendingUPISettle] = useState<{ debt: Debt; amount: number } | null>(null);
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
 
@@ -260,12 +263,14 @@ export default function GroupDetailScreen() {
     const settlementData = {
       groupId, fromUserId: debt.fromUserId, fromName: debt.fromName,
       toUserId: debt.toUserId, toName: debt.toName, amount, method,
+      note: settleNote.trim() || undefined,
     };
     if (isAuthenticated) { await addSettlementCloud(settlementData); }
     else { const { addSettlement } = require('../services/StorageService'); await addSettlement(settlementData); }
 
     setSettleModalVisible(false);
     setSettleTarget(null);
+    setSettleNote('');
     await load();
 
     Alert.alert(
@@ -281,6 +286,7 @@ export default function GroupDetailScreen() {
     setEditingTxn({
       txn, amount: String(txn.amount), description: txn.description,
       note: txn.note || '', category: txn.category || '',
+      paidBy: txn.addedBy,
       members: group!.members.map(m => ({
         userId: m.userId,
         displayName: m.userId === userId ? 'You' : m.displayName,
@@ -307,7 +313,7 @@ export default function GroupDetailScreen() {
         return {
           userId: m.userId, displayName: m.displayName,
           amount: Math.round((perPerson + (i === includedMembers.length - 1 ? diff : 0)) * 100) / 100,
-          settled: existingSplit?.settled ?? (m.userId === editingTxn.txn.addedBy),
+          settled: existingSplit?.settled ?? (m.userId === editingTxn.paidBy),
         };
       });
 
@@ -315,6 +321,7 @@ export default function GroupDetailScreen() {
         amount: parsedAmount, description: editingTxn.description.trim() || 'Group expense', splits: newSplits,
         note: editingTxn.note.trim() || undefined,
         category: editingTxn.category || undefined,
+        addedBy: editingTxn.paidBy,
       });
       setEditingTxn(null);
       await load();
@@ -452,6 +459,40 @@ export default function GroupDetailScreen() {
     );
   };
 
+  const handleReverseSettlement = (s: Settlement) => {
+    Alert.alert(
+      'Reverse Settlement',
+      `Reverse ${formatCurrency(s.amount)} from ${s.fromUserId === userId ? 'You' : s.fromName} to ${s.toUserId === userId ? 'You' : s.toName}?\n\nThis will undo the settlement and unsettle the corresponding splits.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reverse',
+          style: 'destructive',
+          onPress: async () => {
+            // Delete the settlement record
+            if (isAuthenticated) {
+              await deleteSettlementCloud(groupId, s.id);
+            } else {
+              const { deleteSettlement } = require('../services/StorageService');
+              await deleteSettlement(groupId, s.id);
+            }
+            // Unsettle splits that were settled by this settlement
+            for (const txn of activeGroupTransactions) {
+              if (txn.addedBy === s.toUserId) {
+                const split = txn.splits.find(sp => sp.userId === s.fromUserId && sp.settled);
+                if (split) {
+                  await unsettleSplit(groupId, txn.id, s.fromUserId);
+                }
+              }
+            }
+            await load();
+            Alert.alert('Reversed', 'Settlement has been reversed.');
+          },
+        },
+      ],
+    );
+  };
+
   const renderSettlementRow = (s: Settlement) => {
     const d = new Date(s.timestamp);
     const monthShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
@@ -460,7 +501,7 @@ export default function GroupDetailScreen() {
     const isTo = s.toUserId === userId;
 
     return (
-      <View key={s.id} style={styles.timelineRow}>
+      <TouchableOpacity key={s.id} style={styles.timelineRow} onPress={() => handleReverseSettlement(s)} activeOpacity={0.7}>
         <View style={styles.dateCol}>
           <Text style={styles.dateMonth}>{monthShort}</Text>
           <Text style={styles.dateDay}>{day}</Text>
@@ -475,8 +516,9 @@ export default function GroupDetailScreen() {
             <Text style={[styles.rowSubBold, isTo && { color: COLORS.success }]}>{isTo ? 'You' : s.toName}</Text>
             {' '}{formatCurrency(s.amount)}
           </Text>
+          {s.note ? <Text style={styles.settlementNote}>{s.note}</Text> : null}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -679,6 +721,15 @@ export default function GroupDetailScreen() {
           </View>
         )}
 
+        <TextInput
+          style={styles.settleNoteInput}
+          value={settleNote}
+          onChangeText={setSettleNote}
+          placeholder="Add a note (optional)"
+          placeholderTextColor={COLORS.textLight}
+          maxLength={200}
+        />
+
         <View style={styles.payOptions}>
           <TouchableOpacity style={styles.payOption} onPress={handleUPISettle} activeOpacity={0.7}>
             <View style={[styles.payOptionIcon, { backgroundColor: `${COLORS.primaryLight}18` }]}>
@@ -793,6 +844,25 @@ export default function GroupDetailScreen() {
               multiline
               maxLength={300}
             />
+
+            <Text style={styles.editLabel}>PAID BY</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, marginHorizontal: -4 }}>
+              {editingTxn.members.map(m => {
+                const isPayer = editingTxn.paidBy === m.userId;
+                const c = getColorForId(m.userId);
+                return (
+                  <TouchableOpacity
+                    key={m.userId}
+                    style={[styles.editChip, isPayer && { borderColor: c, backgroundColor: `${c}15` }]}
+                    onPress={() => setEditingTxn({ ...editingTxn, paidBy: m.userId })}
+                    activeOpacity={0.7}
+                  >
+                    {isPayer && <Text style={[styles.editCheck, { color: c }]}>✓</Text>}
+                    <Text style={[styles.editChipName, isPayer ? { color: COLORS.text } : { color: COLORS.textSecondary }]}>{m.displayName}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
             <Text style={styles.editLabel}>SPLIT BETWEEN (Equal)</Text>
             <View style={styles.editMembers}>
@@ -1030,4 +1100,8 @@ const styles = StyleSheet.create({
   commentInput: { flex: 1, backgroundColor: COLORS.surfaceHigh, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, maxHeight: 80 },
   commentSendBtn: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, backgroundColor: COLORS.primary },
   commentSendText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+
+  // ─── Settlement Note ─────────────────────────────────────────────────────
+  settleNoteInput: { backgroundColor: COLORS.glass, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.glassBorder, marginTop: 12, marginBottom: 4 },
+  settlementNote: { fontSize: 11, color: COLORS.textSecondary, fontStyle: 'italic', marginTop: 2 },
 });

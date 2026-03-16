@@ -67,6 +67,9 @@ export default function EMIsScreen() {
   const [formDay, setFormDay] = useState('');
   const [editingItem, setEditingItem] = useState<EMIItem | null>(null);
 
+  const [inactiveItems, setInactiveItems] = useState<EMIItem[]>([]);
+  const [showInactive, setShowInactive] = useState(false);
+
   const load = useCallback(async () => {
     // Check for completed EMIs first
     const completed = await checkEMICompletions();
@@ -77,8 +80,10 @@ export default function EMIsScreen() {
 
     const emis = await getEMIs();
     const active = emis.filter(e => e.active);
+    const inactive = emis.filter(e => !e.active);
     active.sort((a, b) => (a.confirmed === b.confirmed ? 0 : a.confirmed ? -1 : 1));
     setItems(active);
+    setInactiveItems(inactive);
     const onboarded = await hasEMIsOnboarded();
     if (!onboarded && emis.filter(e => e.confirmed).length === 0) setShowOnboarding(true);
     setLoading(false);
@@ -188,6 +193,12 @@ export default function EMIsScreen() {
     ]);
   };
 
+  const handleToggleActive = async (item: EMIItem) => {
+    const updated = { ...item, active: !item.active };
+    await saveEMI(updated);
+    load();
+  };
+
   const handleConfirmAutoDetected = async (item: EMIItem) => {
     item.confirmed = true;
     await saveEMI(item);
@@ -246,6 +257,13 @@ export default function EMIsScreen() {
           </View>
           <Text style={styles.progressText}>{item.monthsPaid}/{item.totalMonths} months paid</Text>
         </TouchableOpacity>
+        {!isAutoDetected && (
+          <View style={styles.cardActions}>
+            <TouchableOpacity onPress={() => handleToggleActive(item)} activeOpacity={0.7} style={styles.deactivateBtn}>
+              <Text style={styles.deactivateText}>Deactivate</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   };
@@ -315,6 +333,32 @@ export default function EMIsScreen() {
           ) : null
         }
       />
+
+      {/* Inactive section */}
+      {inactiveItems.length > 0 && (
+        <View style={styles.inactiveSection}>
+          <TouchableOpacity style={styles.inactiveHeader} onPress={() => setShowInactive(!showInactive)} activeOpacity={0.7}>
+            <Text style={styles.inactiveTitle}>Inactive ({inactiveItems.length})</Text>
+            <Text style={styles.inactiveChevron}>{showInactive ? '▾' : '▸'}</Text>
+          </TouchableOpacity>
+          {showInactive && inactiveItems.map(item => (
+            <View key={item.id} style={[styles.card, { opacity: 0.6, marginHorizontal: 16, marginBottom: 8 }]}>
+              <View style={styles.cardTop}>
+                <View style={styles.cardLeft}>
+                  <Text style={styles.cardName}>{item.name}</Text>
+                  <Text style={styles.cardCycle}>{item.monthsLeft} months remaining · Inactive</Text>
+                </View>
+                <View style={styles.cardRight}>
+                  <Text style={styles.cardAmount}>{formatCurrency(item.amount)}/mo</Text>
+                  <TouchableOpacity onPress={() => handleToggleActive(item)} activeOpacity={0.7} style={styles.reactivateBtn}>
+                    <Text style={styles.reactivateText}>Reactivate</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       <TouchableOpacity style={[styles.fab, { backgroundColor: COLORS.warning }]} onPress={() => setShowAddModal(true)} activeOpacity={0.8}>
         <Text style={[styles.fabIcon, { color: '#1A1018' }]}>+</Text>
@@ -483,4 +527,14 @@ const styles = StyleSheet.create({
   saveBtnText: { fontSize: 15, fontWeight: '700' },
   cancelBtn: { paddingVertical: 12, alignItems: 'center' },
   cancelBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+
+  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, marginTop: -6, marginBottom: 8 },
+  deactivateBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: `${COLORS.textSecondary}15` },
+  deactivateText: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
+  inactiveSection: { marginBottom: 80 },
+  inactiveHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
+  inactiveTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary },
+  inactiveChevron: { fontSize: 14, color: COLORS.textSecondary },
+  reactivateBtn: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: `${COLORS.warning}18`, marginTop: 4 },
+  reactivateText: { fontSize: 10, fontWeight: '700', color: COLORS.warning },
 });

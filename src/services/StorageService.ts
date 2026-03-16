@@ -391,6 +391,20 @@ export async function addSettlement(settlement: Omit<Settlement, 'id' | 'timesta
   return full;
 }
 
+export async function deleteSettlement(groupId: string, settlementId: string): Promise<void> {
+  const all = await getSettlements(groupId);
+  await AsyncStorage.setItem(KEYS.SETTLEMENTS(groupId), JSON.stringify(all.filter(s => s.id !== settlementId)));
+}
+
+export async function unarchiveGroup(groupId: string): Promise<void> {
+  const groups = await getGroups();
+  const idx = groups.findIndex(g => g.id === groupId);
+  if (idx !== -1) {
+    groups[idx] = { ...groups[idx], archived: false };
+    await saveGroups(groups);
+  }
+}
+
 // ─── Savings Goals ───────────────────────────────────────────────────────────
 
 export async function getGoals(): Promise<SavingsGoal[]> {

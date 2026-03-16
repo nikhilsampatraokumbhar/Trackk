@@ -66,6 +66,7 @@ export type GroupType = 'trip' | 'expenses' | 'couple' | 'roommates' | 'party' |
 export interface Group {
   id: string;
   name: string;
+  description?: string;
   members: GroupMember[];
   createdBy: string;
   createdAt: number;
@@ -156,6 +157,7 @@ export interface SavingsGoal {
   lastStreakDate: string; // YYYY-MM-DD
   savingsJar: number;    // accumulated uncommitted savings
   totalSaved: number;    // lifetime "I invested this" amount
+  paused?: boolean;       // temporarily pause this goal
   createdAt: number;
 }
 
@@ -241,6 +243,7 @@ export interface Settlement {
   toName: string;
   amount: number;
   method: 'upi' | 'cash';
+  note?: string;
   timestamp: number;
 }
 
@@ -264,6 +267,8 @@ export interface UserSubscriptionItem {
   /** Whether user has confirmed/acknowledged this subscription */
   confirmed: boolean;
   active: boolean;
+  /** ISO date of when this was last manually marked as paid */
+  lastPaidDate?: string;
   createdAt: number;
 }
 

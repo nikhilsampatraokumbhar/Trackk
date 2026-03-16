@@ -22,6 +22,7 @@ import {
 } from '../services/EmailService';
 import { db } from '../services/FirebaseConfig';
 import { backupAllData, restoreFromBackup } from '../services/BackupService';
+import { clearAllData } from '../services/StorageService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -588,6 +589,48 @@ export default function ProfileScreen() {
           <Text style={styles.signOutBtnText}>Sign Out</Text>
         </TouchableOpacity>
 
+        {/* Delete Account */}
+        <TouchableOpacity
+          style={styles.deleteAccountBtn}
+          onPress={() => {
+            Alert.alert(
+              'Delete Account',
+              'This will permanently delete ALL your data including expenses, groups, goals, subscriptions, EMIs, and investments. This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Everything',
+                  style: 'destructive',
+                  onPress: () => {
+                    Alert.alert(
+                      'Are you absolutely sure?',
+                      'Type DELETE to confirm account deletion.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Yes, Delete',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              await clearAllData();
+                              await signOut();
+                            } catch (err: any) {
+                              Alert.alert('Error', err?.message || 'Failed to delete account.');
+                            }
+                          },
+                        },
+                      ],
+                    );
+                  },
+                },
+              ],
+            );
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.deleteAccountBtnText}>Delete Account</Text>
+        </TouchableOpacity>
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -1046,6 +1089,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: COLORS.textSecondary,
+    letterSpacing: 0.3,
+  },
+  deleteAccountBtn: {
+    borderRadius: 20,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 12,
+    backgroundColor: `${COLORS.danger}08`,
+    borderWidth: 1,
+    borderColor: `${COLORS.danger}20`,
+  },
+  deleteAccountBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.danger,
     letterSpacing: 0.3,
   },
 });
