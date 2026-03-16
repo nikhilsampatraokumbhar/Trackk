@@ -48,6 +48,7 @@ interface TrackerContextType {
   getActiveTrackers: (groups: Group[]) => ActiveTracker[];
   pendingTransaction: ParsedTransaction | null;
   pendingGroupTracker: ActiveTracker | null; // auto-routed group tracker for SplitEditor
+  pendingTargetTracker: ActiveTracker | null; // non-group tracker to auto-save + navigate
   clearPendingTransaction: () => void;
   addTransactionToTracker: (parsed: ParsedTransaction, trackerType: TrackerType, trackerId: string) => Promise<void>;
   transactionVersion: number; // increments on every new transaction, screens can react to this
@@ -94,11 +95,16 @@ interface Props {
 export function TrackerProvider({ children, groups, userId }: Props) {
   const [trackerState, setTrackerState] = useState<TrackerState>(DEFAULT_STATE);
   const [isListening, setIsListening] = useState(false);
-  const [pendingQueue, setPendingQueue] = useState<Array<{ transaction: ParsedTransaction; groupTracker?: ActiveTracker }>>([]);
+  const [pendingQueue, setPendingQueue] = useState<Array<{
+    transaction: ParsedTransaction;
+    groupTracker?: ActiveTracker;
+    targetTracker?: ActiveTracker;
+  }>>([]);
 
   // Derived: current pending transaction is the first item in the queue
   const pendingTransaction = pendingQueue.length > 0 ? pendingQueue[0].transaction : null;
   const pendingGroupTracker = pendingQueue.length > 0 ? (pendingQueue[0].groupTracker || null) : null;
+  const pendingTargetTracker = pendingQueue.length > 0 ? (pendingQueue[0].targetTracker || null) : null;
   const [transactionVersion, setTransactionVersion] = useState(0);
 
   const { loadGroupTransactions, activeGroupId } = useGroups();
@@ -216,16 +222,18 @@ export function TrackerProvider({ children, groups, userId }: Props) {
           } else if (actionId === 'choose_tracker' || (isBodyTap && !hasTrackerData)) {
             // Multiple trackers — show selection dialog
             setPendingQueue(prev => [...prev, { transaction: parsed }]);
-          } else if (isAddAction && hasTrackerData) {
-            // Non-group single tracker → auto-save
+          } else if ((isAddAction || isBodyTap) && hasTrackerData && !isGroupTracker) {
+            // Non-group single tracker → enqueue with target so HomeScreen
+            // can auto-save + navigate to the correct screen
             const trackerType = d.trackerType as TrackerType;
-            const user = await getOrCreateUser();
-            await saveTransaction(parsed, trackerType, user.id);
-          } else if (isBodyTap && hasTrackerData && !isGroupTracker) {
-            // Body tap with non-group single tracker → auto-save
-            const trackerType = d.trackerType as TrackerType;
-            const user = await getOrCreateUser();
-            await saveTransaction(parsed, trackerType, user.id);
+            setPendingQueue(prev => [...prev, {
+              transaction: parsed,
+              targetTracker: {
+                type: trackerType,
+                id: d.trackerId,
+                label: d.trackerLabel || (trackerType === 'personal' ? 'Personal' : 'Reimbursement'),
+              },
+            }]);
           }
         }
       }
@@ -236,16 +244,17 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     })();
   }, []);
 
-  // Register notification callbacks
+  // Register notification callbacks — all types go through pendingQueue
+  // so the active screen can navigate appropriately
   useEffect(() => {
     registerNotificationCallbacks(
       async (parsed, tracker) => {
         if (tracker.type === 'group') {
-          // Group tracker → enqueue pending transaction with group tracker so HomeScreen
-          // can open SplitEditor automatically
           setPendingQueue(prev => [...prev, { transaction: parsed, groupTracker: tracker }]);
         } else {
-          await addTransactionToTracker(parsed, tracker.type, tracker.id);
+          // Personal / Reimbursement → enqueue with targetTracker so HomeScreen
+          // can auto-save + navigate to the correct screen
+          setPendingQueue(prev => [...prev, { transaction: parsed, targetTracker: tracker }]);
         }
       },
       (parsed) => {
@@ -617,6 +626,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     getActiveTrackers,
     pendingTransaction,
     pendingGroupTracker,
+    pendingTargetTracker,
     clearPendingTransaction,
     addTransactionToTracker,
     transactionVersion,

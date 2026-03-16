@@ -34,7 +34,7 @@ export default function HomeScreen() {
   const { isPremium } = usePremium();
   const {
     trackerState, getActiveTrackers, pendingTransaction, pendingGroupTracker,
-    clearPendingTransaction, addTransactionToTracker,
+    pendingTargetTracker, clearPendingTransaction, addTransactionToTracker,
     transactionVersion,
   } = useTracker();
 
@@ -80,10 +80,8 @@ export default function HomeScreen() {
   // Auto-open SplitEditor when a group tracker is auto-routed from notification
   useEffect(() => {
     if (pendingTransaction && pendingGroupTracker) {
-      // Capture data before clearing from queue
       const txn = pendingTransaction;
       const tracker = pendingGroupTracker;
-      // Navigate first, then clear — data is passed via nav params so safe even if clear races
       nav.navigate('SplitEditor', {
         groupId: tracker.id,
         amount: txn.amount,
@@ -95,6 +93,24 @@ export default function HomeScreen() {
       clearPendingTransaction();
     }
   }, [pendingTransaction, pendingGroupTracker]);
+
+  // Auto-save + navigate when personal/reimbursement notification is tapped
+  useEffect(() => {
+    if (pendingTransaction && pendingTargetTracker && !pendingGroupTracker) {
+      const txn = pendingTransaction;
+      const tracker = pendingTargetTracker;
+      (async () => {
+        await addTransactionToTracker(txn, tracker.type, tracker.id);
+        clearPendingTransaction();
+        // Navigate to the correct screen
+        if (tracker.type === 'personal') {
+          nav.navigate('MainTabs', { screen: 'Personal' } as any);
+        } else if (tracker.type === 'reimbursement') {
+          nav.navigate('Reimbursement');
+        }
+      })();
+    }
+  }, [pendingTransaction, pendingTargetTracker, pendingGroupTracker]);
 
   const loadTransactions = useCallback(async () => {
     const all = await getTransactions();
