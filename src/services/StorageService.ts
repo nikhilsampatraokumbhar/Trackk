@@ -256,6 +256,27 @@ export async function addGroupTransaction(
   return txn;
 }
 
+export async function deleteGroupTransaction(
+  groupId: string,
+  transactionId: string,
+): Promise<void> {
+  const all = await getGroupTransactions(groupId);
+  const filtered = all.filter(t => t.id !== transactionId);
+  await saveGroupTransactions(groupId, filtered);
+}
+
+export async function updateGroupTransaction(
+  groupId: string,
+  transactionId: string,
+  updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits'>>,
+): Promise<void> {
+  const all = await getGroupTransactions(groupId);
+  const idx = all.findIndex(t => t.id === transactionId);
+  if (idx === -1) return;
+  all[idx] = { ...all[idx], ...updates };
+  await saveGroupTransactions(groupId, all);
+}
+
 export async function removeSplitMember(
   groupId: string,
   transactionId: string,

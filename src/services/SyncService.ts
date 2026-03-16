@@ -307,6 +307,21 @@ export async function unsettleSplitCloud(
 }
 
 /** Remove a member from a split (in Firestore) */
+export async function deleteGroupTransactionCloud(
+  groupId: string,
+  transactionId: string,
+): Promise<void> {
+  await db.groupTransaction(groupId, transactionId).delete();
+}
+
+export async function updateGroupTransactionCloud(
+  groupId: string,
+  transactionId: string,
+  updates: Record<string, any>,
+): Promise<void> {
+  await db.groupTransaction(groupId, transactionId).update(updates);
+}
+
 export async function removeSplitMemberCloud(
   groupId: string,
   transactionId: string,

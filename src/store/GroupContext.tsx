@@ -8,12 +8,15 @@ import {
   createGroupCloud, getGroupsCloud,
   getGroupTransactionsCloud, settleSplitCloud, unsettleSplitCloud,
   onGroupTransactionsChanged,
+  deleteGroupTransactionCloud, updateGroupTransactionCloud,
 } from '../services/SyncService';
 import {
   getGroups as getGroupsLocal, createGroup as createGroupLocal,
   getGroupTransactions as getGroupTransactionsLocal,
   settleSplit as settleSplitLocal,
   unsettleSplit as unsettleSplitLocal,
+  deleteGroupTransaction as deleteGroupTransactionLocal,
+  updateGroupTransaction as updateGroupTransactionLocal,
 } from '../services/StorageService';
 import { calculateDebts } from '../services/DebtCalculator';
 import { useAuth } from './AuthContext';
@@ -35,6 +38,8 @@ interface GroupContextType {
   loadGroupTransactions: (groupId: string) => Promise<void>;
   settleSplit: (groupId: string, transactionId: string, userId: string) => Promise<void>;
   unsettleSplit: (groupId: string, transactionId: string, userId: string) => Promise<void>;
+  deleteGroupTransaction: (groupId: string, transactionId: string) => Promise<void>;
+  updateGroupTransaction: (groupId: string, transactionId: string, updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits'>>) => Promise<void>;
 }
 
 const GroupContext = createContext<GroupContextType>({
@@ -48,6 +53,8 @@ const GroupContext = createContext<GroupContextType>({
   loadGroupTransactions: async () => {},
   settleSplit: async () => {},
   unsettleSplit: async () => {},
+  deleteGroupTransaction: async () => {},
+  updateGroupTransaction: async () => {},
 });
 
 export function GroupProvider({ children }: { children: ReactNode }) {
@@ -222,6 +229,31 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, loadGroupTransactions]);
 
+  const deleteGroupTransaction = useCallback(async (
+    groupId: string,
+    transactionId: string,
+  ) => {
+    if (isAuthenticated) {
+      await deleteGroupTransactionCloud(groupId, transactionId);
+    } else {
+      await deleteGroupTransactionLocal(groupId, transactionId);
+      await loadGroupTransactions(groupId);
+    }
+  }, [isAuthenticated, loadGroupTransactions]);
+
+  const updateGroupTransaction = useCallback(async (
+    groupId: string,
+    transactionId: string,
+    updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits'>>,
+  ) => {
+    if (isAuthenticated) {
+      await updateGroupTransactionCloud(groupId, transactionId, updates);
+    } else {
+      await updateGroupTransactionLocal(groupId, transactionId, updates);
+      await loadGroupTransactions(groupId);
+    }
+  }, [isAuthenticated, loadGroupTransactions]);
+
   const value = useMemo(() => ({
     groups,
     loading,
@@ -233,7 +265,9 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     loadGroupTransactions,
     settleSplit,
     unsettleSplit,
-  }), [groups, loading, refreshGroups, createGroup, activeGroupId, activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit, unsettleSplit]);
+    deleteGroupTransaction,
+    updateGroupTransaction,
+  }), [groups, loading, refreshGroups, createGroup, activeGroupId, activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit, unsettleSplit, deleteGroupTransaction, updateGroupTransaction]);
 
   return (
     <GroupContext.Provider value={value}>
