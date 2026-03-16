@@ -23,6 +23,7 @@ import { initDeepLinkListener } from '../services/DeepLinkService';
 import {
   ingestTransaction,
   addToPendingReview,
+  markMatchingPendingAsReviewed,
   TransactionSource,
 } from '../services/TransactionSignalEngine';
 import { processTransactionForTracking, checkEMICompletions } from '../services/AutoDetectionService';
@@ -345,6 +346,8 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       await saveTransaction(parsed, 'reimbursement', uid);
       await saveTransaction(parsed, 'personal', uid);
       await syncGoalDailyBudget();
+      // Mark as reviewed since it was auto-saved
+      await markMatchingPendingAsReviewed(parsed);
       setTransactionVersion(v => v + 1);
       // Show a confirmation notification (no action buttons needed)
       await showAutoSavedNotification(parsed);
@@ -591,6 +594,10 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       // Personal expense → sync goal budget
       await syncGoalDailyBudget();
     }
+
+    // Mark matching pending review item as reviewed so it doesn't show redundantly
+    // in Review Expenses after being added via notification
+    await markMatchingPendingAsReviewed(parsed);
 
     // Bump version so screens listening to transactionVersion will re-render/reload
     setTransactionVersion(v => v + 1);
