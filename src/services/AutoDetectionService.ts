@@ -550,28 +550,31 @@ export async function scanHistoricalSMS(
   // Try native SMS scan first (Android only)
   let parsed: Array<{ txn: ParsedTransaction; date: number }> = [];
 
-  if (Platform.OS === 'android' && NativeModules.SmsAndroid) {
+  if (Platform.OS === 'android') {
     const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
+    let messages: Array<{ body: string; address: string; date: string }> = [];
 
-    const messages = await new Promise<Array<{ body: string; address: string; date: string }>>((resolve) => {
-      const smsFilter = {
-        box: 'inbox',
-        maxCount: 5000,
-        minDate: oneYearAgo,
-      };
-
-      NativeModules.SmsAndroid.list(
-        JSON.stringify(smsFilter),
-        (_fail: string) => resolve([]),
-        (_count: number, smsList: string) => {
-          try {
-            resolve(JSON.parse(smsList));
-          } catch {
-            resolve([]);
-          }
-        },
-      );
-    });
+    // Use our custom SmsReaderModule (promise-based, ContentResolver)
+    if (NativeModules.SmsReaderModule) {
+      try {
+        messages = await NativeModules.SmsReaderModule.readSms(5000, oneYearAgo);
+      } catch (e) {
+        console.log('[AutoDetection] SmsReaderModule error:', e);
+        messages = [];
+      }
+    }
+    // Fallback to react-native-get-sms-android if available
+    else if (NativeModules.SmsAndroid) {
+      messages = await new Promise<Array<{ body: string; address: string; date: string }>>((resolve) => {
+        NativeModules.SmsAndroid.list(
+          JSON.stringify({ box: 'inbox', maxCount: 5000, minDate: oneYearAgo }),
+          (_fail: string) => resolve([]),
+          (_count: number, smsList: string) => {
+            try { resolve(JSON.parse(smsList)); } catch { resolve([]); }
+          },
+        );
+      });
+    }
 
     result.totalSmsScanned = messages.length;
 

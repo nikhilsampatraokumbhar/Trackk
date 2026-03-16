@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class SmsListenerPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-        listOf(SmsListenerModule(reactContext))
+        listOf(SmsListenerModule(reactContext), SmsReaderModule(reactContext))
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
         emptyList()

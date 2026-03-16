@@ -101,7 +101,31 @@ export default function SubscriptionsScreen() {
   }, 0);
 
   const handleSyncSMS = async () => {
-    // Check SMS permission
+    if (Platform.OS === 'ios') {
+      // iOS: scan stored transactions (from Shortcuts/deep links)
+      setScanning(true);
+      setScanResultText('');
+      try {
+        const result = await scanFromStoredTransactions('subscriptions');
+        await setSubscriptionsOnboarded();
+        setShowOnboarding(false);
+        if (result.subscriptions.length > 0) {
+          setScanResultText(`Found ${result.subscriptions.length} subscription${result.subscriptions.length > 1 ? 's' : ''}`);
+        } else {
+          setScanResultText('No subscriptions detected yet. Add manually or set up Shortcuts to auto-detect.');
+          setShowAddModal(true);
+        }
+        await load();
+      } catch (e) {
+        setShowOnboarding(false);
+        setShowAddModal(true);
+      } finally {
+        setScanning(false);
+      }
+      return;
+    }
+
+    // Android: Request SMS permission and scan
     const hasPerm = await checkSmsPermission();
     if (!hasPerm) {
       const granted = await requestSmsPermission();
@@ -145,15 +169,10 @@ export default function SubscriptionsScreen() {
     setSyncing(true);
     setScanResultText('');
     try {
-      // Try SMS first on Android, fallback to stored transactions
       let result;
       if (Platform.OS === 'android') {
-        const hasPerm = await checkSmsPermission();
-        if (hasPerm) {
-          result = await scanHistoricalSMS('subscriptions');
-        } else {
-          result = await scanFromStoredTransactions('subscriptions');
-        }
+        // Always try full SMS scan on Android (re-scan picks up new SMS)
+        result = await scanHistoricalSMS('subscriptions');
       } else {
         result = await scanFromStoredTransactions('subscriptions');
       }
@@ -383,10 +402,12 @@ export default function SubscriptionsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.onboardingContent}>
             <Text style={styles.onboardingEmoji}>🔄</Text>
-            <Text style={styles.onboardingTitle}>Let's get all your subscriptions</Text>
+            <Text style={styles.onboardingTitle}>Let's find your subscriptions</Text>
             <Text style={styles.onboardingSub}>
-              We'll scan your SMS history (past 1 year) to find all recurring subscriptions automatically.
-              {'\n\n'}Netflix, Spotify, YouTube Premium — we'll catch them all.
+              {Platform.OS === 'ios'
+                ? "We'll scan your transaction history to find recurring subscriptions.\n\nFor best results, set up Shortcuts automation first (Profile > iPhone Setup) to capture more transactions."
+                : "We'll scan your SMS history (past 1 year) to find all recurring subscriptions automatically.\n\nNetflix, Spotify, YouTube Premium — we'll catch them all."
+              }
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>
@@ -397,7 +418,9 @@ export default function SubscriptionsScreen() {
               <>
                 <TouchableOpacity style={styles.onboardingBtn} onPress={handleSyncSMS} activeOpacity={0.8}>
                   <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
-                    <Text style={styles.onboardingBtnText}>Scan & Find Subscriptions</Text>
+                    <Text style={styles.onboardingBtnText}>
+                      {Platform.OS === 'ios' ? 'Scan Transactions' : 'Scan & Find Subscriptions'}
+                    </Text>
                   </LinearGradient>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleOnboardingDismiss} style={{ padding: 12 }}>

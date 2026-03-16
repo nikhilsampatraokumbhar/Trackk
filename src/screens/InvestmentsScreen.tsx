@@ -85,6 +85,29 @@ export default function InvestmentsScreen() {
   }, 0);
 
   const handleSyncSMS = async () => {
+    if (Platform.OS === 'ios') {
+      setScanning(true);
+      setScanResultText('');
+      try {
+        const result = await scanFromStoredTransactions('investments');
+        await setInvestmentsOnboarded();
+        setShowOnboarding(false);
+        if (result.investments.length > 0) {
+          setScanResultText(`Found ${result.investments.length} investment${result.investments.length > 1 ? 's' : ''}`);
+        } else {
+          setScanResultText('No investments detected yet. Add manually or set up Shortcuts for auto-detection.');
+          setShowAddModal(true);
+        }
+        await load();
+      } catch (e) {
+        setShowOnboarding(false);
+        setShowAddModal(true);
+      } finally {
+        setScanning(false);
+      }
+      return;
+    }
+
     const hasPerm = await checkSmsPermission();
     if (!hasPerm) {
       const granted = await requestSmsPermission();
@@ -130,12 +153,7 @@ export default function InvestmentsScreen() {
     try {
       let result;
       if (Platform.OS === 'android') {
-        const hasPerm = await checkSmsPermission();
-        if (hasPerm) {
-          result = await scanHistoricalSMS('investments');
-        } else {
-          result = await scanFromStoredTransactions('investments');
-        }
+        result = await scanHistoricalSMS('investments');
       } else {
         result = await scanFromStoredTransactions('investments');
       }
@@ -334,10 +352,12 @@ export default function InvestmentsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.onboardingContent}>
             <Text style={styles.onboardingEmoji}>📈</Text>
-            <Text style={styles.onboardingTitle}>Let's get all your investments</Text>
+            <Text style={styles.onboardingTitle}>Let's find your investments</Text>
             <Text style={styles.onboardingSub}>
-              We'll scan your SMS history (past 1 year) to find all SIPs, mutual funds, and recurring investments.
-              {'\n\n'}Enter once, we'll track hereafter.
+              {Platform.OS === 'ios'
+                ? "We'll scan your transaction history to find SIPs, mutual funds, and recurring investments.\n\nFor best results, set up Shortcuts automation first (Profile > iPhone Setup)."
+                : "We'll scan your SMS history (past 1 year) to find all SIPs, mutual funds, and recurring investments.\n\nEnter once, we'll track hereafter."
+              }
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>
@@ -348,7 +368,9 @@ export default function InvestmentsScreen() {
               <>
                 <TouchableOpacity style={styles.onboardingBtn} onPress={handleSyncSMS} activeOpacity={0.8}>
                   <LinearGradient colors={[COLORS.success, '#2A9A6A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
-                    <Text style={styles.onboardingBtnText}>Scan & Find Investments</Text>
+                    <Text style={styles.onboardingBtnText}>
+                      {Platform.OS === 'ios' ? 'Scan Transactions' : 'Scan & Find Investments'}
+                    </Text>
                   </LinearGradient>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleOnboardingDismiss} style={{ padding: 12 }}>
