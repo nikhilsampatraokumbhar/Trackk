@@ -2,7 +2,7 @@ import React, {
   createContext, useContext, useState, useEffect,
   useCallback, useRef, useMemo, ReactNode,
 } from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import notifee from '@notifee/react-native';
 import { TrackerState, ParsedTransaction, ActiveTracker, Group, TrackerType } from '../models/types';
@@ -15,6 +15,7 @@ import {
   setupNotificationChannel, requestNotificationPermission,
   showTransactionNotification, showAutoSavedNotification,
   registerNotificationCallbacks, handleNotificationEvent,
+  PENDING_GROUP_SPLIT_KEY,
 } from '../services/NotificationService';
 import { saveTransaction, addGroupTransaction, getGroup, getGoals, getOrCreateTodaySpend, getOrCreateUser } from '../services/StorageService';
 import { addGroupTransactionCloud, getGroupCloud } from '../services/SyncService';
@@ -22,6 +23,7 @@ import { initDeepLinkListener } from '../services/DeepLinkService';
 import {
   ingestTransaction,
   addToPendingReview,
+  markMatchingPendingAsReviewed,
   TransactionSource,
 } from '../services/TransactionSignalEngine';
 import { processTransactionForTracking, checkEMICompletions } from '../services/AutoDetectionService';
@@ -46,6 +48,7 @@ interface TrackerContextType {
   getActiveTrackers: (groups: Group[]) => ActiveTracker[];
   pendingTransaction: ParsedTransaction | null;
   pendingGroupTracker: ActiveTracker | null; // auto-routed group tracker for SplitEditor
+  pendingTargetTracker: ActiveTracker | null; // non-group tracker to auto-save + navigate
   clearPendingTransaction: () => void;
   addTransactionToTracker: (parsed: ParsedTransaction, trackerType: TrackerType, trackerId: string) => Promise<void>;
   transactionVersion: number; // increments on every new transaction, screens can react to this
@@ -92,11 +95,16 @@ interface Props {
 export function TrackerProvider({ children, groups, userId }: Props) {
   const [trackerState, setTrackerState] = useState<TrackerState>(DEFAULT_STATE);
   const [isListening, setIsListening] = useState(false);
-  const [pendingQueue, setPendingQueue] = useState<Array<{ transaction: ParsedTransaction; groupTracker?: ActiveTracker }>>([]);
+  const [pendingQueue, setPendingQueue] = useState<Array<{
+    transaction: ParsedTransaction;
+    groupTracker?: ActiveTracker;
+    targetTracker?: ActiveTracker;
+  }>>([]);
 
   // Derived: current pending transaction is the first item in the queue
   const pendingTransaction = pendingQueue.length > 0 ? pendingQueue[0].transaction : null;
   const pendingGroupTracker = pendingQueue.length > 0 ? (pendingQueue[0].groupTracker || null) : null;
+  const pendingTargetTracker = pendingQueue.length > 0 ? (pendingQueue[0].targetTracker || null) : null;
   const [transactionVersion, setTransactionVersion] = useState(0);
 
   const { loadGroupTransactions, activeGroupId } = useGroups();
@@ -114,6 +122,39 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   useEffect(() => { trackerStateRef.current = trackerState; }, [trackerState]);
   useEffect(() => { loadGroupTransactionsRef.current = loadGroupTransactions; }, [loadGroupTransactions]);
   useEffect(() => { activeGroupIdRef.current = activeGroupId; }, [activeGroupId]);
+
+  /**
+   * Check AsyncStorage for a pending group split stashed by the background handler.
+   * The background handler can't show UI, so it stashes the data for us to pick up
+   * when the app comes to foreground and route to SplitEditor.
+   */
+  const consumePendingGroupSplit = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(PENDING_GROUP_SPLIT_KEY);
+      if (!raw) return;
+      await AsyncStorage.removeItem(PENDING_GROUP_SPLIT_KEY);
+      const { transaction, trackerId, trackerLabel } = JSON.parse(raw);
+      if (!transaction || !trackerId) return;
+      setPendingQueue(prev => [...prev, {
+        transaction,
+        groupTracker: {
+          type: 'group' as const,
+          id: trackerId,
+          label: trackerLabel || 'Group',
+        },
+      }]);
+    } catch {}
+  }, []);
+
+  // When app comes back to foreground, check for stashed pending group splits
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        consumePendingGroupSplit();
+      }
+    });
+    return () => sub.remove();
+  }, [consumePendingGroupSplit]);
 
   // Load state on mount; also recover pending transaction if app was cold-launched
   // from a "Choose Tracker" notification action
@@ -181,32 +222,39 @@ export function TrackerProvider({ children, groups, userId }: Props) {
           } else if (actionId === 'choose_tracker' || (isBodyTap && !hasTrackerData)) {
             // Multiple trackers — show selection dialog
             setPendingQueue(prev => [...prev, { transaction: parsed }]);
-          } else if (isAddAction && hasTrackerData) {
-            // Non-group single tracker → auto-save
+          } else if ((isAddAction || isBodyTap) && hasTrackerData && !isGroupTracker) {
+            // Non-group single tracker → enqueue with target so HomeScreen
+            // can auto-save + navigate to the correct screen
             const trackerType = d.trackerType as TrackerType;
-            const user = await getOrCreateUser();
-            await saveTransaction(parsed, trackerType, user.id);
-          } else if (isBodyTap && hasTrackerData && !isGroupTracker) {
-            // Body tap with non-group single tracker → auto-save
-            const trackerType = d.trackerType as TrackerType;
-            const user = await getOrCreateUser();
-            await saveTransaction(parsed, trackerType, user.id);
+            setPendingQueue(prev => [...prev, {
+              transaction: parsed,
+              targetTracker: {
+                type: trackerType,
+                id: d.trackerId,
+                label: d.trackerLabel || (trackerType === 'personal' ? 'Personal' : 'Reimbursement'),
+              },
+            }]);
           }
         }
       }
+
+      // Check for pending group split stashed by background handler
+      // (background handler can't show SplitEditor, so it stashes data for us)
+      await consumePendingGroupSplit();
     })();
   }, []);
 
-  // Register notification callbacks
+  // Register notification callbacks — all types go through pendingQueue
+  // so the active screen can navigate appropriately
   useEffect(() => {
     registerNotificationCallbacks(
       async (parsed, tracker) => {
         if (tracker.type === 'group') {
-          // Group tracker → enqueue pending transaction with group tracker so HomeScreen
-          // can open SplitEditor automatically
           setPendingQueue(prev => [...prev, { transaction: parsed, groupTracker: tracker }]);
         } else {
-          await addTransactionToTracker(parsed, tracker.type, tracker.id);
+          // Personal / Reimbursement → enqueue with targetTracker so HomeScreen
+          // can auto-save + navigate to the correct screen
+          setPendingQueue(prev => [...prev, { transaction: parsed, targetTracker: tracker }]);
         }
       },
       (parsed) => {
@@ -250,14 +298,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
         await processTransactionForTracking(parsed);
       } catch {}
 
+      // Always add to pending review so Review Expenses can show all today's transactions
+      await addToPendingReview(parsed, 'email');
+
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
 
       if (activeTrackers.length > 0) {
         await handleIncomingTransaction(parsed, activeTrackers);
-      } else {
-        await addToPendingReview(parsed, 'email');
       }
     });
 
@@ -269,13 +318,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     const cleanup = initDeepLinkListener(async (parsed) => {
       const signal = ingestTransaction(parsed, 'deep_link');
       if (!signal) return; // duplicate
+
+      // Always add to pending review
+      await addToPendingReview(parsed, 'deep_link');
+
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
       if (activeTrackers.length > 0) {
         await handleIncomingTransaction(parsed, activeTrackers);
-      } else {
-        await addToPendingReview(parsed, 'deep_link');
       }
     });
     return cleanup;
@@ -304,6 +355,8 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       await saveTransaction(parsed, 'reimbursement', uid);
       await saveTransaction(parsed, 'personal', uid);
       await syncGoalDailyBudget();
+      // Mark as reviewed since it was auto-saved
+      await markMatchingPendingAsReviewed(parsed);
       setTransactionVersion(v => v + 1);
       // Show a confirmation notification (no action buttons needed)
       await showAutoSavedNotification(parsed);
@@ -314,6 +367,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   }, []);
 
   // Start/stop SMS listener based on tracker state (Android only)
+  // Only listen when user has explicitly turned on a tracker (consent-based)
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
@@ -351,13 +405,14 @@ export function TrackerProvider({ children, groups, userId }: Props) {
         // Silent fail — auto-detection is best-effort
       }
 
+      // Always add to pending review so Review Expenses can show all today's transactions
+      await addToPendingReview(parsed, 'sms');
+
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
       if (activeTrackers.length > 0) {
         await handleIncomingTransaction(parsed, activeTrackers);
-      } else {
-        await addToPendingReview(parsed, 'sms');
       }
     });
 
@@ -549,6 +604,10 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       await syncGoalDailyBudget();
     }
 
+    // Mark matching pending review item as reviewed so it doesn't show redundantly
+    // in Review Expenses after being added via notification
+    await markMatchingPendingAsReviewed(parsed);
+
     // Bump version so screens listening to transactionVersion will re-render/reload
     setTransactionVersion(v => v + 1);
   }, []);
@@ -567,6 +626,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     getActiveTrackers,
     pendingTransaction,
     pendingGroupTracker,
+    pendingTargetTracker,
     clearPendingTransaction,
     addTransactionToTracker,
     transactionVersion,

@@ -212,6 +212,89 @@ export async function getGroupCloud(groupId: string): Promise<Group | null> {
   };
 }
 
+/** Update a group's fields in Firestore */
+export async function updateGroupCloud(
+  groupId: string,
+  updates: Record<string, any>,
+): Promise<void> {
+  await db.group(groupId).update(updates);
+}
+
+/** Delete a group and all its sub-collections from Firestore */
+export async function deleteGroupCloud(groupId: string): Promise<void> {
+  // Delete all transactions
+  const txnSnap = await db.groupTransactions(groupId).get();
+  const batch1 = firestore().batch();
+  txnSnap.docs.forEach(doc => batch1.delete(doc.ref));
+  if (txnSnap.docs.length > 0) await batch1.commit();
+
+  // Delete all settlements
+  const settleSnap = await db.settlements(groupId).get();
+  const batch2 = firestore().batch();
+  settleSnap.docs.forEach(doc => batch2.delete(doc.ref));
+  if (settleSnap.docs.length > 0) await batch2.commit();
+
+  // Delete the group doc itself
+  await db.group(groupId).delete();
+}
+
+/** Add a member to a group in Firestore */
+export async function addMemberToGroupCloud(
+  groupId: string,
+  member: GroupMember,
+): Promise<void> {
+  const doc = await db.group(groupId).get();
+  if (!doc.exists) return;
+  const data = doc.data()!;
+  const members: GroupMember[] = data.members || [];
+  members.push(member);
+
+  const normalizedPhone = member.phone.replace(/\D/g, '').slice(-10);
+  await db.group(groupId).update({
+    members,
+    ...(normalizedPhone.length === 10 ? {
+      memberPhones: firestore.FieldValue.arrayUnion(normalizedPhone),
+    } : {}),
+  });
+}
+
+/** Remove a member from a group in Firestore and settle their splits */
+export async function removeMemberFromGroupCloud(
+  groupId: string,
+  memberUserId: string,
+): Promise<void> {
+  const doc = await db.group(groupId).get();
+  if (!doc.exists) return;
+  const data = doc.data()!;
+  const removedMember = (data.members || []).find((m: GroupMember) => m.userId === memberUserId);
+  const updatedMembers = (data.members || []).filter((m: GroupMember) => m.userId !== memberUserId);
+
+  const updateData: Record<string, any> = {
+    members: updatedMembers,
+    memberIds: firestore.FieldValue.arrayRemove(memberUserId),
+  };
+  if (removedMember) {
+    const normalizedPhone = removedMember.phone.replace(/\D/g, '').slice(-10);
+    if (normalizedPhone.length === 10) {
+      updateData.memberPhones = firestore.FieldValue.arrayRemove(normalizedPhone);
+    }
+  }
+  await db.group(groupId).update(updateData);
+
+  // Settle all their unsettled splits
+  const txnSnap = await db.groupTransactions(groupId).get();
+  for (const txnDoc of txnSnap.docs) {
+    const txn = txnDoc.data() as GroupTransaction;
+    const needsUpdate = txn.splits.some(s => s.userId === memberUserId && !s.settled);
+    if (needsUpdate) {
+      const updatedSplits = txn.splits.map(s =>
+        s.userId === memberUserId ? { ...s, settled: true } : s,
+      );
+      await txnDoc.ref.update({ splits: updatedSplits });
+    }
+  }
+}
+
 // ─── Group Transactions Sync ────────────────────────────────────────────────
 
 /** Add a group transaction to Firestore */
@@ -307,6 +390,21 @@ export async function unsettleSplitCloud(
 }
 
 /** Remove a member from a split (in Firestore) */
+export async function deleteGroupTransactionCloud(
+  groupId: string,
+  transactionId: string,
+): Promise<void> {
+  await db.groupTransaction(groupId, transactionId).delete();
+}
+
+export async function updateGroupTransactionCloud(
+  groupId: string,
+  transactionId: string,
+  updates: Record<string, any>,
+): Promise<void> {
+  await db.groupTransaction(groupId, transactionId).update(updates);
+}
+
 export async function removeSplitMemberCloud(
   groupId: string,
   transactionId: string,

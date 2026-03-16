@@ -164,45 +164,48 @@ export async function readRecentSms(
   maxCount: number = 50,
   callback?: SmsCallback,
 ): Promise<void> {
-  if (!NativeModules.SmsAndroid) return;
+  let messages: Array<{ body: string; address: string; date: string }> = [];
 
-  return new Promise(resolve => {
-    const filter = {
-      box: 'inbox',
-      maxCount,
-      minDate: lastSmsTimestamp,
-    };
+  // Use our custom SmsReaderModule first (promise-based)
+  if (NativeModules.SmsReaderModule) {
+    try {
+      messages = await NativeModules.SmsReaderModule.readSms(maxCount, lastSmsTimestamp);
+    } catch (e) {
+      console.log('SMS read error:', e);
+      return;
+    }
+  }
+  // Fallback to react-native-get-sms-android
+  else if (NativeModules.SmsAndroid) {
+    messages = await new Promise<Array<{ body: string; address: string; date: string }>>((resolve) => {
+      NativeModules.SmsAndroid.list(
+        JSON.stringify({ box: 'inbox', maxCount, minDate: lastSmsTimestamp }),
+        (fail: string) => { console.log('SMS read error:', fail); resolve([]); },
+        (_count: number, smsList: string) => {
+          try { resolve(JSON.parse(smsList)); } catch { resolve([]); }
+        },
+      );
+    });
+  } else {
+    return;
+  }
 
-    NativeModules.SmsAndroid.list(
-      JSON.stringify(filter),
-      (fail: string) => {
-        console.log('SMS read error:', fail);
-        resolve();
-      },
-      (_count: number, smsList: string) => {
-        const messages: Array<{ body: string; address: string; date: string }> =
-          JSON.parse(smsList);
+  let latestDate = lastSmsTimestamp;
 
-        let latestDate = lastSmsTimestamp;
-
-        for (const sms of messages) {
-          const msgDate = parseInt(sms.date, 10);
-          if (msgDate > lastSmsTimestamp) {
-            if (isBankSender(sms.address)) {
-              const parsed = parseTransactionSms(sms.body, sms.address);
-              if (parsed && callback && !isDuplicate(parsed)) {
-                callback(parsed);
-              }
-            }
-            if (msgDate > latestDate) latestDate = msgDate;
-          }
+  for (const sms of messages) {
+    const msgDate = parseInt(sms.date, 10);
+    if (msgDate > lastSmsTimestamp) {
+      if (isBankSender(sms.address)) {
+        const parsed = parseTransactionSms(sms.body, sms.address);
+        if (parsed && callback && !isDuplicate(parsed)) {
+          callback(parsed);
         }
+      }
+      if (msgDate > latestDate) latestDate = msgDate;
+    }
+  }
 
-        lastSmsTimestamp = latestDate > lastSmsTimestamp ? latestDate : lastSmsTimestamp;
-        resolve();
-      },
-    );
-  });
+  lastSmsTimestamp = latestDate > lastSmsTimestamp ? latestDate : lastSmsTimestamp;
 }
 
 /**

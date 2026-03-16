@@ -14,11 +14,13 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeModules, Platform } from 'react-native';
+import functions from '@react-native-firebase/functions';
 import { ParsedTransaction, UserSubscriptionItem, InvestmentItem, EMIItem, Transaction } from '../models/types';
 import {
   getSubscriptions, saveSubscription,
   getInvestments, saveInvestment,
   getEMIs, saveEMI,
+  getTransactions,
 } from './StorageService';
 import { isBankSender, parseTransactionSms } from './TransactionParser';
 import { generateId } from '../utils/helpers';
@@ -546,49 +548,204 @@ export async function scanHistoricalSMS(
     totalMatched: 0,
   };
 
-  if (Platform.OS !== 'android' || !NativeModules.SmsAndroid) {
-    return result;
-  }
+  // Try native SMS scan first (Android only)
+  let parsed: Array<{ txn: ParsedTransaction; date: number }> = [];
 
-  // Read up to 5000 SMS from the last year
-  const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
+  if (Platform.OS === 'android') {
+    const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
+    let messages: Array<{ body: string; address: string; date: string }> = [];
 
-  const messages = await new Promise<Array<{ body: string; address: string; date: string }>>((resolve) => {
-    const smsFilter = {
-      box: 'inbox',
-      maxCount: 5000,
-      minDate: oneYearAgo,
-    };
+    // Use our custom SmsReaderModule (promise-based, ContentResolver)
+    if (NativeModules.SmsReaderModule) {
+      try {
+        messages = await NativeModules.SmsReaderModule.readSms(5000, oneYearAgo);
+      } catch (e) {
+        console.log('[AutoDetection] SmsReaderModule error:', e);
+        messages = [];
+      }
+    }
+    // Fallback to react-native-get-sms-android if available
+    else if (NativeModules.SmsAndroid) {
+      messages = await new Promise<Array<{ body: string; address: string; date: string }>>((resolve) => {
+        NativeModules.SmsAndroid.list(
+          JSON.stringify({ box: 'inbox', maxCount: 5000, minDate: oneYearAgo }),
+          (_fail: string) => resolve([]),
+          (_count: number, smsList: string) => {
+            try { resolve(JSON.parse(smsList)); } catch { resolve([]); }
+          },
+        );
+      });
+    }
 
-    NativeModules.SmsAndroid.list(
-      JSON.stringify(smsFilter),
-      (_fail: string) => resolve([]),
-      (_count: number, smsList: string) => {
-        try {
-          resolve(JSON.parse(smsList));
-        } catch {
-          resolve([]);
-        }
-      },
-    );
-  });
+    result.totalSmsScanned = messages.length;
 
-  result.totalSmsScanned = messages.length;
-
-  // Parse all bank SMS into transactions with correct timestamps
-  const parsed: Array<{ txn: ParsedTransaction; date: number }> = [];
-  for (const sms of messages) {
-    if (!isBankSender(sms.address)) continue;
-    const p = parseTransactionSms(sms.body, sms.address);
-    if (p) {
-      // Use actual SMS date instead of Date.now()
-      p.timestamp = parseInt(sms.date, 10);
-      p.rawMessage = sms.body;
-      parsed.push({ txn: p, date: parseInt(sms.date, 10) });
+    for (const sms of messages) {
+      if (!isBankSender(sms.address)) continue;
+      const p = parseTransactionSms(sms.body, sms.address);
+      if (p) {
+        p.timestamp = parseInt(sms.date, 10);
+        p.rawMessage = sms.body;
+        parsed.push({ txn: p, date: parseInt(sms.date, 10) });
+      }
     }
   }
 
+  // Fallback: use stored transactions when native SMS is unavailable or returned nothing
+  if (parsed.length === 0) {
+    const storedResult = await scanFromStoredTransactions(filter);
+    return storedResult;
+  }
+
   // Group by classification and merchant
+  return await groupAndSaveDetections(parsed, filter, result);
+}
+
+/**
+ * Fallback scanner that uses already-stored transactions from the app's local storage.
+ * Works on both iOS and Android — doesn't require SMS permission.
+ * Analyzes transaction history by merchant name and keywords to detect patterns.
+ */
+export async function scanFromStoredTransactions(
+  filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+): Promise<ScanResult> {
+  const result: ScanResult = {
+    subscriptions: [],
+    investments: [],
+    emis: [],
+    totalSmsScanned: 0,
+    totalMatched: 0,
+  };
+
+  // Get all stored transactions (personal + reimbursement — no group)
+  const allTransactions = await getTransactions();
+  result.totalSmsScanned = allTransactions.length;
+
+  if (allTransactions.length === 0) {
+    return result;
+  }
+
+  // Convert Transaction[] to ParsedTransaction[] for classification
+  const parsed: Array<{ txn: ParsedTransaction; date: number }> = [];
+
+  for (const txn of allTransactions) {
+    const p: ParsedTransaction = {
+      amount: txn.amount,
+      type: 'debit',
+      merchant: txn.merchant || txn.description,
+      rawMessage: txn.rawMessage || txn.description || txn.merchant || '',
+      timestamp: txn.timestamp,
+      bank: txn.source,
+    };
+    parsed.push({ txn: p, date: txn.timestamp });
+  }
+
+  return await groupAndSaveDetections(parsed, filter, result);
+}
+
+/**
+ * Scan connected email accounts (Gmail/Outlook) for the last 1 year of
+ * bank transaction emails. Uses a Cloud Function to access email via OAuth.
+ * Works on both iOS and Android — the primary scan method for iOS users.
+ *
+ * @returns ScanResult with detected subscriptions, EMIs, and investments.
+ */
+export async function scanEmailHistory(
+  filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+): Promise<ScanResult> {
+  const result: ScanResult = {
+    subscriptions: [],
+    investments: [],
+    emis: [],
+    totalSmsScanned: 0,
+    totalMatched: 0,
+  };
+
+  try {
+    const scanFn = functions().httpsCallable('scanEmailHistory');
+    const response = await scanFn({});
+    const data = response.data as {
+      transactions: Array<{
+        amount: number;
+        type: string;
+        merchant?: string;
+        bank?: string;
+        emailSubject: string;
+        rawBody: string;
+        timestamp: number;
+      }>;
+      totalScanned: number;
+      providers: string[];
+    };
+
+    if (!data.transactions || data.transactions.length === 0) {
+      return result;
+    }
+
+    result.totalSmsScanned = data.totalScanned;
+
+    // Convert email transactions to ParsedTransaction format for classification
+    const parsed: Array<{ txn: ParsedTransaction; date: number }> = [];
+
+    for (const emailTxn of data.transactions) {
+      const p: ParsedTransaction = {
+        amount: emailTxn.amount,
+        type: 'debit',
+        merchant: emailTxn.merchant || '',
+        rawMessage: `${emailTxn.emailSubject} ${emailTxn.rawBody}`,
+        timestamp: emailTxn.timestamp,
+        bank: emailTxn.bank,
+      };
+      parsed.push({ txn: p, date: emailTxn.timestamp });
+    }
+
+    return await groupAndSaveDetections(parsed, filter, result);
+  } catch (e) {
+    console.log('[AutoDetection] Email scan error:', e);
+    return result;
+  }
+}
+
+/**
+ * Combined scan: tries SMS (Android) + Email (both platforms) + stored transactions.
+ * This is the primary function screens should call for the most comprehensive scan.
+ */
+export async function scanAllSources(
+  filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+): Promise<ScanResult> {
+  // Run SMS scan and email scan in parallel
+  const [smsResult, emailResult] = await Promise.allSettled([
+    scanHistoricalSMS(filter),
+    scanEmailHistory(filter),
+  ]);
+
+  const sms = smsResult.status === 'fulfilled' ? smsResult.value : null;
+  const email = emailResult.status === 'fulfilled' ? emailResult.value : null;
+
+  // Merge results — prefer whichever found more
+  const merged: ScanResult = {
+    subscriptions: [...(sms?.subscriptions || []), ...(email?.subscriptions || [])],
+    investments: [...(sms?.investments || []), ...(email?.investments || [])],
+    emis: [...(sms?.emis || []), ...(email?.emis || [])],
+    totalSmsScanned: (sms?.totalSmsScanned || 0) + (email?.totalSmsScanned || 0),
+    totalMatched: (sms?.totalMatched || 0) + (email?.totalMatched || 0),
+  };
+
+  // If both returned nothing, try stored transactions as last resort
+  if (merged.subscriptions.length === 0 && merged.investments.length === 0 && merged.emis.length === 0) {
+    return await scanFromStoredTransactions(filter);
+  }
+
+  return merged;
+}
+
+/**
+ * Shared logic: group parsed transactions by classification, detect patterns, and save.
+ */
+async function groupAndSaveDetections(
+  parsed: Array<{ txn: ParsedTransaction; date: number }>,
+  filter: 'all' | 'subscriptions' | 'investments' | 'emis',
+  result: ScanResult,
+): Promise<ScanResult> {
   interface DetectedGroup {
     category: TransactionCategory;
     merchantName: string;
@@ -644,7 +801,6 @@ export async function scanHistoricalSMS(
         intervals.push((sortedDates[i] - sortedDates[i - 1]) / (1000 * 60 * 60 * 24));
       }
       const avgInterval = intervals.reduce((s, v) => s + v, 0) / intervals.length;
-      // Yearly: average interval 300-400 days
       if (avgInterval > 300) {
         cycle = 'yearly';
       }
@@ -684,12 +840,11 @@ export async function scanHistoricalSMS(
       await saveInvestment(item);
       result.investments.push(item);
     } else if (group.category === 'emi') {
-      // For EMIs, count occurrences as months paid
       const item: EMIItem = {
         id: generateId(),
         name: group.merchantName,
         amount: latestAmount,
-        totalMonths: 0, // user needs to set
+        totalMonths: 0,
         monthsPaid: group.dates.length,
         monthsLeft: 0,
         billingDay,

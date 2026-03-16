@@ -52,6 +52,7 @@ import * as crypto from "crypto";
 import { exchangeGmailCode, processGmailNotification, renewGmailWatch, disconnectGmail } from "./email/gmailService";
 import { exchangeOutlookCode, processOutlookNotification, renewOutlookWatch, disconnectOutlook } from "./email/outlookService";
 import { exchangeYahooCode, pollYahooMail, disconnectYahoo } from "./email/yahooService";
+import { scanAllEmailHistory } from "./email/emailHistoryScanner";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -467,7 +468,50 @@ export const disconnectEmail = onCall(
   }
 );
 
-// ─── 7. Gmail Webhook (Pub/Sub) ─────────────────────────────────────────────
+// ─── 7. Scan Email History ───────────────────────────────────────────────────
+
+/**
+ * Scan connected email accounts (Gmail/Outlook) for the last 1 year of
+ * bank transaction emails. Returns parsed transactions for the client
+ * to classify into subscriptions, EMIs, and investments.
+ *
+ * Called from the Subscriptions/EMIs/Investments screens when user taps Sync.
+ */
+export const scanEmailHistory = onCall(
+  {
+    secrets: [
+      gmailClientId, gmailClientSecret,
+      microsoftClientId, microsoftClientSecret,
+    ],
+    timeoutSeconds: 120,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be logged in");
+    }
+
+    try {
+      const result = await scanAllEmailHistory(
+        request.auth.uid,
+        gmailClientId.value(),
+        gmailClientSecret.value(),
+        microsoftClientId.value(),
+        microsoftClientSecret.value(),
+      );
+
+      return {
+        transactions: result.transactions,
+        totalScanned: result.totalScanned,
+        providers: result.providers,
+      };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      throw new HttpsError("internal", "Email scan failed: " + message);
+    }
+  },
+);
+
+// ─── 8. Gmail Webhook (Pub/Sub) ─────────────────────────────────────────────
 
 export const gmailWebhook = onMessagePublished(
   {

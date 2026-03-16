@@ -258,6 +258,33 @@ export async function markAsReviewed(ids: string[]): Promise<void> {
 }
 
 /**
+ * Mark a pending review item as reviewed by matching amount + timestamp.
+ * Used when a transaction is saved via notification action so it doesn't
+ * appear redundantly in Review Expenses.
+ */
+export async function markMatchingPendingAsReviewed(
+  parsed: ParsedTransaction,
+): Promise<void> {
+  const pending = await getPendingReviewTransactions();
+  let matched = false;
+
+  for (const p of pending) {
+    if (p.reviewed) continue;
+    const amountMatch = Math.abs(p.parsed.amount - parsed.amount) <= 0.01;
+    const timeMatch = Math.abs(p.receivedAt - parsed.timestamp) <= 120_000; // 2 min window
+    if (amountMatch && timeMatch) {
+      p.reviewed = true;
+      matched = true;
+      break; // Only mark one match
+    }
+  }
+
+  if (matched) {
+    await AsyncStorage.setItem(PENDING_REVIEW_KEY, JSON.stringify(pending));
+  }
+}
+
+/**
  * Clear old reviewed transactions (older than 7 days).
  */
 export async function cleanupOldPending(): Promise<void> {

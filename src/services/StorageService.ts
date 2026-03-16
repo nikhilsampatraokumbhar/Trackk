@@ -203,6 +203,14 @@ export async function archiveGroup(groupId: string): Promise<void> {
   }
 }
 
+export async function deleteGroup(groupId: string): Promise<void> {
+  const groups = await getGroups();
+  await saveGroups(groups.filter(g => g.id !== groupId));
+  // Clean up related data
+  await AsyncStorage.removeItem(KEYS.GROUP_TRANSACTIONS(groupId));
+  await AsyncStorage.removeItem(KEYS.SETTLEMENTS(groupId));
+}
+
 // ─── Group Transactions ──────────────────────────────────────────────────────
 
 export async function getGroupTransactions(groupId: string): Promise<GroupTransaction[]> {
@@ -254,6 +262,27 @@ export async function addGroupTransaction(
   await saveTransaction(splitParsed, 'group', userId, groupId);
 
   return txn;
+}
+
+export async function deleteGroupTransaction(
+  groupId: string,
+  transactionId: string,
+): Promise<void> {
+  const all = await getGroupTransactions(groupId);
+  const filtered = all.filter(t => t.id !== transactionId);
+  await saveGroupTransactions(groupId, filtered);
+}
+
+export async function updateGroupTransaction(
+  groupId: string,
+  transactionId: string,
+  updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits'>>,
+): Promise<void> {
+  const all = await getGroupTransactions(groupId);
+  const idx = all.findIndex(t => t.id === transactionId);
+  if (idx === -1) return;
+  all[idx] = { ...all[idx], ...updates };
+  await saveGroupTransactions(groupId, all);
 }
 
 export async function removeSplitMember(

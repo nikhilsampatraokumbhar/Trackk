@@ -1,18 +1,18 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Modal, TextInput, Alert, KeyboardAvoidingView, Platform,
-  ActivityIndicator,
+  ActivityIndicator, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { InvestmentItem } from '../models/types';
 import {
   getInvestments, saveInvestment, deleteInvestment,
   hasInvestmentsOnboarded, setInvestmentsOnboarded,
 } from '../services/StorageService';
-import { scanHistoricalSMS } from '../services/AutoDetectionService';
+import { scanAllSources } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
 import EmptyState from '../components/EmptyState';
@@ -39,12 +39,26 @@ function daysUntil(dateStr: string): number {
 }
 
 export default function InvestmentsScreen() {
+  const nav = useNavigation();
   const [items, setItems] = useState<InvestmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [scanResultText, setScanResultText] = useState('');
+  const spinAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (syncing) {
+      spinAnim.setValue(0);
+      Animated.loop(
+        Animated.timing(spinAnim, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true }),
+      ).start();
+    } else {
+      spinAnim.stopAnimation();
+    }
+  }, [syncing]);
 
   const [formName, setFormName] = useState('');
   const [formAmount, setFormAmount] = useState('');
@@ -71,42 +85,49 @@ export default function InvestmentsScreen() {
   }, 0);
 
   const handleSyncSMS = async () => {
-    const hasPerm = await checkSmsPermission();
-    if (!hasPerm) {
-      const granted = await requestSmsPermission();
-      if (!granted) {
-        Alert.alert(
-          'SMS Permission Required',
-          'We need SMS access to scan your transaction history and find investments automatically.',
-          [
-            { text: 'Add Manually', onPress: () => { setShowOnboarding(false); setShowAddModal(true); } },
-            { text: 'Try Again', onPress: handleSyncSMS },
-          ],
-        );
-        return;
-      }
+    if (Platform.OS === 'android') {
+      const hasPerm = await checkSmsPermission();
+      if (!hasPerm) await requestSmsPermission();
     }
 
     setScanning(true);
     setScanResultText('');
     try {
-      const result = await scanHistoricalSMS('investments');
+      const result = await scanAllSources('investments');
       await setInvestmentsOnboarded();
       setShowOnboarding(false);
 
       if (result.investments.length > 0) {
         setScanResultText(`Found ${result.investments.length} investment${result.investments.length > 1 ? 's' : ''}`);
       } else {
-        setScanResultText('No investments found in your SMS history');
+        setScanResultText('No investments found. Connect your email in Profile for better detection.');
         setShowAddModal(true);
       }
       await load();
     } catch (e) {
-      Alert.alert('Scan Failed', 'Could not scan SMS history. You can add investments manually.');
+      Alert.alert('Scan Failed', 'Could not complete scan. You can add investments manually.');
       setShowOnboarding(false);
       setShowAddModal(true);
     } finally {
       setScanning(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setScanResultText('');
+    try {
+      const result = await scanAllSources('investments');
+      if (result.investments.length > 0) {
+        setScanResultText(`Found ${result.investments.length} new investment${result.investments.length > 1 ? 's' : ''}`);
+      } else {
+        setScanResultText('No new investments found');
+      }
+      await load();
+    } catch (e) {
+      setScanResultText('Sync failed. Try again later.');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -220,7 +241,27 @@ export default function InvestmentsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <LinearGradient colors={['#101A14', '#0A100C', COLORS.background]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
         <View style={[styles.headerAccent, { backgroundColor: COLORS.success }]} />
-        <Text style={styles.headerTitle}>Investments</Text>
+        <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn} activeOpacity={0.7}>
+          <Text style={styles.backIcon}>‹</Text>
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.headerTitle}>Investments</Text>
+          <TouchableOpacity
+            style={styles.syncBtn}
+            onPress={handleSync}
+            disabled={syncing}
+            activeOpacity={0.7}
+          >
+            {syncing ? (
+              <Animated.Text style={[styles.syncIcon, { transform: [{ rotate: spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }]}>
+                ↻
+              </Animated.Text>
+            ) : (
+              <Text style={styles.syncIcon}>↻</Text>
+            )}
+          </TouchableOpacity>
+        </View>
         <Text style={styles.headerSub}>All your investments in one place</Text>
         {items.length > 0 && (
           <View style={styles.headerStats}>
@@ -271,10 +312,11 @@ export default function InvestmentsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.onboardingContent}>
             <Text style={styles.onboardingEmoji}>📈</Text>
-            <Text style={styles.onboardingTitle}>Let's get all your investments</Text>
+            <Text style={styles.onboardingTitle}>Let's find your investments</Text>
             <Text style={styles.onboardingSub}>
-              We'll scan your SMS history (past 1 year) to find all SIPs, mutual funds, and recurring investments.
+              We'll scan your SMS and connected email to find all SIPs, mutual funds, and recurring investments.
               {'\n\n'}Enter once, we'll track hereafter.
+              {'\n\n'}Tip: Connect your email in Profile for best results!
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>
@@ -343,7 +385,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: { borderRadius: 20, padding: 24, margin: 16, marginBottom: 8, borderWidth: 1, borderColor: COLORS.glassBorder, overflow: 'hidden' },
   headerAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  backIcon: { fontSize: 28, color: COLORS.success, fontWeight: '300', marginRight: 2, marginTop: -2 },
+  backText: { fontSize: 14, color: COLORS.success, fontWeight: '600' },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
+  syncBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: `${COLORS.success}20`, alignItems: 'center', justifyContent: 'center' },
+  syncIcon: { fontSize: 20, color: COLORS.success, fontWeight: '700' },
   headerSub: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 },
   headerStats: { flexDirection: 'row', justifyContent: 'space-between' },
   headerStatLabel: { fontSize: 9, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
