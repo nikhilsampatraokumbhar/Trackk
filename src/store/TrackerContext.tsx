@@ -288,14 +288,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
         await processTransactionForTracking(parsed);
       } catch {}
 
+      // Always add to pending review so Review Expenses can show all today's transactions
+      await addToPendingReview(parsed, 'email');
+
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
 
       if (activeTrackers.length > 0) {
         await handleIncomingTransaction(parsed, activeTrackers);
-      } else {
-        await addToPendingReview(parsed, 'email');
       }
     });
 
@@ -307,13 +308,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     const cleanup = initDeepLinkListener(async (parsed) => {
       const signal = ingestTransaction(parsed, 'deep_link');
       if (!signal) return; // duplicate
+
+      // Always add to pending review
+      await addToPendingReview(parsed, 'deep_link');
+
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
       if (activeTrackers.length > 0) {
         await handleIncomingTransaction(parsed, activeTrackers);
-      } else {
-        await addToPendingReview(parsed, 'deep_link');
       }
     });
     return cleanup;
@@ -351,22 +354,14 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     }
   }, []);
 
-  // Start/stop SMS listener based on tracker state (Android only)
+  // Always start SMS listener on Android — captures transactions for Review Expenses
+  // even when no trackers are active (they go to pending review for later assignment)
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
-    const hasActiveTracker =
-      trackerState.personal ||
-      trackerState.reimbursement ||
-      trackerState.activeGroupIds.length > 0;
-
-    if (hasActiveTracker && !isListeningRef.current) {
+    if (!isListeningRef.current) {
       isListeningRef.current = true;
       startListening();
-    } else if (!hasActiveTracker && isListeningRef.current) {
-      isListeningRef.current = false;
-      stopSmsListener();
-      setIsListening(false);
     }
   }, [trackerState]);
 
@@ -389,13 +384,14 @@ export function TrackerProvider({ children, groups, userId }: Props) {
         // Silent fail — auto-detection is best-effort
       }
 
+      // Always add to pending review so Review Expenses can show all today's transactions
+      await addToPendingReview(parsed, 'sms');
+
       const currentState = trackerStateRef.current;
       const currentGroups = groupsRef.current;
       const activeTrackers = getActiveTrackersFromState(currentState, currentGroups);
       if (activeTrackers.length > 0) {
         await handleIncomingTransaction(parsed, activeTrackers);
-      } else {
-        await addToPendingReview(parsed, 'sms');
       }
     });
 
