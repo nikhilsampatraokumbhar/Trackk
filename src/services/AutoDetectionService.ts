@@ -14,6 +14,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeModules, Platform } from 'react-native';
+import functions from '@react-native-firebase/functions';
 import { ParsedTransaction, UserSubscriptionItem, InvestmentItem, EMIItem, Transaction } from '../models/types';
 import {
   getSubscriptions, saveSubscription,
@@ -639,6 +640,102 @@ export async function scanFromStoredTransactions(
   }
 
   return await groupAndSaveDetections(parsed, filter, result);
+}
+
+/**
+ * Scan connected email accounts (Gmail/Outlook) for the last 1 year of
+ * bank transaction emails. Uses a Cloud Function to access email via OAuth.
+ * Works on both iOS and Android — the primary scan method for iOS users.
+ *
+ * @returns ScanResult with detected subscriptions, EMIs, and investments.
+ */
+export async function scanEmailHistory(
+  filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+): Promise<ScanResult> {
+  const result: ScanResult = {
+    subscriptions: [],
+    investments: [],
+    emis: [],
+    totalSmsScanned: 0,
+    totalMatched: 0,
+  };
+
+  try {
+    const scanFn = functions().httpsCallable('scanEmailHistory');
+    const response = await scanFn({});
+    const data = response.data as {
+      transactions: Array<{
+        amount: number;
+        type: string;
+        merchant?: string;
+        bank?: string;
+        emailSubject: string;
+        rawBody: string;
+        timestamp: number;
+      }>;
+      totalScanned: number;
+      providers: string[];
+    };
+
+    if (!data.transactions || data.transactions.length === 0) {
+      return result;
+    }
+
+    result.totalSmsScanned = data.totalScanned;
+
+    // Convert email transactions to ParsedTransaction format for classification
+    const parsed: Array<{ txn: ParsedTransaction; date: number }> = [];
+
+    for (const emailTxn of data.transactions) {
+      const p: ParsedTransaction = {
+        amount: emailTxn.amount,
+        type: 'debit',
+        merchant: emailTxn.merchant || '',
+        rawMessage: `${emailTxn.emailSubject} ${emailTxn.rawBody}`,
+        timestamp: emailTxn.timestamp,
+        bank: emailTxn.bank,
+      };
+      parsed.push({ txn: p, date: emailTxn.timestamp });
+    }
+
+    return await groupAndSaveDetections(parsed, filter, result);
+  } catch (e) {
+    console.log('[AutoDetection] Email scan error:', e);
+    return result;
+  }
+}
+
+/**
+ * Combined scan: tries SMS (Android) + Email (both platforms) + stored transactions.
+ * This is the primary function screens should call for the most comprehensive scan.
+ */
+export async function scanAllSources(
+  filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+): Promise<ScanResult> {
+  // Run SMS scan and email scan in parallel
+  const [smsResult, emailResult] = await Promise.allSettled([
+    scanHistoricalSMS(filter),
+    scanEmailHistory(filter),
+  ]);
+
+  const sms = smsResult.status === 'fulfilled' ? smsResult.value : null;
+  const email = emailResult.status === 'fulfilled' ? emailResult.value : null;
+
+  // Merge results — prefer whichever found more
+  const merged: ScanResult = {
+    subscriptions: [...(sms?.subscriptions || []), ...(email?.subscriptions || [])],
+    investments: [...(sms?.investments || []), ...(email?.investments || [])],
+    emis: [...(sms?.emis || []), ...(email?.emis || [])],
+    totalSmsScanned: (sms?.totalSmsScanned || 0) + (email?.totalSmsScanned || 0),
+    totalMatched: (sms?.totalMatched || 0) + (email?.totalMatched || 0),
+  };
+
+  // If both returned nothing, try stored transactions as last resort
+  if (merged.subscriptions.length === 0 && merged.investments.length === 0 && merged.emis.length === 0) {
+    return await scanFromStoredTransactions(filter);
+  }
+
+  return merged;
 }
 
 /**

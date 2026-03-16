@@ -12,7 +12,7 @@ import {
   getSubscriptions, saveSubscription, deleteSubscription,
   hasSubscriptionsOnboarded, setSubscriptionsOnboarded,
 } from '../services/StorageService';
-import { checkSharedSubscriptionStatus, scanHistoricalSMS, scanFromStoredTransactions } from '../services/AutoDetectionService';
+import { checkSharedSubscriptionStatus, scanAllSources } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
 import EmptyState from '../components/EmptyState';
@@ -101,63 +101,32 @@ export default function SubscriptionsScreen() {
   }, 0);
 
   const handleSyncSMS = async () => {
-    if (Platform.OS === 'ios') {
-      // iOS: scan stored transactions (from Shortcuts/deep links)
-      setScanning(true);
-      setScanResultText('');
-      try {
-        const result = await scanFromStoredTransactions('subscriptions');
-        await setSubscriptionsOnboarded();
-        setShowOnboarding(false);
-        if (result.subscriptions.length > 0) {
-          setScanResultText(`Found ${result.subscriptions.length} subscription${result.subscriptions.length > 1 ? 's' : ''}`);
-        } else {
-          setScanResultText('No subscriptions detected yet. Add manually or set up Shortcuts to auto-detect.');
-          setShowAddModal(true);
-        }
-        await load();
-      } catch (e) {
-        setShowOnboarding(false);
-        setShowAddModal(true);
-      } finally {
-        setScanning(false);
-      }
-      return;
-    }
-
-    // Android: Request SMS permission and scan
-    const hasPerm = await checkSmsPermission();
-    if (!hasPerm) {
-      const granted = await requestSmsPermission();
-      if (!granted) {
-        Alert.alert(
-          'SMS Permission Required',
-          'We need SMS access to scan your transaction history and find subscriptions automatically.',
-          [
-            { text: 'Add Manually', onPress: () => { setShowOnboarding(false); setShowAddModal(true); } },
-            { text: 'Try Again', onPress: handleSyncSMS },
-          ],
-        );
-        return;
+    // Request SMS permission on Android for best results
+    if (Platform.OS === 'android') {
+      const hasPerm = await checkSmsPermission();
+      if (!hasPerm) {
+        await requestSmsPermission();
+        // Continue even if denied — email scan and stored transactions still work
       }
     }
 
     setScanning(true);
     setScanResultText('');
     try {
-      const result = await scanHistoricalSMS('subscriptions');
+      // Scan all sources: SMS (Android) + Email (Gmail/Outlook) + stored transactions
+      const result = await scanAllSources('subscriptions');
       await setSubscriptionsOnboarded();
       setShowOnboarding(false);
 
       if (result.subscriptions.length > 0) {
         setScanResultText(`Found ${result.subscriptions.length} subscription${result.subscriptions.length > 1 ? 's' : ''}`);
       } else {
-        setScanResultText('No subscriptions found in your SMS history');
+        setScanResultText('No subscriptions found. Connect your email in Profile for better detection.');
         setShowAddModal(true);
       }
       await load();
     } catch (e) {
-      Alert.alert('Scan Failed', 'Could not scan SMS history. You can add subscriptions manually.');
+      Alert.alert('Scan Failed', 'Could not complete scan. You can add subscriptions manually.');
       setShowOnboarding(false);
       setShowAddModal(true);
     } finally {
@@ -169,14 +138,7 @@ export default function SubscriptionsScreen() {
     setSyncing(true);
     setScanResultText('');
     try {
-      let result;
-      if (Platform.OS === 'android') {
-        // Always try full SMS scan on Android (re-scan picks up new SMS)
-        result = await scanHistoricalSMS('subscriptions');
-      } else {
-        result = await scanFromStoredTransactions('subscriptions');
-      }
-
+      const result = await scanAllSources('subscriptions');
       if (result.subscriptions.length > 0) {
         setScanResultText(`Found ${result.subscriptions.length} new subscription${result.subscriptions.length > 1 ? 's' : ''}`);
       } else {
@@ -404,10 +366,9 @@ export default function SubscriptionsScreen() {
             <Text style={styles.onboardingEmoji}>🔄</Text>
             <Text style={styles.onboardingTitle}>Let's find your subscriptions</Text>
             <Text style={styles.onboardingSub}>
-              {Platform.OS === 'ios'
-                ? "We'll scan your transaction history to find recurring subscriptions.\n\nFor best results, set up Shortcuts automation first (Profile > iPhone Setup) to capture more transactions."
-                : "We'll scan your SMS history (past 1 year) to find all recurring subscriptions automatically.\n\nNetflix, Spotify, YouTube Premium — we'll catch them all."
-              }
+              We'll scan your SMS{Platform.OS === 'android' ? '' : ''} and connected email (Gmail/Outlook) to find all recurring subscriptions automatically.
+              {'\n\n'}Netflix, Spotify, YouTube Premium — we'll catch them all.
+              {'\n\n'}Tip: Connect your email in Profile for best results!
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>
@@ -418,9 +379,7 @@ export default function SubscriptionsScreen() {
               <>
                 <TouchableOpacity style={styles.onboardingBtn} onPress={handleSyncSMS} activeOpacity={0.8}>
                   <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
-                    <Text style={styles.onboardingBtnText}>
-                      {Platform.OS === 'ios' ? 'Scan Transactions' : 'Scan & Find Subscriptions'}
-                    </Text>
+                    <Text style={styles.onboardingBtnText}>Scan & Find Subscriptions</Text>
                   </LinearGradient>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleOnboardingDismiss} style={{ padding: 12 }}>

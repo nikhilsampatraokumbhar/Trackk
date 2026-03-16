@@ -12,7 +12,7 @@ import {
   getEMIs, saveEMI, deleteEMI,
   hasEMIsOnboarded, setEMIsOnboarded,
 } from '../services/StorageService';
-import { scanHistoricalSMS, scanFromStoredTransactions, checkEMICompletions } from '../services/AutoDetectionService';
+import { scanAllSources, checkEMICompletions } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
 import EmptyState from '../components/EmptyState';
@@ -89,61 +89,27 @@ export default function EMIsScreen() {
   const totalMonthly = items.reduce((sum, item) => sum + item.amount, 0);
 
   const handleSyncSMS = async () => {
-    if (Platform.OS === 'ios') {
-      setScanning(true);
-      setScanResultText('');
-      try {
-        const result = await scanFromStoredTransactions('emis');
-        await setEMIsOnboarded();
-        setShowOnboarding(false);
-        if (result.emis.length > 0) {
-          setScanResultText(`Found ${result.emis.length} EMI${result.emis.length > 1 ? 's' : ''}`);
-        } else {
-          setScanResultText('No EMIs detected yet. Add manually or set up Shortcuts for auto-detection.');
-          setShowAddModal(true);
-        }
-        await load();
-      } catch (e) {
-        setShowOnboarding(false);
-        setShowAddModal(true);
-      } finally {
-        setScanning(false);
-      }
-      return;
-    }
-
-    const hasPerm = await checkSmsPermission();
-    if (!hasPerm) {
-      const granted = await requestSmsPermission();
-      if (!granted) {
-        Alert.alert(
-          'SMS Permission Required',
-          'We need SMS access to scan your transaction history and find EMIs automatically.',
-          [
-            { text: 'Add Manually', onPress: () => { setShowOnboarding(false); setShowAddModal(true); } },
-            { text: 'Try Again', onPress: handleSyncSMS },
-          ],
-        );
-        return;
-      }
+    if (Platform.OS === 'android') {
+      const hasPerm = await checkSmsPermission();
+      if (!hasPerm) await requestSmsPermission();
     }
 
     setScanning(true);
     setScanResultText('');
     try {
-      const result = await scanHistoricalSMS('emis');
+      const result = await scanAllSources('emis');
       await setEMIsOnboarded();
       setShowOnboarding(false);
 
       if (result.emis.length > 0) {
         setScanResultText(`Found ${result.emis.length} EMI${result.emis.length > 1 ? 's' : ''}`);
       } else {
-        setScanResultText('No EMIs found in your SMS history');
+        setScanResultText('No EMIs found. Connect your email in Profile for better detection.');
         setShowAddModal(true);
       }
       await load();
     } catch (e) {
-      Alert.alert('Scan Failed', 'Could not scan SMS history. You can add EMIs manually.');
+      Alert.alert('Scan Failed', 'Could not complete scan. You can add EMIs manually.');
       setShowOnboarding(false);
       setShowAddModal(true);
     } finally {
@@ -155,13 +121,7 @@ export default function EMIsScreen() {
     setSyncing(true);
     setScanResultText('');
     try {
-      let result;
-      if (Platform.OS === 'android') {
-        result = await scanHistoricalSMS('emis');
-      } else {
-        result = await scanFromStoredTransactions('emis');
-      }
-
+      const result = await scanAllSources('emis');
       if (result.emis.length > 0) {
         setScanResultText(`Found ${result.emis.length} new EMI${result.emis.length > 1 ? 's' : ''}`);
       } else {
@@ -386,10 +346,9 @@ export default function EMIsScreen() {
             <Text style={styles.onboardingEmoji}>🏦</Text>
             <Text style={styles.onboardingTitle}>Let's find your EMIs</Text>
             <Text style={styles.onboardingSub}>
-              {Platform.OS === 'ios'
-                ? "We'll scan your transaction history to find EMI payments.\n\nFor best results, set up Shortcuts automation first (Profile > iPhone Setup) to capture more transactions."
-                : "We'll scan your SMS history (past 1 year) to find all EMI payments automatically.\n\nTrack loan repayments, auto EMIs, and never miss a payment."
-              }
+              We'll scan your SMS and connected email to find all EMI payments automatically.
+              {'\n\n'}Track loan repayments, auto EMIs, and never miss a payment.
+              {'\n\n'}Tip: Connect your email in Profile for best results!
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>
@@ -400,9 +359,7 @@ export default function EMIsScreen() {
               <>
                 <TouchableOpacity style={styles.onboardingBtn} onPress={handleSyncSMS} activeOpacity={0.8}>
                   <LinearGradient colors={[COLORS.warning, '#C8A052']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
-                    <Text style={[styles.onboardingBtnText, { color: '#1A1018' }]}>
-                      {Platform.OS === 'ios' ? 'Scan Transactions' : 'Scan & Find EMIs'}
-                    </Text>
+                    <Text style={[styles.onboardingBtnText, { color: '#1A1018' }]}>Scan & Find EMIs</Text>
                   </LinearGradient>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleOnboardingDismiss} style={{ padding: 12 }}>
