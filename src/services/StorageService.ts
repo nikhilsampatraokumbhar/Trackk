@@ -203,6 +203,14 @@ export async function archiveGroup(groupId: string): Promise<void> {
   }
 }
 
+export async function deleteGroup(groupId: string): Promise<void> {
+  const groups = await getGroups();
+  await saveGroups(groups.filter(g => g.id !== groupId));
+  // Clean up related data
+  await AsyncStorage.removeItem(KEYS.GROUP_TRANSACTIONS(groupId));
+  await AsyncStorage.removeItem(KEYS.SETTLEMENTS(groupId));
+}
+
 // ─── Group Transactions ──────────────────────────────────────────────────────
 
 export async function getGroupTransactions(groupId: string): Promise<GroupTransaction[]> {

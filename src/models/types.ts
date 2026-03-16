@@ -61,6 +61,8 @@ export interface GroupMember {
   phone: string;
 }
 
+export type GroupType = 'trip' | 'expenses' | 'couple' | 'roommates' | 'party' | 'other';
+
 export interface Group {
   id: string;
   name: string;
@@ -71,6 +73,8 @@ export interface Group {
   tripReminderSent?: boolean;
   archived?: boolean;
   budget?: number;
+  groupType?: GroupType;
+  imageUri?: string;
 }
 
 export interface Split {

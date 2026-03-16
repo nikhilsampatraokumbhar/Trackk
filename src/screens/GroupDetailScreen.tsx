@@ -442,8 +442,18 @@ export default function GroupDetailScreen() {
           <>
             {/* Group header — clean, like Splitwise */}
             <View style={styles.header}>
-              <View style={[styles.groupIcon, { backgroundColor: `${groupColor}30` }]}>
-                <Text style={[styles.groupInitial, { color: groupColor }]}>{(group.name || 'G')[0].toUpperCase()}</Text>
+              <View style={styles.headerTopRow}>
+                <View style={[styles.groupIcon, { backgroundColor: `${groupColor}30` }]}>
+                  <Text style={[styles.groupInitial, { color: groupColor }]}>{(group.name || 'G')[0].toUpperCase()}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.settingsBtn}
+                  onPress={() => nav.navigate('GroupSettings', { groupId })}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.settingsIcon}>⚙️</Text>
+                </TouchableOpacity>
               </View>
               <Text style={styles.groupName}>{group.name}</Text>
               <Text style={[styles.summaryText, { color: summaryLine.color }]}>{summaryLine.text}</Text>
@@ -714,7 +724,10 @@ const styles = StyleSheet.create({
 
   // ─── Header (Splitwise-style) ─────────────────────────────────────────────
   header: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16 },
-  groupIcon: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  headerTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  settingsBtn: { padding: 8, borderRadius: 12, backgroundColor: `${COLORS.surfaceHigh}` },
+  settingsIcon: { fontSize: 20 },
+  groupIcon: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   groupInitial: { fontSize: 28, fontWeight: '800' },
   groupName: { fontSize: 24, fontWeight: '800', color: COLORS.text, marginBottom: 4, letterSpacing: -0.3 },
   summaryText: { fontSize: 14, fontWeight: '500', marginBottom: 16 },

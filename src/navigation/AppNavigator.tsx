@@ -26,6 +26,7 @@ import QuickAddScreen from '../screens/QuickAddScreen';
 import SubscriptionsScreen from '../screens/SubscriptionsScreen';
 import InvestmentsScreen from '../screens/InvestmentsScreen';
 import EMIsScreen from '../screens/EMIsScreen';
+import GroupSettingsScreen from '../screens/GroupSettingsScreen';
 import LoginScreen from '../screens/LoginScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 
@@ -47,6 +48,7 @@ export type RootStackParamList = {
   MainTabs: undefined;
   Goals: undefined;
   GroupDetail: { groupId: string };
+  GroupSettings: { groupId: string };
   CreateGroup: undefined;
   TransactionDetail: { transactionId: string };
   TrackerSettings: undefined;
@@ -311,6 +313,11 @@ export function AppNavigator() {
               name="GroupDetail"
               component={GroupDetailScreen}
               options={{ title: 'Group', headerBackTitle: '' }}
+            />
+            <Stack.Screen
+              name="GroupSettings"
+              component={GroupSettingsScreen}
+              options={{ title: 'Group Settings', headerBackTitle: '' }}
             />
             <Stack.Screen
               name="CreateGroup"

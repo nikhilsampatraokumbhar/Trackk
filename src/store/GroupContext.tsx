@@ -3,12 +3,14 @@ import React, {
   useCallback, useMemo, ReactNode,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Group, GroupTransaction, Debt } from '../models/types';
+import { Group, GroupTransaction, GroupMember, Debt } from '../models/types';
 import {
   createGroupCloud, getGroupsCloud,
   getGroupTransactionsCloud, settleSplitCloud, unsettleSplitCloud,
   onGroupTransactionsChanged,
   deleteGroupTransactionCloud, updateGroupTransactionCloud,
+  updateGroupCloud, deleteGroupCloud,
+  addMemberToGroupCloud, removeMemberFromGroupCloud,
 } from '../services/SyncService';
 import {
   getGroups as getGroupsLocal, createGroup as createGroupLocal,
@@ -17,6 +19,9 @@ import {
   unsettleSplit as unsettleSplitLocal,
   deleteGroupTransaction as deleteGroupTransactionLocal,
   updateGroupTransaction as updateGroupTransactionLocal,
+  updateGroup as updateGroupLocal,
+  deleteGroup as deleteGroupLocal,
+  removeGroupMember as removeGroupMemberLocal,
 } from '../services/StorageService';
 import { calculateDebts } from '../services/DebtCalculator';
 import { useAuth } from './AuthContext';
@@ -40,6 +45,10 @@ interface GroupContextType {
   unsettleSplit: (groupId: string, transactionId: string, userId: string) => Promise<void>;
   deleteGroupTransaction: (groupId: string, transactionId: string) => Promise<void>;
   updateGroupTransaction: (groupId: string, transactionId: string, updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits'>>) => Promise<void>;
+  updateGroup: (groupId: string, updates: Partial<Group>) => Promise<void>;
+  deleteGroup: (groupId: string) => Promise<void>;
+  addGroupMember: (groupId: string, member: GroupMember) => Promise<void>;
+  removeGroupMember: (groupId: string, memberUserId: string) => Promise<void>;
 }
 
 const GroupContext = createContext<GroupContextType>({
@@ -55,6 +64,10 @@ const GroupContext = createContext<GroupContextType>({
   unsettleSplit: async () => {},
   deleteGroupTransaction: async () => {},
   updateGroupTransaction: async () => {},
+  updateGroup: async () => {},
+  deleteGroup: async () => {},
+  addGroupMember: async () => {},
+  removeGroupMember: async () => {},
 });
 
 export function GroupProvider({ children }: { children: ReactNode }) {
@@ -71,18 +84,14 @@ export function GroupProvider({ children }: { children: ReactNode }) {
 
     try {
       if (isAuthenticated) {
-        // Fetch from Firestore - includes groups found by phone match
         const cloudGroups = await getGroupsCloud(user.id, user.phone);
         setGroups(cloudGroups);
-        // Persist to cache for next instant load
         AsyncStorage.setItem(CACHE_KEYS.GROUPS, JSON.stringify(cloudGroups)).catch(() => {});
       } else {
-        // Fallback to local storage
         const localGroups = await getGroupsLocal();
         setGroups(localGroups);
       }
     } catch {
-      // Fallback to local
       const localGroups = await getGroupsLocal();
       setGroups(localGroups);
     }
@@ -98,21 +107,17 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     (async () => {
-      // Step 1: Load from cache instantly (no spinner)
       try {
         const cached = await AsyncStorage.getItem(CACHE_KEYS.GROUPS);
         if (cached && !cancelled) {
           const cachedGroups: Group[] = JSON.parse(cached);
           if (cachedGroups.length > 0) {
             setGroups(cachedGroups);
-            setLoading(false); // User sees data immediately
+            setLoading(false);
           }
         }
-      } catch {
-        // Cache miss is fine, will fetch from cloud
-      }
+      } catch {}
 
-      // Step 2: Refresh from cloud silently in background
       if (!cancelled) {
         await refreshGroups();
         if (!cancelled) setLoading(false);
@@ -132,10 +137,8 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     let group: Group;
 
     if (isAuthenticated && user) {
-      // Create in Firestore (synced)
       group = await createGroupCloud(name, members, userId, user.phone, isTrip);
     } else {
-      // Create locally (offline fallback)
       group = await createGroupLocal(name, members, userId, isTrip);
     }
     if (budget && budget > 0) {
@@ -144,7 +147,6 @@ export function GroupProvider({ children }: { children: ReactNode }) {
 
     setGroups(prev => {
       const updated = [group, ...prev];
-      // Update cache
       AsyncStorage.setItem(CACHE_KEYS.GROUPS, JSON.stringify(updated)).catch(() => {});
       return updated;
     });
@@ -152,7 +154,6 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, user]);
 
   const loadGroupTransactions = useCallback(async (groupId: string) => {
-    // Cleanup previous listener
     if (unsubscribe) {
       unsubscribe();
       setUnsubscribe(null);
@@ -160,7 +161,6 @@ export function GroupProvider({ children }: { children: ReactNode }) {
 
     setActiveGroupId(groupId);
 
-    // Step 1: Load cached transactions instantly
     try {
       const cached = await AsyncStorage.getItem(CACHE_KEYS.GROUP_TXNS(groupId));
       if (cached) {
@@ -170,31 +170,22 @@ export function GroupProvider({ children }: { children: ReactNode }) {
           setActiveGroupDebts(calculateDebts(cachedTxns));
         }
       }
-    } catch {
-      // Cache miss is fine
-    }
+    } catch {}
 
-    // Step 2: Set up real-time listener / fetch fresh data
     if (isAuthenticated) {
-      // Set up real-time listener for group transactions
-      // The listener fires immediately with current data, so no separate initial fetch needed
-      // (doing both causes a race where the fetch overwrites newer listener data)
       const unsub = onGroupTransactionsChanged(groupId, (txns) => {
         setActiveGroupTransactions(txns);
         setActiveGroupDebts(calculateDebts(txns));
-        // Update cache on every real-time update
         AsyncStorage.setItem(CACHE_KEYS.GROUP_TXNS(groupId), JSON.stringify(txns)).catch(() => {});
       });
       setUnsubscribe(() => unsub);
     } else {
-      // Local fallback
       const txns = await getGroupTransactionsLocal(groupId);
       setActiveGroupTransactions(txns);
       setActiveGroupDebts(calculateDebts(txns));
     }
   }, [isAuthenticated, unsubscribe]);
 
-  // Cleanup listener on unmount
   useEffect(() => {
     return () => {
       if (unsubscribe) unsubscribe();
@@ -202,24 +193,18 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   }, [unsubscribe]);
 
   const settleSplit = useCallback(async (
-    groupId: string,
-    transactionId: string,
-    userId: string,
+    groupId: string, transactionId: string, userId: string,
   ) => {
     if (isAuthenticated) {
-      // Settle in Firestore (will trigger real-time update for all members)
       await settleSplitCloud(groupId, transactionId, userId);
     } else {
-      // Local fallback
       await settleSplitLocal(groupId, transactionId, userId);
       await loadGroupTransactions(groupId);
     }
   }, [isAuthenticated, loadGroupTransactions]);
 
   const unsettleSplit = useCallback(async (
-    groupId: string,
-    transactionId: string,
-    userId: string,
+    groupId: string, transactionId: string, userId: string,
   ) => {
     if (isAuthenticated) {
       await unsettleSplitCloud(groupId, transactionId, userId);
@@ -230,8 +215,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, loadGroupTransactions]);
 
   const deleteGroupTransaction = useCallback(async (
-    groupId: string,
-    transactionId: string,
+    groupId: string, transactionId: string,
   ) => {
     if (isAuthenticated) {
       await deleteGroupTransactionCloud(groupId, transactionId);
@@ -242,8 +226,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, loadGroupTransactions]);
 
   const updateGroupTransaction = useCallback(async (
-    groupId: string,
-    transactionId: string,
+    groupId: string, transactionId: string,
     updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits'>>,
   ) => {
     if (isAuthenticated) {
@@ -253,6 +236,60 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       await loadGroupTransactions(groupId);
     }
   }, [isAuthenticated, loadGroupTransactions]);
+
+  const updateGroup = useCallback(async (groupId: string, updates: Partial<Group>) => {
+    if (isAuthenticated) {
+      await updateGroupCloud(groupId, updates);
+    } else {
+      await updateGroupLocal(groupId, updates);
+    }
+    // Update local state immediately
+    setGroups(prev => {
+      const updated = prev.map(g => g.id === groupId ? { ...g, ...updates } : g);
+      AsyncStorage.setItem(CACHE_KEYS.GROUPS, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, [isAuthenticated]);
+
+  const deleteGroup = useCallback(async (groupId: string) => {
+    if (isAuthenticated) {
+      await deleteGroupCloud(groupId);
+    } else {
+      await deleteGroupLocal(groupId);
+    }
+    setGroups(prev => {
+      const updated = prev.filter(g => g.id !== groupId);
+      AsyncStorage.setItem(CACHE_KEYS.GROUPS, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+    // Clean transaction cache
+    AsyncStorage.removeItem(CACHE_KEYS.GROUP_TXNS(groupId)).catch(() => {});
+  }, [isAuthenticated]);
+
+  const addGroupMember = useCallback(async (groupId: string, member: GroupMember) => {
+    if (isAuthenticated) {
+      await addMemberToGroupCloud(groupId, member);
+    } else {
+      // Local: update group directly
+      const localGroups = await getGroupsLocal();
+      const g = localGroups.find(gr => gr.id === groupId);
+      if (g) {
+        g.members.push(member);
+        await updateGroupLocal(groupId, { members: g.members });
+      }
+    }
+    // Refresh groups to get updated member list
+    await refreshGroups();
+  }, [isAuthenticated, refreshGroups]);
+
+  const removeGroupMember = useCallback(async (groupId: string, memberUserId: string) => {
+    if (isAuthenticated) {
+      await removeMemberFromGroupCloud(groupId, memberUserId);
+    } else {
+      await removeGroupMemberLocal(groupId, memberUserId);
+    }
+    await refreshGroups();
+  }, [isAuthenticated, refreshGroups]);
 
   const value = useMemo(() => ({
     groups,
@@ -267,7 +304,11 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     unsettleSplit,
     deleteGroupTransaction,
     updateGroupTransaction,
-  }), [groups, loading, refreshGroups, createGroup, activeGroupId, activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit, unsettleSplit, deleteGroupTransaction, updateGroupTransaction]);
+    updateGroup,
+    deleteGroup,
+    addGroupMember,
+    removeGroupMember,
+  }), [groups, loading, refreshGroups, createGroup, activeGroupId, activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit, unsettleSplit, deleteGroupTransaction, updateGroupTransaction, updateGroup, deleteGroup, addGroupMember, removeGroupMember]);
 
   return (
     <GroupContext.Provider value={value}>
