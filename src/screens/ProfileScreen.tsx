@@ -11,7 +11,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { usePremium } from '../store/PremiumContext';
-import { COLORS } from '../utils/helpers';
+import { COLORS, formatDate } from '../utils/helpers';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, changeLanguage } from '../i18n';
 import { CURRENCIES, getPreferredCurrency, setPreferredCurrency, getCurrencyInfo } from '../utils/currencies';
@@ -21,6 +21,7 @@ import {
   getProviderDisplayName, getProviderColor,
 } from '../services/EmailService';
 import { db } from '../services/FirebaseConfig';
+import { backupAllData, restoreFromBackup } from '../services/BackupService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -504,6 +505,68 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Backup & Restore */}
+        <View style={styles.dataSection}>
+          <Text style={styles.dataSectionTitle}>DATA</Text>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={async () => {
+              try {
+                await backupAllData();
+                Alert.alert('Backup Complete', 'Your data has been exported. Share it to save it safely.');
+              } catch (err: any) {
+                Alert.alert('Error', err?.message || 'Failed to create backup.');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.settingIcon, { backgroundColor: `${COLORS.success}15` }]}>
+              <Text style={styles.settingEmoji}>💾</Text>
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Backup Data</Text>
+              <Text style={styles.settingSub}>Export all personal data as JSON</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={async () => {
+              Alert.alert(
+                'Restore Backup',
+                'This will replace all your current local data with the backup. Are you sure?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Restore',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        const result = await restoreFromBackup();
+                        if (result) {
+                          Alert.alert('Restored', 'Data has been restored from backup. Please restart the app.');
+                        }
+                      } catch (err: any) {
+                        Alert.alert('Error', err?.message || 'Failed to restore backup.');
+                      }
+                    },
+                  },
+                ],
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.settingIcon, { backgroundColor: `${COLORS.warning}15` }]}>
+              <Text style={styles.settingEmoji}>📥</Text>
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Restore Backup</Text>
+              <Text style={styles.settingSub}>Import data from a backup file</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Sign Out */}
         <TouchableOpacity
           style={styles.signOutBtn}
@@ -933,6 +996,42 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textSecondary,
   },
+
+  /* ── Backup & Restore ─────────────────────────────────────── */
+  dataSection: {
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+  },
+  dataSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  settingIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  settingEmoji: { fontSize: 20 },
+  settingInfo: { flex: 1 },
+  settingLabel: { fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 2 },
+  settingSub: { fontSize: 11, color: COLORS.textSecondary },
 
   signOutBtn: {
     borderRadius: 20,

@@ -84,6 +84,14 @@ export interface Split {
   settled: boolean;
 }
 
+export interface ExpenseComment {
+  id: string;
+  userId: string;
+  displayName: string;
+  text: string;
+  timestamp: number;
+}
+
 export interface GroupTransaction {
   id: string;
   groupId: string;
@@ -96,6 +104,7 @@ export interface GroupTransaction {
   currency?: string;       // ISO 4217 code, defaults to user's preferred currency
   timestamp: number;
   splits: Split[];
+  comments?: ExpenseComment[];
 }
 
 export interface Debt {

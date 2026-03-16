@@ -56,6 +56,12 @@ export default function PersonalExpenseScreen() {
   // Context menu
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; transaction: Transaction | null }>({ visible: false, transaction: null });
 
+  // Search, filter, sort
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
+  const [showFilters, setShowFilters] = useState(false);
+
   // Staggered animation tracking
   const [hasAnimated, setHasAnimated] = useState(false);
   const itemAnims = useRef<Map<string, { translateY: Animated.Value; opacity: Animated.Value }>>(new Map());
@@ -162,7 +168,45 @@ export default function PersonalExpenseScreen() {
   const totalMonthly = thisMonth.reduce((s, t) => s + t.amount, 0);
   const totalAll = transactions.reduce((s, t) => s + t.amount, 0);
 
-  const sections = useMemo(() => groupByDate(transactions), [transactions]);
+  // Filtered + sorted transactions
+  const filteredTransactions = useMemo(() => {
+    let result = transactions;
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(t =>
+        (t.description || '').toLowerCase().includes(q) ||
+        (t.merchant || '').toLowerCase().includes(q) ||
+        (t.category || '').toLowerCase().includes(q) ||
+        String(t.amount).includes(q)
+      );
+    }
+
+    // Category filter
+    if (selectedCategory) {
+      result = result.filter(t => (t.category || 'Other') === selectedCategory);
+    }
+
+    // Sort
+    if (sortBy === 'amount') {
+      result = [...result].sort((a, b) => b.amount - a.amount);
+    }
+    // date sort is default (already sorted by timestamp desc)
+
+    return result;
+  }, [transactions, searchQuery, selectedCategory, sortBy]);
+
+  const sections = useMemo(() => groupByDate(filteredTransactions), [filteredTransactions]);
+
+  // Get unique categories from transactions
+  const availableCategories = useMemo(() => {
+    const cats = new Set<string>();
+    for (const t of transactions) {
+      cats.add(t.category || 'Other');
+    }
+    return Array.from(cats).sort();
+  }, [transactions]);
 
   if (loading) {
     return (
@@ -251,6 +295,89 @@ export default function PersonalExpenseScreen() {
                 }}>
                   <Text style={styles.debugBtnText}>Send Test Notification</Text>
                 </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Search + Filter Bar */}
+            <View style={styles.searchRow}>
+              <View style={styles.searchInputWrap}>
+                <Text style={styles.searchIcon}>🔍</Text>
+                <TextInput
+                  style={styles.searchInput}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search expenses..."
+                  placeholderTextColor={COLORS.textLight}
+                  returnKeyType="search"
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.searchClear}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <TouchableOpacity
+                style={[styles.filterToggleBtn, showFilters && styles.filterToggleBtnActive]}
+                onPress={() => { hapticLight(); setShowFilters(!showFilters); }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.filterToggleText}>{showFilters ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {showFilters && (
+              <View style={styles.filterSection}>
+                {/* Sort toggle */}
+                <View style={styles.sortRow}>
+                  <Text style={styles.filterLabel}>SORT BY</Text>
+                  <View style={styles.sortBtns}>
+                    <TouchableOpacity
+                      style={[styles.sortBtn, sortBy === 'date' && styles.sortBtnActive]}
+                      onPress={() => setSortBy('date')}
+                    >
+                      <Text style={[styles.sortBtnText, sortBy === 'date' && styles.sortBtnTextActive]}>Date</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sortBtn, sortBy === 'amount' && styles.sortBtnActive]}
+                      onPress={() => setSortBy('amount')}
+                    >
+                      <Text style={[styles.sortBtnText, sortBy === 'amount' && styles.sortBtnTextActive]}>Amount</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Category filter chips */}
+                {availableCategories.length > 0 && (
+                  <>
+                    <Text style={styles.filterLabel}>CATEGORY</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterCatScroll}>
+                      <TouchableOpacity
+                        style={[styles.filterCatChip, !selectedCategory && styles.filterCatChipActive]}
+                        onPress={() => setSelectedCategory(null)}
+                      >
+                        <Text style={[styles.filterCatText, !selectedCategory && styles.filterCatTextActive]}>All</Text>
+                      </TouchableOpacity>
+                      {availableCategories.map(cat => (
+                        <TouchableOpacity
+                          key={cat}
+                          style={[styles.filterCatChip, selectedCategory === cat && styles.filterCatChipActive]}
+                          onPress={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
+                        >
+                          <Text style={[styles.filterCatText, selectedCategory === cat && styles.filterCatTextActive]}>{cat}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
+
+                {(searchQuery || selectedCategory || sortBy !== 'date') && (
+                  <TouchableOpacity
+                    style={styles.clearFiltersBtn}
+                    onPress={() => { setSearchQuery(''); setSelectedCategory(null); setSortBy('date'); }}
+                  >
+                    <Text style={styles.clearFiltersText}>Clear all filters</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -447,4 +574,29 @@ const styles = StyleSheet.create({
   addModalSaveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   addModalCancelBtn: { paddingVertical: 12, alignItems: 'center' },
   addModalCancelText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+
+  // Search + Filter
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  searchInputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glass, borderRadius: 14, paddingHorizontal: 14, borderWidth: 1, borderColor: COLORS.glassBorder },
+  searchIcon: { fontSize: 14, marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 14, color: COLORS.text, paddingVertical: 12 },
+  searchClear: { fontSize: 14, color: COLORS.textSecondary, padding: 4 },
+  filterToggleBtn: { width: 42, height: 42, borderRadius: 14, backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center', justifyContent: 'center' },
+  filterToggleBtnActive: { borderColor: `${COLORS.primary}40`, backgroundColor: `${COLORS.primary}15` },
+  filterToggleText: { fontSize: 12, color: COLORS.textSecondary },
+  filterSection: { backgroundColor: COLORS.glass, borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: COLORS.glassBorder },
+  filterLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 8, marginTop: 4 },
+  sortRow: { marginBottom: 12 },
+  sortBtns: { flexDirection: 'row', gap: 8 },
+  sortBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: COLORS.surfaceHigh, borderWidth: 1, borderColor: COLORS.border },
+  sortBtnActive: { borderColor: `${COLORS.personalColor}40`, backgroundColor: `${COLORS.personalColor}15` },
+  sortBtnText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
+  sortBtnTextActive: { color: COLORS.personalColor },
+  filterCatScroll: { marginBottom: 8 },
+  filterCatChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: COLORS.surfaceHigh, borderWidth: 1, borderColor: COLORS.border, marginRight: 8 },
+  filterCatChipActive: { borderColor: `${COLORS.personalColor}40`, backgroundColor: `${COLORS.personalColor}15` },
+  filterCatText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
+  filterCatTextActive: { color: COLORS.personalColor },
+  clearFiltersBtn: { alignItems: 'center', paddingVertical: 8, marginTop: 4 },
+  clearFiltersText: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
 });

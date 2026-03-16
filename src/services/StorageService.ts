@@ -285,6 +285,18 @@ export async function updateGroupTransaction(
   await saveGroupTransactions(groupId, all);
 }
 
+export async function updateGroupTransactionComments(
+  groupId: string,
+  transactionId: string,
+  comments: any[],
+): Promise<void> {
+  const all = await getGroupTransactions(groupId);
+  const idx = all.findIndex(t => t.id === transactionId);
+  if (idx === -1) return;
+  all[idx] = { ...all[idx], comments };
+  await saveGroupTransactions(groupId, all);
+}
+
 export async function removeSplitMember(
   groupId: string,
   transactionId: string,

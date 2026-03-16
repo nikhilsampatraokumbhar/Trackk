@@ -228,7 +228,11 @@ export default function GroupSettingsScreen() {
   // ─── Invite ─────────────────────────────────────────────────────────────────
   const handleInviteLink = async () => {
     if (!group) return;
-    const message = `Join my group "${group.name}" on Trackk! Download the app and use group code: ${group.id}`;
+    const memberNames = group.members.map(m => m.displayName).join(', ');
+    const message = `Hey! Join my group "${group.name}" on Trackk to split expenses easily.\n\n` +
+      `Members: ${memberNames}\n\n` +
+      `Group code: ${group.id}\n\n` +
+      `Download Trackk and enter this code to join: https://trackk.app/join/${group.id}`;
     try {
       await Share.share({ message, title: `Join ${group.name} on Trackk` });
     } catch {}

@@ -174,6 +174,38 @@ export default function GroupListScreen() {
         ListHeaderComponent={
           <>
             <Text style={styles.screenTitle}>Your Groups</Text>
+
+            {/* Overall Balances Summary */}
+            {(() => {
+              const allStats = Object.values(groupStats);
+              if (allStats.length === 0) return null;
+              const totalNetOwed = allStats.reduce((s, st) => s + st.netOwed, 0);
+              const totalOwedToYou = allStats.reduce((s, st) => s + Math.max(st.netOwed, 0), 0);
+              const totalYouOwe = allStats.reduce((s, st) => s + Math.abs(Math.min(st.netOwed, 0)), 0);
+              if (totalOwedToYou === 0 && totalYouOwe === 0) return null;
+              return (
+                <View style={styles.balanceSummaryCard}>
+                  <View style={styles.balanceSummaryRow}>
+                    <View style={styles.balanceStat}>
+                      <Text style={styles.balanceStatLabel}>YOU ARE OWED</Text>
+                      <Text style={[styles.balanceStatValue, { color: COLORS.success }]}>{formatCurrency(totalOwedToYou)}</Text>
+                    </View>
+                    <View style={styles.balanceDivider} />
+                    <View style={styles.balanceStat}>
+                      <Text style={styles.balanceStatLabel}>YOU OWE</Text>
+                      <Text style={[styles.balanceStatValue, { color: COLORS.danger }]}>{formatCurrency(totalYouOwe)}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.balanceNetRow}>
+                    <Text style={styles.balanceNetLabel}>Net</Text>
+                    <Text style={[styles.balanceNetValue, { color: totalNetOwed >= 0 ? COLORS.success : COLORS.danger }]}>
+                      {totalNetOwed >= 0 ? `+${formatCurrency(totalNetOwed)}` : `-${formatCurrency(Math.abs(totalNetOwed))}`}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
+
             {!isPremium && (
               <TouchableOpacity
                 style={styles.premiumBanner}
@@ -784,6 +816,61 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.textSecondary,
+  },
+
+  /* ── Overall Balance Summary ────────────────────────────── */
+  balanceSummaryCard: {
+    backgroundColor: COLORS.glass,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+  },
+  balanceSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  balanceStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  balanceStatLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
+  balanceStatValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  balanceDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: COLORS.glassBorder,
+    marginHorizontal: 12,
+  },
+  balanceNetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.glassBorder,
+    gap: 8,
+  },
+  balanceNetLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  balanceNetValue: {
+    fontSize: 16,
+    fontWeight: '800',
   },
 
   archivedSection: { marginTop: 24 },

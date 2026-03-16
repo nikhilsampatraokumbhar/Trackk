@@ -17,11 +17,11 @@ import {
   addSettlementCloud, getSettlementsCloud,
   onSettlementsChanged, onGroupChanged, getGroupCloud,
 } from '../services/SyncService';
-import { Group, GroupTransaction, Split, Settlement, Debt } from '../models/types';
-import { simplifyDebts } from '../services/DebtCalculator';
+import { Group, GroupTransaction, Split, Settlement, Debt, ExpenseComment } from '../models/types';
+import { simplifyDebts, calculateDebts } from '../services/DebtCalculator';
 import TrackerToggle from '../components/TrackerToggle';
 import EmptyState from '../components/EmptyState';
-import { COLORS, formatCurrency, formatDate, getColorForId } from '../utils/helpers';
+import { COLORS, formatCurrency, formatDate, getColorForId, generateId } from '../utils/helpers';
 import { GROUP_CATEGORIES } from '../utils/categories';
 import BottomSheet from '../components/BottomSheet';
 
@@ -90,6 +90,13 @@ export default function GroupDetailScreen() {
   const [editingTxn, setEditingTxn] = useState<EditingTxn | null>(null);
   const [editSaving, setEditSaving] = useState(false);
 
+  // Simplify debts toggle
+  const [simplifyDebtsEnabled, setSimplifyDebtsEnabled] = useState(true);
+
+  // Comments
+  const [commentTxn, setCommentTxn] = useState<GroupTransaction | null>(null);
+  const [commentText, setCommentText] = useState('');
+
   const { isAuthenticated } = useAuth();
 
   const load = useCallback(async () => {
@@ -139,7 +146,8 @@ export default function GroupDetailScreen() {
   const isTracking = trackerState.activeGroupIds.includes(groupId);
   const groupColor = getColorForId(group.id);
   const userId = user?.id || '';
-  const simplifiedDebts = simplifyDebts(activeGroupDebts);
+  const rawDebts = activeGroupDebts;
+  const simplifiedDebts = simplifyDebtsEnabled ? simplifyDebts(activeGroupDebts) : rawDebts;
   const userDebts = simplifiedDebts.filter(d => d.fromUserId === userId);
 
   // Build summary line like Splitwise: "X owes you ₹500" or "You owe X ₹500"
@@ -191,7 +199,11 @@ export default function GroupDetailScreen() {
     if (!settleTarget) return;
     const amount = getSettleAmountValue();
     if (amount <= 0) { Alert.alert('Invalid Amount', 'Please enter a valid amount.'); return; }
-    const upiUrl = `upi://pay?pa=&pn=${encodeURIComponent(settleTarget.debt.toName)}&am=${amount}&cu=INR&tn=Settlement`;
+    // Try to find the payee's phone number for UPI ID
+    const payeeMember = group!.members.find(m => m.userId === settleTarget.debt.toUserId);
+    const payeePhone = payeeMember?.phone?.replace(/\D/g, '').slice(-10) || '';
+    const upiId = payeePhone ? `${payeePhone}@upi` : '';
+    const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(settleTarget.debt.toName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(`Settlement - ${group!.name}`)}`;
     try {
       const canOpen = await Linking.canOpenURL(upiUrl);
       if (canOpen) {
@@ -322,6 +334,41 @@ export default function GroupDetailScreen() {
     ]);
   };
 
+  // ─── Comments ──────────────────────────────────────────────────────────────
+  const handleAddComment = async () => {
+    if (!commentTxn || !commentText.trim()) return;
+    const newComment: ExpenseComment = {
+      id: generateId(),
+      userId,
+      displayName: user?.displayName || 'You',
+      text: commentText.trim(),
+      timestamp: Date.now(),
+    };
+    const existing = commentTxn.comments || [];
+    await updateGroupTransaction(groupId, commentTxn.id, {
+      ...({} as any),
+    });
+    // Update via raw Firestore or local storage
+    const updatedComments = [...existing, newComment];
+    // We pass comments through the update mechanism
+    try {
+      if (isAuthenticated) {
+        const { db } = require('../services/FirebaseConfig');
+        await db.groupTransaction(groupId, commentTxn.id).update({ comments: updatedComments });
+      } else {
+        const { updateGroupTransactionComments } = require('../services/StorageService');
+        await updateGroupTransactionComments(groupId, commentTxn.id, updatedComments);
+      }
+      setCommentText('');
+      await load();
+      // Refresh the comment txn
+      const updated = activeGroupTransactions.find(t => t.id === commentTxn.id);
+      if (updated) setCommentTxn(updated);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to add comment');
+    }
+  };
+
   const toggleEditMember = (memberId: string) => {
     if (!editingTxn) return;
     setEditingTxn({
@@ -393,10 +440,13 @@ export default function GroupDetailScreen() {
           {txn.note ? <Text style={styles.rowNote} numberOfLines={1}>{txn.note}</Text> : null}
         </View>
 
-        {/* User's share */}
+        {/* User's share + comment indicator */}
         <View style={styles.rowRight}>
           <Text style={[styles.rowRightLabel, { color: rightColor }]}>{rightLabel}</Text>
           {rightAmount ? <Text style={[styles.rowRightAmount, { color: rightColor }]}>{rightAmount}</Text> : null}
+          {(txn.comments && txn.comments.length > 0) && (
+            <Text style={styles.commentBadge}>💬 {txn.comments.length}</Text>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -489,6 +539,39 @@ export default function GroupDetailScreen() {
                 )}
               </View>
             </View>
+
+            {/* Debts Section */}
+            {simplifiedDebts.length > 0 && (
+              <View style={styles.debtsSection}>
+                <View style={styles.debtsSectionHeader}>
+                  <Text style={styles.debtsSectionTitle}>BALANCES</Text>
+                  <TouchableOpacity
+                    style={styles.simplifyToggle}
+                    onPress={() => setSimplifyDebtsEnabled(!simplifyDebtsEnabled)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.simplifyToggleText}>
+                      {simplifyDebtsEnabled ? 'Simplified' : 'Detailed'}
+                    </Text>
+                    <View style={[styles.simplifyDot, { backgroundColor: simplifyDebtsEnabled ? COLORS.success : COLORS.warning }]} />
+                  </TouchableOpacity>
+                </View>
+                {simplifiedDebts.map((debt, i) => (
+                  <View key={i} style={styles.debtRow}>
+                    <Text style={styles.debtName}>
+                      {debt.fromUserId === userId ? 'You' : debt.fromName}
+                    </Text>
+                    <Text style={styles.debtArrow}>→</Text>
+                    <Text style={styles.debtName}>
+                      {debt.toUserId === userId ? 'You' : debt.toName}
+                    </Text>
+                    <Text style={[styles.debtAmount, {
+                      color: debt.fromUserId === userId ? COLORS.danger : debt.toUserId === userId ? COLORS.success : COLORS.text
+                    }]}>{formatCurrency(debt.amount)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {/* Tracker toggle */}
             <View style={styles.trackerWrap}>
@@ -744,6 +827,10 @@ export default function GroupDetailScreen() {
               </LinearGradient>
             </TouchableOpacity>
 
+            <TouchableOpacity style={styles.commentOpenBtn} onPress={() => { setCommentTxn(editingTxn.txn); setEditingTxn(null); }} activeOpacity={0.7}>
+              <Text style={styles.commentOpenBtnText}>💬 Comments {editingTxn.txn.comments?.length ? `(${editingTxn.txn.comments.length})` : ''}</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteExpense} activeOpacity={0.7}>
               <Text style={styles.deleteBtnText}>Delete Expense</Text>
             </TouchableOpacity>
@@ -751,6 +838,60 @@ export default function GroupDetailScreen() {
             <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditingTxn(null)} activeOpacity={0.7}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
+          </>
+        )}
+      </BottomSheet>
+
+      {/* ─── Comments ─────────────────────────────────────────────────────── */}
+      <BottomSheet visible={!!commentTxn} onClose={() => { setCommentTxn(null); setCommentText(''); }}>
+        {commentTxn && (
+          <>
+            <Text style={styles.modalTitle}>Comments</Text>
+            <Text style={styles.modalSub}>{commentTxn.description} · {formatCurrency(commentTxn.amount)}</Text>
+
+            {(!commentTxn.comments || commentTxn.comments.length === 0) && (
+              <Text style={styles.noCommentsText}>No comments yet. Be the first!</Text>
+            )}
+
+            {(commentTxn.comments || []).map(c => {
+              const isMe = c.userId === userId;
+              return (
+                <View key={c.id} style={styles.commentRow}>
+                  <View style={[styles.commentAvatar, { backgroundColor: `${getColorForId(c.userId)}20` }]}>
+                    <Text style={[styles.commentAvatarText, { color: getColorForId(c.userId) }]}>
+                      {(isMe ? 'Y' : c.displayName[0]).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.commentContent}>
+                    <Text style={styles.commentAuthor}>{isMe ? 'You' : c.displayName}</Text>
+                    <Text style={styles.commentTextBody}>{c.text}</Text>
+                    <Text style={styles.commentTime}>
+                      {new Date(c.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+
+            <View style={styles.commentInputRow}>
+              <TextInput
+                style={styles.commentInput}
+                value={commentText}
+                onChangeText={setCommentText}
+                placeholder="Add a comment..."
+                placeholderTextColor={COLORS.textLight}
+                multiline
+                maxLength={500}
+              />
+              <TouchableOpacity
+                style={[styles.commentSendBtn, !commentText.trim() && { opacity: 0.3 }]}
+                onPress={handleAddComment}
+                disabled={!commentText.trim()}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.commentSendText}>Send</Text>
+              </TouchableOpacity>
+            </View>
           </>
         )}
       </BottomSheet>
@@ -858,4 +999,35 @@ const styles = StyleSheet.create({
   saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   deleteBtn: { paddingVertical: 14, alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: `${COLORS.danger}30`, backgroundColor: `${COLORS.danger}08`, marginBottom: 6 },
   deleteBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.danger },
+
+  // ─── Debts Section ──────────────────────────────────────────────────────
+  debtsSection: { marginHorizontal: 16, marginBottom: 12, backgroundColor: COLORS.surface, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: COLORS.border },
+  debtsSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  debtsSectionTitle: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5 },
+  simplifyToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: COLORS.surfaceHigh, borderWidth: 1, borderColor: COLORS.border },
+  simplifyToggleText: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
+  simplifyDot: { width: 6, height: 6, borderRadius: 3 },
+  debtRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 6 },
+  debtName: { fontSize: 13, fontWeight: '600', color: COLORS.text },
+  debtArrow: { fontSize: 12, color: COLORS.textSecondary },
+  debtAmount: { fontSize: 14, fontWeight: '700', marginLeft: 'auto' },
+
+  // ─── Comment Badge ──────────────────────────────────────────────────────
+  commentBadge: { fontSize: 10, color: COLORS.textSecondary, marginTop: 2 },
+  commentOpenBtn: { paddingVertical: 12, alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceHigh, marginBottom: 6 },
+  commentOpenBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.text },
+
+  // ─── Comments Sheet ─────────────────────────────────────────────────────
+  noCommentsText: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', paddingVertical: 20, fontStyle: 'italic' },
+  commentRow: { flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  commentAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  commentAvatarText: { fontSize: 13, fontWeight: '800' },
+  commentContent: { flex: 1 },
+  commentAuthor: { fontSize: 12, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
+  commentTextBody: { fontSize: 13, color: COLORS.text, lineHeight: 18 },
+  commentTime: { fontSize: 10, color: COLORS.textSecondary, marginTop: 4 },
+  commentInputRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 12, gap: 8 },
+  commentInput: { flex: 1, backgroundColor: COLORS.surfaceHigh, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, maxHeight: 80 },
+  commentSendBtn: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, backgroundColor: COLORS.primary },
+  commentSendText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
 });
