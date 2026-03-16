@@ -15,6 +15,7 @@ import {
 import { scanAllSources, checkEMICompletions, reconcileExistingItems } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
+import { useNetwork } from '../store/NetworkContext';
 import EmptyState from '../components/EmptyState';
 
 function calcNextBillingDate(billingDay: number): string {
@@ -36,6 +37,7 @@ function daysUntil(dateStr: string): number {
 
 export default function EMIsScreen() {
   const nav = useNavigation();
+  const { isConnected } = useNetwork();
   const [items, setItems] = useState<EMIItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -94,6 +96,10 @@ export default function EMIsScreen() {
   const totalMonthly = items.reduce((sum, item) => sum + item.amount, 0);
 
   const handleSyncSMS = async () => {
+    if (!isConnected) {
+      Alert.alert('No Internet', 'You are offline. Please check your connection and try again.');
+      return;
+    }
     if (Platform.OS === 'android') {
       const hasPerm = await checkSmsPermission();
       if (!hasPerm) await requestSmsPermission();
@@ -123,6 +129,10 @@ export default function EMIsScreen() {
   };
 
   const handleSync = async () => {
+    if (!isConnected) {
+      Alert.alert('No Internet', 'You are offline. Please check your connection and try again.');
+      return;
+    }
     setSyncing(true);
     setScanResultText('');
     try {

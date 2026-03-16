@@ -6,12 +6,14 @@ import { AuthProvider, useAuth } from './src/store/AuthContext';
 import { GroupProvider, useGroups } from './src/store/GroupContext';
 import { TrackerProvider } from './src/store/TrackerContext';
 import { PremiumProvider } from './src/store/PremiumContext';
+import { NetworkProvider } from './src/store/NetworkContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { registerBackgroundHandler } from './src/services/NotificationService';
 import { setupReminderChannel, checkAndSendReminders } from './src/services/DebtReminderService';
 import { getGroupTransactions } from './src/services/StorageService';
 import { calculateDebts } from './src/services/DebtCalculator';
 import SplashScreen from './src/components/SplashScreen';
+import OfflineBanner from './src/components/OfflineBanner';
 
 import { COLORS } from './src/utils/helpers';
 import './src/i18n'; // Initialize i18n
@@ -57,13 +59,21 @@ function AppContent() {
 
   // If not authenticated, AppNavigator will show LoginScreen
   if (!isAuthenticated || !user) {
-    return <AppNavigator />;
+    return (
+      <View style={{ flex: 1 }}>
+        <AppNavigator />
+        <OfflineBanner />
+      </View>
+    );
   }
 
   return (
     <PremiumProvider userId={user.id}>
       <TrackerProvider groups={groups} userId={user.id}>
-        <AppNavigator />
+        <View style={{ flex: 1 }}>
+          <AppNavigator />
+          <OfflineBanner />
+        </View>
       </TrackerProvider>
     </PremiumProvider>
   );
@@ -73,12 +83,14 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <GroupProvider>
-        <StatusBar style="light" />
-        <AppContent />
-      </GroupProvider>
-    </AuthProvider>
+    <NetworkProvider>
+      <AuthProvider>
+        <GroupProvider>
+          <StatusBar style="light" />
+          <AppContent />
+        </GroupProvider>
+      </AuthProvider>
+    </NetworkProvider>
   );
 }
 

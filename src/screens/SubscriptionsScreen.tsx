@@ -15,6 +15,7 @@ import {
 import { checkSharedSubscriptionStatus, scanAllSources, reconcileExistingItems } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
+import { useNetwork } from '../store/NetworkContext';
 import EmptyState from '../components/EmptyState';
 
 /** Calculate next billing date from a billing day and cycle */
@@ -47,6 +48,7 @@ function daysUntil(dateStr: string): number {
 
 export default function SubscriptionsScreen() {
   const nav = useNavigation();
+  const { isConnected } = useNetwork();
   const [items, setItems] = useState<UserSubscriptionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -106,6 +108,10 @@ export default function SubscriptionsScreen() {
   }, 0);
 
   const handleSyncSMS = async () => {
+    if (!isConnected) {
+      Alert.alert('No Internet', 'You are offline. Please check your connection and try again.');
+      return;
+    }
     // Request SMS permission on Android for best results
     if (Platform.OS === 'android') {
       const hasPerm = await checkSmsPermission();
@@ -140,6 +146,10 @@ export default function SubscriptionsScreen() {
   };
 
   const handleSync = async () => {
+    if (!isConnected) {
+      Alert.alert('No Internet', 'You are offline. Please check your connection and try again.');
+      return;
+    }
     setSyncing(true);
     setScanResultText('');
     try {
