@@ -354,14 +354,23 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     }
   }, []);
 
-  // Always start SMS listener on Android — captures transactions for Review Expenses
-  // even when no trackers are active (they go to pending review for later assignment)
+  // Start/stop SMS listener based on tracker state (Android only)
+  // Only listen when user has explicitly turned on a tracker (consent-based)
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
-    if (!isListeningRef.current) {
+    const hasActiveTracker =
+      trackerState.personal ||
+      trackerState.reimbursement ||
+      trackerState.activeGroupIds.length > 0;
+
+    if (hasActiveTracker && !isListeningRef.current) {
       isListeningRef.current = true;
       startListening();
+    } else if (!hasActiveTracker && isListeningRef.current) {
+      isListeningRef.current = false;
+      stopSmsListener();
+      setIsListening(false);
     }
   }, [trackerState]);
 
