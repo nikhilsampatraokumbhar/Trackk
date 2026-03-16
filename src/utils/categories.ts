@@ -21,3 +21,16 @@ export const REIMBURSEMENT_CATEGORIES: Category[] = [
   { label: 'Team outing', icon: '🎉' },
   { label: 'Software', icon: '💻' },
 ];
+
+export const GROUP_CATEGORIES: Category[] = [
+  { label: 'Food & Drinks', icon: '🍕' },
+  { label: 'Groceries', icon: '🛒' },
+  { label: 'Transport', icon: '🚗' },
+  { label: 'Stay', icon: '🏨' },
+  { label: 'Shopping', icon: '🛍️' },
+  { label: 'Entertainment', icon: '🎬' },
+  { label: 'Utilities', icon: '💡' },
+  { label: 'Rent', icon: '🏠' },
+  { label: 'Tickets', icon: '🎫' },
+  { label: 'Other', icon: '📦' },
+];

@@ -12,9 +12,10 @@ import {
   getSubscriptions, saveSubscription, deleteSubscription,
   hasSubscriptionsOnboarded, setSubscriptionsOnboarded,
 } from '../services/StorageService';
-import { checkSharedSubscriptionStatus, scanAllSources } from '../services/AutoDetectionService';
+import { checkSharedSubscriptionStatus, scanAllSources, reconcileExistingItems } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
+import { useNetwork } from '../store/NetworkContext';
 import EmptyState from '../components/EmptyState';
 
 /** Calculate next billing date from a billing day and cycle */
@@ -47,6 +48,7 @@ function daysUntil(dateStr: string): number {
 
 export default function SubscriptionsScreen() {
   const nav = useNavigation();
+  const { isConnected } = useNetwork();
   const [items, setItems] = useState<UserSubscriptionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -65,6 +67,7 @@ export default function SubscriptionsScreen() {
     } else {
       spinAnim.stopAnimation();
     }
+    return () => { spinAnim.stopAnimation(); };
   }, [syncing]);
 
   // Add form
@@ -76,14 +79,19 @@ export default function SubscriptionsScreen() {
   const [formSharedCount, setFormSharedCount] = useState('');
   const [editingItem, setEditingItem] = useState<UserSubscriptionItem | null>(null);
 
+  const [inactiveItems, setInactiveItems] = useState<UserSubscriptionItem[]>([]);
+  const [showInactive, setShowInactive] = useState(false);
+
   const load = useCallback(async () => {
     const subs = await getSubscriptions();
     const active = subs.filter(s => s.active);
+    const inactive = subs.filter(s => !s.active);
     active.sort((a, b) => {
       if (a.confirmed === b.confirmed) return 0;
       return a.confirmed ? -1 : 1;
     });
     setItems(active);
+    setInactiveItems(inactive);
 
     const onboarded = await hasSubscriptionsOnboarded();
     if (!onboarded && subs.filter(s => s.confirmed).length === 0) {
@@ -101,6 +109,10 @@ export default function SubscriptionsScreen() {
   }, 0);
 
   const handleSyncSMS = async () => {
+    if (!isConnected) {
+      Alert.alert('No Internet', 'You are offline. Please check your connection and try again.');
+      return;
+    }
     // Request SMS permission on Android for best results
     if (Platform.OS === 'android') {
       const hasPerm = await checkSmsPermission();
@@ -135,15 +147,21 @@ export default function SubscriptionsScreen() {
   };
 
   const handleSync = async () => {
+    if (!isConnected) {
+      Alert.alert('No Internet', 'You are offline. Please check your connection and try again.');
+      return;
+    }
     setSyncing(true);
     setScanResultText('');
     try {
+      // First reconcile existing items against recent transactions
+      const reconciled = await reconcileExistingItems();
+      // Then scan for new items
       const result = await scanAllSources('subscriptions');
-      if (result.subscriptions.length > 0) {
-        setScanResultText(`Found ${result.subscriptions.length} new subscription${result.subscriptions.length > 1 ? 's' : ''}`);
-      } else {
-        setScanResultText('No new subscriptions found');
-      }
+      const parts: string[] = [];
+      if (reconciled.subsUpdated > 0) parts.push(`${reconciled.subsUpdated} updated`);
+      if (result.subscriptions.length > 0) parts.push(`${result.subscriptions.length} new`);
+      setScanResultText(parts.length > 0 ? parts.join(', ') : 'All up to date');
       await load();
     } catch (e) {
       setScanResultText('Sync failed. Try again later.');
@@ -213,6 +231,23 @@ export default function SubscriptionsScreen() {
     ]);
   };
 
+  const handleToggleActive = async (item: UserSubscriptionItem) => {
+    const updated = { ...item, active: !item.active };
+    await saveSubscription(updated);
+    load();
+  };
+
+  const handleMarkPaid = async (item: UserSubscriptionItem) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const updated = {
+      ...item,
+      lastPaidDate: today,
+      nextBillingDate: calcNextBillingDate(item.billingDay, item.cycle),
+    };
+    await saveSubscription(updated);
+    load();
+  };
+
   const handleOnboardingDismiss = async () => {
     await setSubscriptionsOnboarded();
     setShowOnboarding(false);
@@ -267,12 +302,28 @@ export default function SubscriptionsScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <Text style={[styles.cardDays, isUrgent && { color: COLORS.danger }]}>
-                {days === 0 ? 'Due today' : `${days}d left`}
-              </Text>
+              <>
+                <Text style={[styles.cardDays, isUrgent && { color: COLORS.danger }]}>
+                  {days === 0 ? 'Due today' : `${days}d left`}
+                </Text>
+                {item.lastPaidDate === new Date().toISOString().slice(0, 10) ? (
+                  <Text style={styles.paidBadge}>Paid today</Text>
+                ) : days <= 3 ? (
+                  <TouchableOpacity style={styles.markPaidBtn} onPress={() => handleMarkPaid(item)} activeOpacity={0.7}>
+                    <Text style={styles.markPaidText}>Mark Paid</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
             )}
           </View>
         </TouchableOpacity>
+        {!isAutoDetected && (
+          <View style={styles.cardActions}>
+            <TouchableOpacity onPress={() => handleToggleActive(item)} activeOpacity={0.7} style={styles.deactivateBtn}>
+              <Text style={styles.deactivateText}>Deactivate</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   };
@@ -349,6 +400,30 @@ export default function SubscriptionsScreen() {
           ) : null
         }
       />
+
+      {/* Inactive section */}
+      {inactiveItems.length > 0 && (
+        <View style={styles.inactiveSection}>
+          <TouchableOpacity style={styles.inactiveHeader} onPress={() => setShowInactive(!showInactive)} activeOpacity={0.7}>
+            <Text style={styles.inactiveTitle}>Inactive ({inactiveItems.length})</Text>
+            <Text style={styles.inactiveChevron}>{showInactive ? '▾' : '▸'}</Text>
+          </TouchableOpacity>
+          {showInactive && inactiveItems.map(item => (
+            <View key={item.id} style={[styles.card, { opacity: 0.6, marginHorizontal: 16, marginBottom: 8 }]}>
+              <View style={styles.cardLeft}>
+                <Text style={styles.cardName}>{item.name}</Text>
+                <Text style={styles.cardCycle}>{item.cycle === 'monthly' ? 'Monthly' : 'Yearly'} · Inactive</Text>
+              </View>
+              <View style={styles.cardRight}>
+                <Text style={styles.cardAmount}>{formatCurrency(item.amount)}</Text>
+                <TouchableOpacity onPress={() => handleToggleActive(item)} activeOpacity={0.7} style={styles.reactivateBtn}>
+                  <Text style={styles.reactivateText}>Reactivate</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Add FAB */}
       <TouchableOpacity
@@ -565,4 +640,17 @@ const styles = StyleSheet.create({
 
   cancelBtn: { paddingVertical: 12, alignItems: 'center' },
   cancelBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+
+  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, marginTop: -6, marginBottom: 8 },
+  deactivateBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: `${COLORS.textSecondary}15` },
+  deactivateText: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
+  markPaidBtn: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: `${COLORS.success}18`, marginTop: 4 },
+  markPaidText: { fontSize: 10, fontWeight: '700', color: COLORS.success },
+  paidBadge: { fontSize: 10, fontWeight: '700', color: COLORS.success, marginTop: 4 },
+  inactiveSection: { marginBottom: 80 },
+  inactiveHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
+  inactiveTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary },
+  inactiveChevron: { fontSize: 14, color: COLORS.textSecondary },
+  reactivateBtn: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: `${COLORS.primary}18`, marginTop: 4 },
+  reactivateText: { fontSize: 10, fontWeight: '700', color: COLORS.primary },
 });

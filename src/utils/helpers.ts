@@ -40,11 +40,10 @@ export const COLORS = {
   secondary: '#E07888',
 };
 
-export function formatCurrency(amount: number): string {
-  return `₹${amount.toLocaleString('en-IN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+import { formatCurrencyAmount } from './currencies';
+
+export function formatCurrency(amount: number, currencyCode?: string): string {
+  return formatCurrencyAmount(amount, currencyCode);
 }
 
 export function formatDate(timestamp: number): string {

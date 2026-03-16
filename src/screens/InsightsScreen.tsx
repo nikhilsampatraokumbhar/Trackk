@@ -1,6 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Alert,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,7 +15,7 @@ import { COLORS, formatCurrency, formatDate } from '../utils/helpers';
 import EmptyState from '../components/EmptyState';
 import { detectCategory, CATEGORY_COLORS, CATEGORY_ICONS } from '../services/CategoryService';
 import { detectRecurringExpenses, RecurringExpense } from '../services/RecurringService';
-import { shareCSV, shareTextReport } from '../services/ExportService';
+import { shareCSV, shareTextReport, sharePDF } from '../services/ExportService';
 import BottomSheet from '../components/BottomSheet';
 
 interface CategoryData {
@@ -43,9 +44,13 @@ export default function InsightsScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'all'>('month');
+  const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'all' | 'custom'>('month');
   const [recurring, setRecurring] = useState<RecurringExpense[]>([]);
   const [showExportSheet, setShowExportSheet] = useState(false);
+  // Custom date range
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const load = useCallback(async () => {
     const all = await getTransactions();
@@ -63,7 +68,16 @@ export default function InsightsScreen() {
   const thisMonthTxns = getMonthTransactions(transactions, 0);
   const lastMonthTxns = getMonthTransactions(transactions, 1);
 
-  const displayTxns = selectedPeriod === 'month' ? thisMonthTxns : transactions;
+  const customTxns = useMemo(() => {
+    if (selectedPeriod !== 'custom' || !customStartDate || !customEndDate) return [];
+    const start = new Date(customStartDate).getTime();
+    const end = new Date(customEndDate + 'T23:59:59').getTime();
+    return transactions.filter(t => t.timestamp >= start && t.timestamp <= end);
+  }, [transactions, selectedPeriod, customStartDate, customEndDate]);
+
+  const displayTxns = selectedPeriod === 'month' ? thisMonthTxns
+    : selectedPeriod === 'custom' ? customTxns
+    : transactions;
   const totalSpent = displayTxns.reduce((s, t) => s + t.amount, 0);
 
   // Category breakdown using CategoryService
@@ -125,11 +139,27 @@ export default function InsightsScreen() {
     setShowExportSheet(false);
     const label = selectedPeriod === 'month'
       ? now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+      : selectedPeriod === 'custom' && customStartDate && customEndDate
+      ? `${customStartDate} to ${customEndDate}`
       : 'All Time';
     try {
       await shareTextReport(displayTxns, label);
     } catch {
       Alert.alert('Error', 'Failed to export report.');
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setShowExportSheet(false);
+    const label = selectedPeriod === 'month'
+      ? now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+      : selectedPeriod === 'custom' && customStartDate && customEndDate
+      ? `${customStartDate} to ${customEndDate}`
+      : 'All Time';
+    try {
+      await sharePDF(displayTxns, label);
+    } catch {
+      Alert.alert('Error', 'Failed to export PDF.');
     }
   };
 
@@ -160,20 +190,55 @@ export default function InsightsScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.periodBtn, selectedPeriod === 'all' && styles.periodBtnActive]}
-              onPress={() => {
-                if (!isPremium) { nav.navigate('Pricing'); return; }
-                setSelectedPeriod('all');
-              }}
+              onPress={() => setSelectedPeriod('all')}
             >
-              <Text style={[styles.periodText, selectedPeriod === 'all' && styles.periodTextActive]}>
-                All Time {!isPremium ? '🔒' : ''}
-              </Text>
+              <Text style={[styles.periodText, selectedPeriod === 'all' && styles.periodTextActive]}>All Time</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.periodBtn, selectedPeriod === 'custom' && styles.periodBtnActive]}
+              onPress={() => { setSelectedPeriod('custom'); setShowDatePicker(true); }}
+            >
+              <Text style={[styles.periodText, selectedPeriod === 'custom' && styles.periodTextActive]}>Custom</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity style={styles.exportBtn} onPress={() => setShowExportSheet(true)} activeOpacity={0.7}>
             <Text style={styles.exportBtnText}>Export</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Custom Date Range Picker */}
+        {selectedPeriod === 'custom' && (
+          <View style={styles.dateRangeCard}>
+            <View style={styles.dateRangeRow}>
+              <View style={styles.dateField}>
+                <Text style={styles.dateFieldLabel}>FROM</Text>
+                <TextInput
+                  style={styles.dateFieldInput}
+                  value={customStartDate}
+                  onChangeText={setCustomStartDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={COLORS.textLight}
+                  maxLength={10}
+                />
+              </View>
+              <Text style={styles.dateRangeSep}>→</Text>
+              <View style={styles.dateField}>
+                <Text style={styles.dateFieldLabel}>TO</Text>
+                <TextInput
+                  style={styles.dateFieldInput}
+                  value={customEndDate}
+                  onChangeText={setCustomEndDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={COLORS.textLight}
+                  maxLength={10}
+                />
+              </View>
+            </View>
+            {customStartDate && customEndDate && (
+              <Text style={styles.dateRangeCount}>{customTxns.length} transactions found</Text>
+            )}
+          </View>
+        )}
 
         {/* Summary hero */}
         <LinearGradient colors={['#140E20', '#0A0A0F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
@@ -367,6 +432,16 @@ export default function InsightsScreen() {
           </View>
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.exportOption} onPress={handleExportPDF} activeOpacity={0.7}>
+          <View style={[styles.exportOptionIcon, { backgroundColor: `${COLORS.danger}18` }]}>
+            <Text style={styles.exportOptionEmoji}>📄</Text>
+          </View>
+          <View style={styles.exportOptionInfo}>
+            <Text style={styles.exportOptionTitle}>Export as PDF</Text>
+            <Text style={styles.exportOptionSub}>Print-ready expense report</Text>
+          </View>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.exportOption} onPress={handleExportReport} activeOpacity={0.7}>
           <View style={[styles.exportOptionIcon, { backgroundColor: `${COLORS.primary}18` }]}>
             <Text style={styles.exportOptionEmoji}>📝</Text>
@@ -483,4 +558,13 @@ const styles = StyleSheet.create({
   exportOptionInfo: { flex: 1 },
   exportOptionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 3 },
   exportOptionSub: { fontSize: 12, color: COLORS.textSecondary },
+
+  /* Date Range */
+  dateRangeCard: { backgroundColor: COLORS.surface, borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border },
+  dateRangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dateField: { flex: 1 },
+  dateFieldLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1, marginBottom: 6 },
+  dateFieldInput: { backgroundColor: COLORS.surfaceHigh, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, textAlign: 'center' },
+  dateRangeSep: { fontSize: 16, color: COLORS.textSecondary, marginTop: 16 },
+  dateRangeCount: { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center', marginTop: 10 },
 });

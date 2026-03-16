@@ -276,12 +276,24 @@ export async function deleteGroupTransaction(
 export async function updateGroupTransaction(
   groupId: string,
   transactionId: string,
-  updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits'>>,
+  updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits' | 'note' | 'category' | 'currency'>>,
 ): Promise<void> {
   const all = await getGroupTransactions(groupId);
   const idx = all.findIndex(t => t.id === transactionId);
   if (idx === -1) return;
   all[idx] = { ...all[idx], ...updates };
+  await saveGroupTransactions(groupId, all);
+}
+
+export async function updateGroupTransactionComments(
+  groupId: string,
+  transactionId: string,
+  comments: any[],
+): Promise<void> {
+  const all = await getGroupTransactions(groupId);
+  const idx = all.findIndex(t => t.id === transactionId);
+  if (idx === -1) return;
+  all[idx] = { ...all[idx], comments };
   await saveGroupTransactions(groupId, all);
 }
 
@@ -377,6 +389,20 @@ export async function addSettlement(settlement: Omit<Settlement, 'id' | 'timesta
   all.unshift(full);
   await AsyncStorage.setItem(KEYS.SETTLEMENTS(settlement.groupId), JSON.stringify(all));
   return full;
+}
+
+export async function deleteSettlement(groupId: string, settlementId: string): Promise<void> {
+  const all = await getSettlements(groupId);
+  await AsyncStorage.setItem(KEYS.SETTLEMENTS(groupId), JSON.stringify(all.filter(s => s.id !== settlementId)));
+}
+
+export async function unarchiveGroup(groupId: string): Promise<void> {
+  const groups = await getGroups();
+  const idx = groups.findIndex(g => g.id === groupId);
+  if (idx !== -1) {
+    groups[idx] = { ...groups[idx], archived: false };
+    await saveGroups(groups);
+  }
 }
 
 // ─── Savings Goals ───────────────────────────────────────────────────────────

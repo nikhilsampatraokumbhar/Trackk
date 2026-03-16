@@ -523,6 +523,9 @@ export async function checkSharedSubscriptionStatus(subscriptionId: string): Pro
 
 // ─── Historical SMS Scan (One-Time Sync) ───────────────────────────────────
 
+const LAST_SCAN_KEY = '@et_last_scan_ts';
+const SCAN_OVERLAP_DAYS = 10; // buffer overlap to catch late-arriving messages
+
 export interface ScanResult {
   subscriptions: UserSubscriptionItem[];
   investments: InvestmentItem[];
@@ -532,13 +535,17 @@ export interface ScanResult {
 }
 
 /**
- * Scan historical SMS messages (up to 1 year back) to detect subscriptions,
- * investments, and EMIs. Creates unconfirmed items for each detected pattern.
+ * Scan SMS messages to detect subscriptions, investments, and EMIs.
  *
- * @param filter 'all' | 'subscriptions' | 'investments' | 'emis' — which category to scan for
+ * On first run: scans 1 year of history.
+ * On subsequent runs: only scans from (lastScan - 10 days) for efficiency.
+ *
+ * @param filter which category to scan for
+ * @param since timestamp to scan from (auto-computed from last scan if omitted)
  */
 export async function scanHistoricalSMS(
   filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+  since?: number,
 ): Promise<ScanResult> {
   const result: ScanResult = {
     subscriptions: [],
@@ -552,13 +559,13 @@ export async function scanHistoricalSMS(
   let parsed: Array<{ txn: ParsedTransaction; date: number }> = [];
 
   if (Platform.OS === 'android') {
-    const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
+    const scanFrom = since ?? (Date.now() - (365 * 24 * 60 * 60 * 1000));
     let messages: Array<{ body: string; address: string; date: string }> = [];
 
     // Use our custom SmsReaderModule (promise-based, ContentResolver)
     if (NativeModules.SmsReaderModule) {
       try {
-        messages = await NativeModules.SmsReaderModule.readSms(5000, oneYearAgo);
+        messages = await NativeModules.SmsReaderModule.readSms(5000, scanFrom);
       } catch (e) {
         console.log('[AutoDetection] SmsReaderModule error:', e);
         messages = [];
@@ -568,7 +575,7 @@ export async function scanHistoricalSMS(
     else if (NativeModules.SmsAndroid) {
       messages = await new Promise<Array<{ body: string; address: string; date: string }>>((resolve) => {
         NativeModules.SmsAndroid.list(
-          JSON.stringify({ box: 'inbox', maxCount: 5000, minDate: oneYearAgo }),
+          JSON.stringify({ box: 'inbox', maxCount: 5000, minDate: scanFrom }),
           (_fail: string) => resolve([]),
           (_count: number, smsList: string) => {
             try { resolve(JSON.parse(smsList)); } catch { resolve([]); }
@@ -592,7 +599,7 @@ export async function scanHistoricalSMS(
 
   // Fallback: use stored transactions when native SMS is unavailable or returned nothing
   if (parsed.length === 0) {
-    const storedResult = await scanFromStoredTransactions(filter);
+    const storedResult = await scanFromStoredTransactions(filter, since);
     return storedResult;
   }
 
@@ -607,6 +614,7 @@ export async function scanHistoricalSMS(
  */
 export async function scanFromStoredTransactions(
   filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+  since?: number,
 ): Promise<ScanResult> {
   const result: ScanResult = {
     subscriptions: [],
@@ -616,8 +624,11 @@ export async function scanFromStoredTransactions(
     totalMatched: 0,
   };
 
-  // Get all stored transactions (personal + reimbursement — no group)
-  const allTransactions = await getTransactions();
+  // Get stored transactions, filtered by time window if since is provided
+  const rawTransactions = await getTransactions();
+  const allTransactions = since
+    ? rawTransactions.filter(t => t.timestamp >= since)
+    : rawTransactions;
   result.totalSmsScanned = allTransactions.length;
 
   if (allTransactions.length === 0) {
@@ -651,6 +662,7 @@ export async function scanFromStoredTransactions(
  */
 export async function scanEmailHistory(
   filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+  since?: number,
 ): Promise<ScanResult> {
   const result: ScanResult = {
     subscriptions: [],
@@ -712,10 +724,19 @@ export async function scanEmailHistory(
 export async function scanAllSources(
   filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
 ): Promise<ScanResult> {
+  // Determine scan window: first run = 365 days, subsequent = (lastScan - 10 day buffer)
+  const lastScanRaw = await AsyncStorage.getItem(LAST_SCAN_KEY);
+  const since = lastScanRaw
+    ? parseInt(lastScanRaw, 10) - (SCAN_OVERLAP_DAYS * 24 * 60 * 60 * 1000)
+    : undefined; // undefined = full 365 day scan (first time)
+
+  // Save current timestamp as the new last scan point
+  await AsyncStorage.setItem(LAST_SCAN_KEY, String(Date.now()));
+
   // Run SMS scan and email scan in parallel
   const [smsResult, emailResult] = await Promise.allSettled([
-    scanHistoricalSMS(filter),
-    scanEmailHistory(filter),
+    scanHistoricalSMS(filter, since),
+    scanEmailHistory(filter, since),
   ]);
 
   const sms = smsResult.status === 'fulfilled' ? smsResult.value : null;
@@ -732,7 +753,7 @@ export async function scanAllSources(
 
   // If both returned nothing, try stored transactions as last resort
   if (merged.subscriptions.length === 0 && merged.investments.length === 0 && merged.emis.length === 0) {
-    return await scanFromStoredTransactions(filter);
+    return await scanFromStoredTransactions(filter, since);
   }
 
   return merged;
@@ -860,6 +881,128 @@ async function groupAndSaveDetections(
   }
 
   return result;
+}
+
+// ─── Reconcile Existing Items Against Recent Transactions ───────────────────
+
+/**
+ * Check recent transactions against all existing tracked subscriptions, EMIs,
+ * and investments. If a matching payment is found, auto-advance the billing
+ * date and mark as paid. This runs on every sync/refresh so the user doesn't
+ * need to manually tap "Mark Paid".
+ *
+ * Only looks at transactions since the last reconciliation (or last 45 days
+ * on first run) to avoid re-processing old history every time.
+ */
+export async function reconcileExistingItems(): Promise<{
+  subsUpdated: number;
+  emisUpdated: number;
+  investmentsUpdated: number;
+}> {
+  const stats = { subsUpdated: 0, emisUpdated: 0, investmentsUpdated: 0 };
+
+  // Use same scan timestamp as scanAllSources — with 10-day overlap buffer
+  // On first run (no prior scan), look back 45 days
+  const lastRaw = await AsyncStorage.getItem(LAST_SCAN_KEY);
+  const lastReconcile = lastRaw
+    ? parseInt(lastRaw, 10) - (SCAN_OVERLAP_DAYS * 24 * 60 * 60 * 1000)
+    : Date.now() - (45 * 24 * 60 * 60 * 1000);
+  const now = Date.now();
+
+  // Get transactions since last reconcile
+  const allTxns = await getTransactions();
+  const recentTxns = allTxns.filter(t => t.timestamp >= lastReconcile);
+  if (recentTxns.length === 0) return stats;
+
+  // Convert to ParsedTransaction format for matching
+  const parsed: ParsedTransaction[] = recentTxns.map(t => ({
+    amount: t.amount,
+    type: 'debit' as const,
+    merchant: t.merchant || t.description,
+    rawMessage: t.rawMessage || t.description || t.merchant || '',
+    timestamp: t.timestamp,
+    bank: t.source,
+  }));
+
+  // ── Reconcile Subscriptions ──
+  const subs = await getSubscriptions();
+  for (const sub of subs) {
+    if (!sub.active || !sub.confirmed) continue;
+
+    // Find a matching recent transaction
+    const match = parsed.find(p => {
+      const name = classifyTransaction(p).matchedMerchant || p.merchant || '';
+      if (!namesMatch(sub.name, name)) return false;
+      // Amount should be close (within 20% to handle price changes)
+      const amtRatio = Math.abs(p.amount - sub.amount) / sub.amount;
+      return amtRatio < 0.2;
+    });
+
+    if (match) {
+      const txnDate = new Date(match.timestamp);
+      const billingDay = txnDate.getDate();
+      sub.billingDay = billingDay;
+      sub.nextBillingDate = calcNextBillingDate(billingDay, sub.cycle);
+      sub.lastPaidDate = txnDate.toISOString().slice(0, 10);
+      // Update amount if it changed
+      if (Math.abs(match.amount - sub.amount) > 1) {
+        sub.amount = match.amount;
+      }
+      await saveSubscription(sub);
+      stats.subsUpdated++;
+    }
+  }
+
+  // ── Reconcile EMIs ──
+  const emis = await getEMIs();
+  for (const emi of emis) {
+    if (!emi.active || !emi.confirmed) continue;
+
+    const match = parsed.find(p => {
+      const name = classifyTransaction(p).matchedMerchant || p.merchant || '';
+      // EMIs match by name or by amount + billing day proximity
+      if (namesMatch(emi.name, name)) return true;
+      const amountClose = Math.abs(p.amount - emi.amount) < 5;
+      const dayClose = Math.abs(new Date(p.timestamp).getDate() - emi.billingDay) <= 2;
+      return amountClose && dayClose;
+    });
+
+    if (match) {
+      emi.monthsPaid = Math.min(emi.monthsPaid + 1, emi.totalMonths);
+      emi.monthsLeft = Math.max(emi.totalMonths - emi.monthsPaid, 0);
+      emi.nextBillingDate = calcNextBillingDate(emi.billingDay, 'monthly');
+      if (emi.monthsLeft === 0 && emi.totalMonths > 0) {
+        emi.active = false;
+      }
+      await saveEMI(emi);
+      stats.emisUpdated++;
+    }
+  }
+
+  // ── Reconcile Investments ──
+  const invs = await getInvestments();
+  for (const inv of invs) {
+    if (!inv.active || !inv.confirmed || inv.cycle === 'one-time') continue;
+
+    const match = parsed.find(p => {
+      const name = classifyTransaction(p).matchedMerchant || p.merchant || '';
+      return namesMatch(inv.name, name);
+    });
+
+    if (match) {
+      const txnDate = new Date(match.timestamp);
+      const billingDay = txnDate.getDate();
+      if (inv.billingDay) {
+        inv.billingDay = billingDay;
+        inv.nextBillingDate = calcNextBillingDate(billingDay, inv.cycle === 'monthly' ? 'monthly' : 'yearly');
+      }
+      inv.amount = match.amount; // variable SIPs
+      await saveInvestment(inv);
+      stats.investmentsUpdated++;
+    }
+  }
+
+  return stats;
 }
 
 // ─── Recurring Pattern Detection ───────────────────────────────────────────

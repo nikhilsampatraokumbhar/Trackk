@@ -12,9 +12,10 @@ import {
   getInvestments, saveInvestment, deleteInvestment,
   hasInvestmentsOnboarded, setInvestmentsOnboarded,
 } from '../services/StorageService';
-import { scanAllSources } from '../services/AutoDetectionService';
+import { scanAllSources, reconcileExistingItems } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
+import { useNetwork } from '../store/NetworkContext';
 import EmptyState from '../components/EmptyState';
 
 function calcNextBillingDate(billingDay: number, cycle: 'monthly' | 'yearly' | 'one-time'): string {
@@ -40,6 +41,7 @@ function daysUntil(dateStr: string): number {
 
 export default function InvestmentsScreen() {
   const nav = useNavigation();
+  const { isConnected } = useNetwork();
   const [items, setItems] = useState<InvestmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -58,6 +60,7 @@ export default function InvestmentsScreen() {
     } else {
       spinAnim.stopAnimation();
     }
+    return () => { spinAnim.stopAnimation(); };
   }, [syncing]);
 
   const [formName, setFormName] = useState('');
@@ -66,11 +69,16 @@ export default function InvestmentsScreen() {
   const [formDay, setFormDay] = useState('');
   const [editingItem, setEditingItem] = useState<InvestmentItem | null>(null);
 
+  const [inactiveItems, setInactiveItems] = useState<InvestmentItem[]>([]);
+  const [showInactive, setShowInactive] = useState(false);
+
   const load = useCallback(async () => {
     const inv = await getInvestments();
     const active = inv.filter(i => i.active);
+    const inactive = inv.filter(i => !i.active);
     active.sort((a, b) => (a.confirmed === b.confirmed ? 0 : a.confirmed ? -1 : 1));
     setItems(active);
+    setInactiveItems(inactive);
     const onboarded = await hasInvestmentsOnboarded();
     if (!onboarded && inv.filter(i => i.confirmed).length === 0) setShowOnboarding(true);
     setLoading(false);
@@ -85,6 +93,10 @@ export default function InvestmentsScreen() {
   }, 0);
 
   const handleSyncSMS = async () => {
+    if (!isConnected) {
+      Alert.alert('No Internet', 'You are offline. Please check your connection and try again.');
+      return;
+    }
     if (Platform.OS === 'android') {
       const hasPerm = await checkSmsPermission();
       if (!hasPerm) await requestSmsPermission();
@@ -114,15 +126,19 @@ export default function InvestmentsScreen() {
   };
 
   const handleSync = async () => {
+    if (!isConnected) {
+      Alert.alert('No Internet', 'You are offline. Please check your connection and try again.');
+      return;
+    }
     setSyncing(true);
     setScanResultText('');
     try {
+      const reconciled = await reconcileExistingItems();
       const result = await scanAllSources('investments');
-      if (result.investments.length > 0) {
-        setScanResultText(`Found ${result.investments.length} new investment${result.investments.length > 1 ? 's' : ''}`);
-      } else {
-        setScanResultText('No new investments found');
-      }
+      const parts: string[] = [];
+      if (reconciled.investmentsUpdated > 0) parts.push(`${reconciled.investmentsUpdated} updated`);
+      if (result.investments.length > 0) parts.push(`${result.investments.length} new`);
+      setScanResultText(parts.length > 0 ? parts.join(', ') : 'All up to date');
       await load();
     } catch (e) {
       setScanResultText('Sync failed. Try again later.');
@@ -176,6 +192,12 @@ export default function InvestmentsScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => { await deleteInvestment(item.id); load(); } },
     ]);
+  };
+
+  const handleToggleActive = async (item: InvestmentItem) => {
+    const updated = { ...item, active: !item.active };
+    await saveInvestment(updated);
+    load();
   };
 
   const handleConfirmAutoDetected = async (item: InvestmentItem) => {
@@ -233,6 +255,13 @@ export default function InvestmentsScreen() {
             )}
           </View>
         </TouchableOpacity>
+        {!isAutoDetected && (
+          <View style={styles.cardActions}>
+            <TouchableOpacity onPress={() => handleToggleActive(item)} activeOpacity={0.7} style={styles.deactivateBtn}>
+              <Text style={styles.deactivateText}>Deactivate</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   };
@@ -302,6 +331,32 @@ export default function InvestmentsScreen() {
           ) : null
         }
       />
+
+      {/* Inactive section */}
+      {inactiveItems.length > 0 && (
+        <View style={styles.inactiveSection}>
+          <TouchableOpacity style={styles.inactiveHeader} onPress={() => setShowInactive(!showInactive)} activeOpacity={0.7}>
+            <Text style={styles.inactiveTitle}>Inactive ({inactiveItems.length})</Text>
+            <Text style={styles.inactiveChevron}>{showInactive ? '▾' : '▸'}</Text>
+          </TouchableOpacity>
+          {showInactive && inactiveItems.map(item => (
+            <View key={item.id} style={[styles.card, { opacity: 0.6, marginHorizontal: 16, marginBottom: 8 }]}>
+              <View style={styles.cardLeft}>
+                <Text style={styles.cardName}>{item.name}</Text>
+                <Text style={styles.cardCycle}>
+                  {item.cycle === 'monthly' ? 'Monthly SIP' : item.cycle === 'yearly' ? 'Yearly' : 'One-time'} · Inactive
+                </Text>
+              </View>
+              <View style={styles.cardRight}>
+                <Text style={styles.cardAmount}>{formatCurrency(item.amount)}</Text>
+                <TouchableOpacity onPress={() => handleToggleActive(item)} activeOpacity={0.7} style={styles.reactivateBtn}>
+                  <Text style={styles.reactivateText}>Reactivate</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       <TouchableOpacity style={[styles.fab, { backgroundColor: COLORS.success }]} onPress={() => setShowAddModal(true)} activeOpacity={0.8}>
         <Text style={styles.fabIcon}>+</Text>
@@ -448,4 +503,14 @@ const styles = StyleSheet.create({
   saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   cancelBtn: { paddingVertical: 12, alignItems: 'center' },
   cancelBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+
+  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, marginTop: -6, marginBottom: 8 },
+  deactivateBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: `${COLORS.textSecondary}15` },
+  deactivateText: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary },
+  inactiveSection: { marginBottom: 80 },
+  inactiveHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
+  inactiveTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary },
+  inactiveChevron: { fontSize: 14, color: COLORS.textSecondary },
+  reactivateBtn: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: `${COLORS.success}18`, marginTop: 4 },
+  reactivateText: { fontSize: 10, fontWeight: '700', color: COLORS.success },
 });

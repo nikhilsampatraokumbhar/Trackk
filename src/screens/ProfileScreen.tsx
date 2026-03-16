@@ -11,19 +11,26 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { usePremium } from '../store/PremiumContext';
-import { COLORS } from '../utils/helpers';
+import { COLORS, formatDate } from '../utils/helpers';
+import { useTranslation } from 'react-i18next';
+import { SUPPORTED_LANGUAGES, changeLanguage } from '../i18n';
+import { CURRENCIES, getPreferredCurrency, setPreferredCurrency, getCurrencyInfo } from '../utils/currencies';
 import { isDevMode, setDevMode, loadDevMode } from '../utils/devMode';
 import {
   EmailProvider, connectEmail, disconnectEmail, parseOAuthRedirect,
   getProviderDisplayName, getProviderColor,
 } from '../services/EmailService';
 import { db } from '../services/FirebaseConfig';
+import { backupAllData, restoreFromBackup } from '../services/BackupService';
+import { clearAllData } from '../services/StorageService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function ProfileScreen() {
   const nav = useNavigation<Nav>();
   const { user, updateProfile, signOut } = useAuth();
+  // Premium UI hidden during free launch — set to true to re-enable
+  const SHOW_PREMIUM_UI = false;
   const { isPremium, isFamily, currentPlan, subscription, referralStats } = usePremium();
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(user?.displayName || '');
@@ -32,6 +39,10 @@ export default function ProfileScreen() {
   });
   const [connectingProvider, setConnectingProvider] = useState<EmailProvider | null>(null);
   const [devMode, setDevModeState] = useState(false);
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [currentCurrency, setCurrentCurrency] = useState(getPreferredCurrency());
+  const { t, i18n } = useTranslation();
   const versionTapCount = useRef(0);
   const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -195,86 +206,88 @@ export default function ProfileScreen() {
           ) : null}
         </LinearGradient>
 
-        {/* ── Premium Status ─────────────────────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>SUBSCRIPTION</Text>
-        </View>
+        {/* ── Premium Status (hidden during free launch) ─────────── */}
+        {SHOW_PREMIUM_UI && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>SUBSCRIPTION</Text>
+            </View>
 
-        <TouchableOpacity
-          style={[styles.premiumCard, isPremium && styles.premiumCardActive]}
-          onPress={() => nav.navigate('Pricing')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.premiumRow}>
-            <View style={styles.premiumIconWrap}>
-              <Text style={styles.premiumIcon}>{isPremium ? '👑' : '✨'}</Text>
-            </View>
-            <View style={styles.premiumInfo}>
-              <Text style={styles.premiumTitle}>
-                {isPremium ? `${currentPlan.name} Plan` : 'Upgrade to Premium'}
-              </Text>
-              <Text style={styles.premiumSubtitle}>
-                {isPremium
-                  ? (subscription?.isFoundingMember ? 'Founding Member' : 'Active')
-                  : 'Less than your morning chai per day'}
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </View>
-          {isPremium && subscription?.endDate && subscription.endDate > 0 && (
-            <View style={styles.premiumExpiry}>
-              <Text style={styles.premiumExpiryText}>
-                Renews {new Date(subscription.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </Text>
-            </View>
-          )}
-          {isPremium && subscription?.endDate === -1 && (
-            <View style={styles.premiumExpiry}>
-              <Text style={[styles.premiumExpiryText, { color: COLORS.primary }]}>
-                Lifetime Access — forever yours
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.premiumCard, isPremium && styles.premiumCardActive]}
+              onPress={() => nav.navigate('Pricing')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.premiumRow}>
+                <View style={styles.premiumIconWrap}>
+                  <Text style={styles.premiumIcon}>{isPremium ? '👑' : '✨'}</Text>
+                </View>
+                <View style={styles.premiumInfo}>
+                  <Text style={styles.premiumTitle}>
+                    {isPremium ? `${currentPlan.name} Plan` : 'Upgrade to Premium'}
+                  </Text>
+                  <Text style={styles.premiumSubtitle}>
+                    {isPremium
+                      ? (subscription?.isFoundingMember ? 'Founding Member' : 'Active')
+                      : 'Less than your morning chai per day'}
+                  </Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </View>
+              {isPremium && subscription?.endDate && subscription.endDate > 0 && (
+                <View style={styles.premiumExpiry}>
+                  <Text style={styles.premiumExpiryText}>
+                    Renews {new Date(subscription.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </Text>
+                </View>
+              )}
+              {isPremium && subscription?.endDate === -1 && (
+                <View style={styles.premiumExpiry}>
+                  <Text style={[styles.premiumExpiryText, { color: COLORS.primary }]}>
+                    Lifetime Access — forever yours
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
-        {/* ── Refer & Earn ──────────────────────────────────────── */}
-        <TouchableOpacity
-          style={styles.referralCard}
-          onPress={() => nav.navigate('Referral')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.premiumRow}>
-            <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.warning}18` }]}>
-              <Text style={styles.premiumIcon}>🎁</Text>
-            </View>
-            <View style={styles.premiumInfo}>
-              <Text style={styles.premiumTitle}>Refer & Earn</Text>
-              <Text style={styles.premiumSubtitle}>
-                {referralStats.freeMonthsEarned > 0
-                  ? `${referralStats.freeMonthsEarned} month(s) earned — keep going!`
-                  : 'Get up to 12 months free premium'}
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </View>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.referralCard}
+              onPress={() => nav.navigate('Referral')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.premiumRow}>
+                <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.warning}18` }]}>
+                  <Text style={styles.premiumIcon}>🎁</Text>
+                </View>
+                <View style={styles.premiumInfo}>
+                  <Text style={styles.premiumTitle}>Refer & Earn</Text>
+                  <Text style={styles.premiumSubtitle}>
+                    {referralStats.freeMonthsEarned > 0
+                      ? `${referralStats.freeMonthsEarned} month(s) earned — keep going!`
+                      : 'Get up to 12 months free premium'}
+                  </Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </View>
+            </TouchableOpacity>
 
-        {/* ── Family Plan Upsell ────────────────────────────────── */}
-        {isPremium && !isFamily && (
-          <TouchableOpacity
-            style={styles.familyUpsell}
-            onPress={() => nav.navigate('Pricing')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.familyUpsellIcon}>👨‍👩‍👧‍👦</Text>
-            <View style={styles.familyUpsellContent}>
-              <Text style={styles.familyUpsellTitle}>Add your family</Text>
-              <Text style={styles.familyUpsellText}>
-                ₹37/person/month — less than a samosa per day
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </TouchableOpacity>
+            {isPremium && !isFamily && (
+              <TouchableOpacity
+                style={styles.familyUpsell}
+                onPress={() => nav.navigate('Pricing')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.familyUpsellIcon}>👨‍👩‍👧‍👦</Text>
+                <View style={styles.familyUpsellContent}>
+                  <Text style={styles.familyUpsellTitle}>Add your family</Text>
+                  <Text style={styles.familyUpsellText}>
+                    ₹37/person/month — less than a samosa per day
+                  </Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
 
         {/* ── Connect Email ─────────────────────────────────────── */}
@@ -363,9 +376,122 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Language Section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{t('profile.language').toUpperCase()}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.premiumCard}
+          onPress={() => setShowLanguagePicker(!showLanguagePicker)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.premiumRow}>
+            <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.groupColor}18` }]}>
+              <Text style={styles.premiumIcon}>
+                {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.flag || '🌐'}
+              </Text>
+            </View>
+            <View style={styles.premiumInfo}>
+              <Text style={styles.premiumTitle}>
+                {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.name || 'English'}
+              </Text>
+              <Text style={styles.premiumSubtitle}>
+                {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.englishName || 'English'}
+              </Text>
+            </View>
+            <Text style={styles.chevron}>{showLanguagePicker ? '‹' : '›'}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {showLanguagePicker && (
+          <View style={[styles.emailCard, { marginTop: 8 }]}>
+            {SUPPORTED_LANGUAGES.map(lang => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.emailProviderRow,
+                  i18n.language === lang.code && { backgroundColor: `${COLORS.primary}10` },
+                ]}
+                onPress={async () => {
+                  await changeLanguage(lang.code);
+                  setShowLanguagePicker(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 20, marginRight: 12 }}>{lang.flag}</Text>
+                <View style={styles.emailProviderInfo}>
+                  <Text style={styles.emailProviderName}>{lang.name}</Text>
+                  <Text style={styles.emailProviderStatus}>{lang.englishName}</Text>
+                </View>
+                {i18n.language === lang.code && (
+                  <Text style={{ color: COLORS.primary, fontWeight: '800' }}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Currency Section */}
+        <View style={[styles.sectionHeader, { marginTop: 12 }]}>
+          <Text style={styles.sectionTitle}>{t('profile.currency').toUpperCase()}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.premiumCard}
+          onPress={() => setShowCurrencyPicker(!showCurrencyPicker)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.premiumRow}>
+            <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.warning}18` }]}>
+              <Text style={styles.premiumIcon}>
+                {getCurrencyInfo(currentCurrency).flag}
+              </Text>
+            </View>
+            <View style={styles.premiumInfo}>
+              <Text style={styles.premiumTitle}>
+                {getCurrencyInfo(currentCurrency).symbol} {getCurrencyInfo(currentCurrency).code}
+              </Text>
+              <Text style={styles.premiumSubtitle}>
+                {getCurrencyInfo(currentCurrency).name}
+              </Text>
+            </View>
+            <Text style={styles.chevron}>{showCurrencyPicker ? '‹' : '›'}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {showCurrencyPicker && (
+          <View style={[styles.emailCard, { marginTop: 8 }]}>
+            {CURRENCIES.map(curr => (
+              <TouchableOpacity
+                key={curr.code}
+                style={[
+                  styles.emailProviderRow,
+                  currentCurrency === curr.code && { backgroundColor: `${COLORS.primary}10` },
+                ]}
+                onPress={async () => {
+                  await setPreferredCurrency(curr.code);
+                  setCurrentCurrency(curr.code);
+                  setShowCurrencyPicker(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 20, marginRight: 12 }}>{curr.flag}</Text>
+                <View style={styles.emailProviderInfo}>
+                  <Text style={styles.emailProviderName}>{curr.symbol} {curr.code}</Text>
+                  <Text style={styles.emailProviderStatus}>{curr.name}</Text>
+                </View>
+                {currentCurrency === curr.code && (
+                  <Text style={{ color: COLORS.primary, fontWeight: '800' }}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {/* About Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>ABOUT</Text>
+          <Text style={styles.sectionTitle}>{t('profile.about').toUpperCase()}</Text>
         </View>
 
         <View style={styles.aboutCard}>
@@ -378,6 +504,68 @@ export default function ProfileScreen() {
             <Text style={styles.aboutLabel}>Storage</Text>
             <Text style={styles.aboutValue}>Personal data local, groups synced via cloud</Text>
           </View>
+        </View>
+
+        {/* Backup & Restore */}
+        <View style={styles.dataSection}>
+          <Text style={styles.dataSectionTitle}>DATA</Text>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={async () => {
+              try {
+                await backupAllData();
+                Alert.alert('Backup Complete', 'Your data has been exported. Share it to save it safely.');
+              } catch (err: any) {
+                Alert.alert('Error', err?.message || 'Failed to create backup.');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.settingIcon, { backgroundColor: `${COLORS.success}15` }]}>
+              <Text style={styles.settingEmoji}>💾</Text>
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Backup Data</Text>
+              <Text style={styles.settingSub}>Export all personal data as JSON</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={async () => {
+              Alert.alert(
+                'Restore Backup',
+                'This will replace all your current local data with the backup. Are you sure?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Restore',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        const result = await restoreFromBackup();
+                        if (result) {
+                          Alert.alert('Restored', 'Data has been restored from backup. Please restart the app.');
+                        }
+                      } catch (err: any) {
+                        Alert.alert('Error', err?.message || 'Failed to restore backup.');
+                      }
+                    },
+                  },
+                ],
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.settingIcon, { backgroundColor: `${COLORS.warning}15` }]}>
+              <Text style={styles.settingEmoji}>📥</Text>
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Restore Backup</Text>
+              <Text style={styles.settingSub}>Import data from a backup file</Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Sign Out */}
@@ -399,6 +587,48 @@ export default function ProfileScreen() {
           activeOpacity={0.8}
         >
           <Text style={styles.signOutBtnText}>Sign Out</Text>
+        </TouchableOpacity>
+
+        {/* Delete Account */}
+        <TouchableOpacity
+          style={styles.deleteAccountBtn}
+          onPress={() => {
+            Alert.alert(
+              'Delete Account',
+              'This will permanently delete ALL your data including expenses, groups, goals, subscriptions, EMIs, and investments. This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Everything',
+                  style: 'destructive',
+                  onPress: () => {
+                    Alert.alert(
+                      'Are you absolutely sure?',
+                      'Type DELETE to confirm account deletion.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Yes, Delete',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              await clearAllData();
+                              await signOut();
+                            } catch (err: any) {
+                              Alert.alert('Error', err?.message || 'Failed to delete account.');
+                            }
+                          },
+                        },
+                      ],
+                    );
+                  },
+                },
+              ],
+            );
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.deleteAccountBtnText}>Delete Account</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -810,6 +1040,42 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
 
+  /* ── Backup & Restore ─────────────────────────────────────── */
+  dataSection: {
+    backgroundColor: COLORS.glass,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+  },
+  dataSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  settingIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  settingEmoji: { fontSize: 20 },
+  settingInfo: { flex: 1 },
+  settingLabel: { fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 2 },
+  settingSub: { fontSize: 11, color: COLORS.textSecondary },
+
   signOutBtn: {
     borderRadius: 20,
     padding: 16,
@@ -823,6 +1089,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: COLORS.textSecondary,
+    letterSpacing: 0.3,
+  },
+  deleteAccountBtn: {
+    borderRadius: 20,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 12,
+    backgroundColor: `${COLORS.danger}08`,
+    borderWidth: 1,
+    borderColor: `${COLORS.danger}20`,
+  },
+  deleteAccountBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.danger,
     letterSpacing: 0.3,
   },
 });

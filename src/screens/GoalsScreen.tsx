@@ -318,6 +318,12 @@ export default function GoalsScreen() {
     );
   };
 
+  const handleTogglePause = async (goal: SavingsGoal) => {
+    const updated = { ...goal, paused: !goal.paused };
+    await saveGoal(updated);
+    await loadData();
+  };
+
   /* ── Edit Goal ──────────────────────────────────────────────────── */
 
   const handleEditGoal = (goal: SavingsGoal) => {
@@ -915,7 +921,7 @@ export default function GoalsScreen() {
 
           <View style={styles.goalHeaderContent}>
             <View style={styles.goalHeaderLeft}>
-              <Text style={styles.goalName} numberOfLines={1}>{goal.name}</Text>
+              <Text style={styles.goalName} numberOfLines={1}>{goal.name}{goal.paused ? ' (Paused)' : ''}</Text>
               <Text style={styles.goalTarget}>{formatCurrency(goal.targetAmount)}</Text>
               <View style={styles.goalDateRow}>
                 <Text style={styles.goalDateText}>
@@ -927,6 +933,13 @@ export default function GoalsScreen() {
               </View>
             </View>
             <View style={styles.goalActions}>
+              <TouchableOpacity
+                style={[styles.editBtn, { backgroundColor: goal.paused ? `${COLORS.success}15` : `${COLORS.warning}15` }]}
+                onPress={() => handleTogglePause(goal)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.editBtnIcon, { color: goal.paused ? COLORS.success : COLORS.warning }]}>{goal.paused ? '\u25B6' : '\u23F8'}</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.editBtn}
                 onPress={() => handleEditGoal(goal)}
@@ -1185,6 +1198,16 @@ export default function GoalsScreen() {
               </Text>
             )}
           </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {goals.length > 0 && (
+            <TouchableOpacity
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: `${COLORS.primary}20`, alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => loadData()}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 20, color: COLORS.primary, fontWeight: '700' }}>↻</Text>
+            </TouchableOpacity>
+          )}
           {goals.length > 0 && (
             <TouchableOpacity
               style={styles.addBtn}
@@ -1215,6 +1238,7 @@ export default function GoalsScreen() {
               </LinearGradient>
             </TouchableOpacity>
           )}
+          </View>
         </View>
 
         {/* Summary Card (when goals exist) */}

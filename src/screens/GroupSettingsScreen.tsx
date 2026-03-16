@@ -43,6 +43,7 @@ export default function GroupSettingsScreen() {
   const [editName, setEditName] = useState('');
   const [editType, setEditType] = useState<GroupType>('other');
   const [editImage, setEditImage] = useState<string | undefined>(undefined);
+  const [editDescription, setEditDescription] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -61,6 +62,7 @@ export default function GroupSettingsScreen() {
       setEditName(fromContext.name);
       setEditType(fromContext.groupType || (fromContext.isTrip ? 'trip' : 'other'));
       setEditImage(fromContext.imageUri);
+      setEditDescription(fromContext.description || '');
       return;
     }
     // Fallback to local/cloud
@@ -73,6 +75,7 @@ export default function GroupSettingsScreen() {
       setEditName(g.name);
       setEditType(g.groupType || (g.isTrip ? 'trip' : 'other'));
       setEditImage(g.imageUri);
+      setEditDescription(g.description || '');
     }
   }, [groupId, groups, isAuthenticated]);
 
@@ -84,8 +87,9 @@ export default function GroupSettingsScreen() {
     const nameChanged = editName.trim() !== group.name;
     const typeChanged = editType !== (group.groupType || (group.isTrip ? 'trip' : 'other'));
     const imageChanged = editImage !== group.imageUri;
-    setHasChanges(nameChanged || typeChanged || imageChanged);
-  }, [editName, editType, editImage, group]);
+    const descChanged = editDescription.trim() !== (group.description || '');
+    setHasChanges(nameChanged || typeChanged || imageChanged || descChanged);
+  }, [editName, editType, editImage, editDescription, group]);
 
   const handleSaveCustomization = async () => {
     if (!group) return;
@@ -101,8 +105,9 @@ export default function GroupSettingsScreen() {
         groupType: editType,
         isTrip: editType === 'trip',
         imageUri: editImage,
+        description: editDescription.trim() || undefined,
       });
-      setGroup(prev => prev ? { ...prev, name: trimmedName, groupType: editType, isTrip: editType === 'trip', imageUri: editImage } : prev);
+      setGroup(prev => prev ? { ...prev, name: trimmedName, groupType: editType, isTrip: editType === 'trip', imageUri: editImage, description: editDescription.trim() || undefined } : prev);
       setHasChanges(false);
       Alert.alert('Saved', 'Group settings updated.');
     } catch (err: any) {
@@ -225,10 +230,37 @@ export default function GroupSettingsScreen() {
     );
   };
 
+  // ─── Transfer Ownership ────────────────────────────────────────────────────
+  const handleTransferOwnership = (member: GroupMember) => {
+    Alert.alert(
+      'Transfer Ownership',
+      `Make ${member.displayName} the admin of this group? You will no longer be able to delete the group.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Transfer',
+          onPress: async () => {
+            try {
+              await updateGroup(groupId, { createdBy: member.userId });
+              setGroup(prev => prev ? { ...prev, createdBy: member.userId } : prev);
+              Alert.alert('Done', `${member.displayName} is now the group admin.`);
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to transfer ownership.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // ─── Invite ─────────────────────────────────────────────────────────────────
   const handleInviteLink = async () => {
     if (!group) return;
-    const message = `Join my group "${group.name}" on Trackk! Download the app and use group code: ${group.id}`;
+    const memberNames = group.members.map(m => m.displayName).join(', ');
+    const message = `Hey! Join my group "${group.name}" on Trackk to split expenses easily.\n\n` +
+      `Members: ${memberNames}\n\n` +
+      `Group code: ${group.id}\n\n` +
+      `Download Trackk and enter this code to join: https://trackk.app/join/${group.id}`;
     try {
       await Share.share({ message, title: `Join ${group.name} on Trackk` });
     } catch {}
@@ -356,6 +388,18 @@ export default function GroupSettingsScreen() {
             maxLength={50}
           />
 
+          {/* Description */}
+          <Text style={styles.fieldLabel}>DESCRIPTION (OPTIONAL)</Text>
+          <TextInput
+            style={[styles.textInput, { minHeight: 60 }]}
+            value={editDescription}
+            onChangeText={setEditDescription}
+            placeholder="Add a group description or notes..."
+            placeholderTextColor={COLORS.textLight}
+            maxLength={200}
+            multiline
+          />
+
           {/* Group Type */}
           <Text style={styles.fieldLabel}>GROUP TYPE</Text>
           <View style={styles.typeGrid}>
@@ -428,6 +472,15 @@ export default function GroupSettingsScreen() {
                     <Text style={styles.memberPhone}>{member.phone}</Text>
                   ) : null}
                 </View>
+                {isCreator && !isMe && !isGroupCreator && (
+                  <TouchableOpacity
+                    onPress={() => handleTransferOwnership(member)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={{ marginRight: 10 }}
+                  >
+                    <Text style={styles.transferText}>Make Admin</Text>
+                  </TouchableOpacity>
+                )}
                 {!isMe && !isGroupCreator && (
                   <TouchableOpacity
                     onPress={() => handleRemoveMember(member)}
@@ -457,6 +510,27 @@ export default function GroupSettingsScreen() {
         {/* ─── Danger Zone ─────────────────────────────────────────────── */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: COLORS.danger }]}>DANGER ZONE</Text>
+
+          {group.archived && (
+            <TouchableOpacity style={styles.dangerRow} onPress={() => {
+              Alert.alert('Unarchive Group', `Restore "${group.name}" from archive?`, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Unarchive', onPress: async () => {
+                  await updateGroup(groupId, { archived: false });
+                  setGroup(prev => prev ? { ...prev, archived: false } : prev);
+                  Alert.alert('Done', 'Group has been unarchived.');
+                }},
+              ]);
+            }} activeOpacity={0.7}>
+              <View style={[styles.actionIcon, { backgroundColor: `${COLORS.success}15` }]}>
+                <Text style={styles.actionEmoji}>📦</Text>
+              </View>
+              <View style={styles.actionInfo}>
+                <Text style={[styles.actionTitle, { color: COLORS.success }]}>Unarchive Group</Text>
+                <Text style={styles.actionSub}>Restore this group from archive</Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity style={styles.dangerRow} onPress={handleLeaveGroup} activeOpacity={0.7}>
             <View style={[styles.actionIcon, { backgroundColor: `${COLORS.warning}15` }]}>
@@ -666,6 +740,7 @@ const styles = StyleSheet.create({
   },
   creatorBadgeText: { fontSize: 10, fontWeight: '700', color: COLORS.primary, letterSpacing: 0.5 },
   removeMemberText: { fontSize: 13, fontWeight: '600', color: COLORS.danger },
+  transferText: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
 
   // ─── Action Rows ───────────────────────────────────────────────────────────
   actionRow: {
