@@ -145,7 +145,57 @@ currency?: string;  // ISO 4217 currency code
 | `src/services/SyncService.ts` | Firebase cloud sync operations |
 | `src/services/StorageService.ts` | Local AsyncStorage operations |
 | `src/services/DebtCalculator.ts` | Group debt calculation logic |
+| `src/services/BackupService.ts` | JSON backup & restore for local data |
+| `src/services/ExportService.ts` | CSV, text report, and PDF export |
 | `src/navigation/AppNavigator.tsx` | Navigation structure and tab bar |
+
+---
+
+## Recent Features (Essential UX)
+
+### Search, Filter & Sort (PersonalExpenseScreen)
+- Search bar filters by description, merchant, category, or amount
+- Category filter chips (from available transaction categories)
+- Sort toggle: by date (default) or by amount (highest first)
+- Expand/collapse filter panel
+
+### Custom Date Range (InsightsScreen)
+- Three period options: This Month, All Time, Custom
+- Custom mode accepts YYYY-MM-DD start/end dates
+- Transactions filtered between date range
+
+### PDF Export (ExportService + InsightsScreen)
+- Uses `expo-print` to generate styled HTML → PDF
+- Includes summary stats, category breakdown table, full transaction list
+- Shared via `expo-sharing`
+
+### Overall Balances (GroupListScreen)
+- Summary card showing "You are owed" / "You owe" totals across ALL groups
+- Net balance displayed with color coding (green positive, red negative)
+
+### Simplify Debts Toggle (GroupDetailScreen)
+- Toggle between "Simplified" (minimum transfers) and "Detailed" (raw debts)
+- Uses `simplifyDebts()` from DebtCalculator vs raw `activeGroupDebts`
+
+### Comments on Group Expenses
+- `ExpenseComment` type: id, userId, displayName, text, timestamp
+- `comments?: ExpenseComment[]` field on `GroupTransaction`
+- Comment thread UI in bottom sheet with avatar, author, text, time
+- Stored in Firestore (cloud) or AsyncStorage (local) via `updateGroupTransactionComments()`
+
+### UPI Payment Deep Link
+- Settlement uses phone number as UPI ID: `{phone}@upi`
+- Includes group name in transaction note
+- Falls back gracefully if no UPI app installed
+
+### Group Invite Link
+- Shares formatted message with group name, member list, group code
+- Includes deep link format: `https://trackk.app/join/{groupId}`
+
+### Backup & Restore (BackupService + ProfileScreen)
+- **Backup**: Exports all AsyncStorage data as JSON file (excludes auth tokens)
+- **Restore**: Picks JSON file via `expo-document-picker`, restores all keys
+- Backup file includes version, timestamp, key count for validation
 
 ---
 
@@ -157,6 +207,8 @@ currency?: string;  // ISO 4217 currency code
 - `@notifee/react-native` (notifications)
 - `i18next` + `react-i18next` (internationalization)
 - `react-native-localize` (device locale detection)
+- `expo-print` (PDF generation)
+- `expo-document-picker` (backup file import)
 
 ---
 
