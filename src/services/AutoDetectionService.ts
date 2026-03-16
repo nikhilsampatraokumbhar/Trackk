@@ -523,6 +523,9 @@ export async function checkSharedSubscriptionStatus(subscriptionId: string): Pro
 
 // ─── Historical SMS Scan (One-Time Sync) ───────────────────────────────────
 
+const LAST_SCAN_KEY = '@et_last_scan_ts';
+const SCAN_OVERLAP_DAYS = 10; // buffer overlap to catch late-arriving messages
+
 export interface ScanResult {
   subscriptions: UserSubscriptionItem[];
   investments: InvestmentItem[];
@@ -532,13 +535,17 @@ export interface ScanResult {
 }
 
 /**
- * Scan historical SMS messages (up to 1 year back) to detect subscriptions,
- * investments, and EMIs. Creates unconfirmed items for each detected pattern.
+ * Scan SMS messages to detect subscriptions, investments, and EMIs.
  *
- * @param filter 'all' | 'subscriptions' | 'investments' | 'emis' — which category to scan for
+ * On first run: scans 1 year of history.
+ * On subsequent runs: only scans from (lastScan - 10 days) for efficiency.
+ *
+ * @param filter which category to scan for
+ * @param since timestamp to scan from (auto-computed from last scan if omitted)
  */
 export async function scanHistoricalSMS(
   filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+  since?: number,
 ): Promise<ScanResult> {
   const result: ScanResult = {
     subscriptions: [],
@@ -552,13 +559,13 @@ export async function scanHistoricalSMS(
   let parsed: Array<{ txn: ParsedTransaction; date: number }> = [];
 
   if (Platform.OS === 'android') {
-    const oneYearAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
+    const scanFrom = since ?? (Date.now() - (365 * 24 * 60 * 60 * 1000));
     let messages: Array<{ body: string; address: string; date: string }> = [];
 
     // Use our custom SmsReaderModule (promise-based, ContentResolver)
     if (NativeModules.SmsReaderModule) {
       try {
-        messages = await NativeModules.SmsReaderModule.readSms(5000, oneYearAgo);
+        messages = await NativeModules.SmsReaderModule.readSms(5000, scanFrom);
       } catch (e) {
         console.log('[AutoDetection] SmsReaderModule error:', e);
         messages = [];
@@ -568,7 +575,7 @@ export async function scanHistoricalSMS(
     else if (NativeModules.SmsAndroid) {
       messages = await new Promise<Array<{ body: string; address: string; date: string }>>((resolve) => {
         NativeModules.SmsAndroid.list(
-          JSON.stringify({ box: 'inbox', maxCount: 5000, minDate: oneYearAgo }),
+          JSON.stringify({ box: 'inbox', maxCount: 5000, minDate: scanFrom }),
           (_fail: string) => resolve([]),
           (_count: number, smsList: string) => {
             try { resolve(JSON.parse(smsList)); } catch { resolve([]); }
@@ -592,7 +599,7 @@ export async function scanHistoricalSMS(
 
   // Fallback: use stored transactions when native SMS is unavailable or returned nothing
   if (parsed.length === 0) {
-    const storedResult = await scanFromStoredTransactions(filter);
+    const storedResult = await scanFromStoredTransactions(filter, since);
     return storedResult;
   }
 
@@ -607,6 +614,7 @@ export async function scanHistoricalSMS(
  */
 export async function scanFromStoredTransactions(
   filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+  since?: number,
 ): Promise<ScanResult> {
   const result: ScanResult = {
     subscriptions: [],
@@ -616,8 +624,11 @@ export async function scanFromStoredTransactions(
     totalMatched: 0,
   };
 
-  // Get all stored transactions (personal + reimbursement — no group)
-  const allTransactions = await getTransactions();
+  // Get stored transactions, filtered by time window if since is provided
+  const rawTransactions = await getTransactions();
+  const allTransactions = since
+    ? rawTransactions.filter(t => t.timestamp >= since)
+    : rawTransactions;
   result.totalSmsScanned = allTransactions.length;
 
   if (allTransactions.length === 0) {
@@ -651,6 +662,7 @@ export async function scanFromStoredTransactions(
  */
 export async function scanEmailHistory(
   filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
+  since?: number,
 ): Promise<ScanResult> {
   const result: ScanResult = {
     subscriptions: [],
@@ -712,10 +724,19 @@ export async function scanEmailHistory(
 export async function scanAllSources(
   filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
 ): Promise<ScanResult> {
+  // Determine scan window: first run = 365 days, subsequent = (lastScan - 10 day buffer)
+  const lastScanRaw = await AsyncStorage.getItem(LAST_SCAN_KEY);
+  const since = lastScanRaw
+    ? parseInt(lastScanRaw, 10) - (SCAN_OVERLAP_DAYS * 24 * 60 * 60 * 1000)
+    : undefined; // undefined = full 365 day scan (first time)
+
+  // Save current timestamp as the new last scan point
+  await AsyncStorage.setItem(LAST_SCAN_KEY, String(Date.now()));
+
   // Run SMS scan and email scan in parallel
   const [smsResult, emailResult] = await Promise.allSettled([
-    scanHistoricalSMS(filter),
-    scanEmailHistory(filter),
+    scanHistoricalSMS(filter, since),
+    scanEmailHistory(filter, since),
   ]);
 
   const sms = smsResult.status === 'fulfilled' ? smsResult.value : null;
@@ -732,7 +753,7 @@ export async function scanAllSources(
 
   // If both returned nothing, try stored transactions as last resort
   if (merged.subscriptions.length === 0 && merged.investments.length === 0 && merged.emis.length === 0) {
-    return await scanFromStoredTransactions(filter);
+    return await scanFromStoredTransactions(filter, since);
   }
 
   return merged;
@@ -873,8 +894,6 @@ async function groupAndSaveDetections(
  * Only looks at transactions since the last reconciliation (or last 45 days
  * on first run) to avoid re-processing old history every time.
  */
-const LAST_RECONCILE_KEY = '@et_last_reconcile_ts';
-
 export async function reconcileExistingItems(): Promise<{
   subsUpdated: number;
   emisUpdated: number;
@@ -882,13 +901,13 @@ export async function reconcileExistingItems(): Promise<{
 }> {
   const stats = { subsUpdated: 0, emisUpdated: 0, investmentsUpdated: 0 };
 
-  // Determine the time window: from last reconcile (or 45 days ago)
-  const lastRaw = await AsyncStorage.getItem(LAST_RECONCILE_KEY);
-  const lastReconcile = lastRaw ? parseInt(lastRaw, 10) : Date.now() - (45 * 24 * 60 * 60 * 1000);
+  // Use same scan timestamp as scanAllSources — with 10-day overlap buffer
+  // On first run (no prior scan), look back 45 days
+  const lastRaw = await AsyncStorage.getItem(LAST_SCAN_KEY);
+  const lastReconcile = lastRaw
+    ? parseInt(lastRaw, 10) - (SCAN_OVERLAP_DAYS * 24 * 60 * 60 * 1000)
+    : Date.now() - (45 * 24 * 60 * 60 * 1000);
   const now = Date.now();
-
-  // Save new reconcile timestamp immediately
-  await AsyncStorage.setItem(LAST_RECONCILE_KEY, String(now));
 
   // Get transactions since last reconcile
   const allTxns = await getTransactions();
