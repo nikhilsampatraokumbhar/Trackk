@@ -60,6 +60,7 @@ export default function InvestmentsScreen() {
     } else {
       spinAnim.stopAnimation();
     }
+    return () => { spinAnim.stopAnimation(); };
   }, [syncing]);
 
   const [formName, setFormName] = useState('');

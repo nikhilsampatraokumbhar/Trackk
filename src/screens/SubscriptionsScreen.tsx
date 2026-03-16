@@ -67,6 +67,7 @@ export default function SubscriptionsScreen() {
     } else {
       spinAnim.stopAnimation();
     }
+    return () => { spinAnim.stopAnimation(); };
   }, [syncing]);
 
   // Add form

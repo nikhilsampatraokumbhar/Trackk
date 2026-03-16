@@ -56,6 +56,7 @@ export default function EMIsScreen() {
     } else {
       spinAnim.stopAnimation();
     }
+    return () => { spinAnim.stopAnimation(); };
   }, [syncing]);
 
   // EMI completion celebration
