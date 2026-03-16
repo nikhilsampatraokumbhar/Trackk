@@ -66,6 +66,7 @@ export async function showTransactionNotification(
         channelId: CHANNEL_ID,
         category: AndroidCategory.MESSAGE,
         importance: AndroidImportance.HIGH,
+        pressAction: { id: 'default', launchActivity: 'default' },
         actions: [
           {
             title: `✅ Add to ${tracker.label}`,
@@ -97,6 +98,7 @@ export async function showTransactionNotification(
         channelId: CHANNEL_ID,
         category: AndroidCategory.MESSAGE,
         importance: AndroidImportance.HIGH,
+        pressAction: { id: 'default', launchActivity: 'default' },
         actions: [
           {
             title: `📋 Choose Tracker (${activeTrackers.length} active)`,
@@ -162,16 +164,53 @@ export async function handleNotificationEvent(
     }
 
     await notifee.cancelAllNotifications();
+  } else if (type === EventType.PRESS && detail.notification?.data) {
+    // User tapped the notification body (not an action button)
+    const data = detail.notification.data;
+    const amt = Number(data.amount);
+    if (!amt || amt <= 0 || !isFinite(amt)) return;
+
+    const parsed: ParsedTransaction = {
+      amount: amt,
+      type: 'debit',
+      merchant: data.merchant || undefined,
+      bank: data.bank || undefined,
+      rawMessage: data.rawMessage,
+      timestamp: Number(data.timestamp) || Date.now(),
+    };
+
+    // If notification has a specific tracker (single tracker case), route to it
+    if (data.trackerType && data.trackerId) {
+      const tracker: ActiveTracker = {
+        type: data.trackerType as any,
+        id: data.trackerId,
+        label: data.trackerLabel,
+      };
+      if (addToTrackerCallback) addToTrackerCallback(parsed, tracker);
+    } else {
+      // Multiple trackers — show selection dialog
+      if (chooseTrackerCallback) chooseTrackerCallback(parsed);
+    }
+
+    await notifee.cancelAllNotifications();
   }
 }
 
 export function registerBackgroundHandler(): void {
   notifee.onBackgroundEvent(async ({ type, detail }) => {
-    if (type === EventType.ACTION_PRESS) {
-      const actionId = detail.pressAction?.id;
+    const isActionPress = type === EventType.ACTION_PRESS;
+    const isBodyPress = type === EventType.PRESS;
 
-      if (actionId === 'add_to_tracker' && detail.notification?.data) {
-        const data = detail.notification.data as Record<string, string>;
+    if ((isActionPress || isBodyPress) && detail.notification?.data) {
+      const actionId = detail.pressAction?.id;
+      const data = detail.notification.data as Record<string, string>;
+
+      // For action button "add_to_tracker" or notification body tap with tracker data
+      const shouldAddToTracker =
+        (isActionPress && actionId === 'add_to_tracker') ||
+        (isBodyPress && data.trackerType && data.trackerId);
+
+      if (shouldAddToTracker) {
         const parsedAmount = Number(data.amount);
         if (!parsedAmount || parsedAmount <= 0 || !isFinite(parsedAmount)) return;
 

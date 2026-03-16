@@ -147,35 +147,51 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       try { await checkEMICompletions(); } catch {}
 
       const initial = await notifee.getInitialNotification();
-      if (initial?.pressAction?.id && initial?.notification?.data) {
-        const actionId = initial.pressAction.id;
+      if (initial?.notification?.data) {
+        const actionId = initial.pressAction?.id;
         const d = initial.notification.data as Record<string, string>;
-        const parsed: ParsedTransaction = {
-          amount: Number(d.amount),
-          type: 'debit',
-          merchant: d.merchant || undefined,
-          bank: d.bank || undefined,
-          rawMessage: d.rawMessage,
-          timestamp: Number(d.timestamp),
-        };
+        const amt = Number(d.amount);
+        if (amt && amt > 0 && isFinite(amt)) {
+          const parsed: ParsedTransaction = {
+            amount: amt,
+            type: 'debit',
+            merchant: d.merchant || undefined,
+            bank: d.bank || undefined,
+            rawMessage: d.rawMessage,
+            timestamp: Number(d.timestamp),
+          };
 
-        if (actionId === 'add_to_tracker' && d.trackerType === 'group') {
-          // Cold-start from group notification → open SplitEditor
-          setPendingQueue(prev => [...prev, {
-            transaction: parsed,
-            groupTracker: {
-              type: 'group',
-              id: d.trackerId,
-              label: d.trackerLabel || 'Group',
-            },
-          }]);
-        } else if (actionId === 'choose_tracker') {
-          setPendingQueue(prev => [...prev, { transaction: parsed }]);
-        } else if (actionId === 'add_to_tracker') {
-          // Non-group single tracker → auto-save
-          const trackerType = d.trackerType as TrackerType;
-          const user = await getOrCreateUser();
-          await saveTransaction(parsed, trackerType, user.id);
+          // Determine if this is a group tracker notification
+          // Handles both action button tap (add_to_tracker) and body tap (default/undefined)
+          const isGroupTracker = d.trackerType === 'group';
+          const isAddAction = actionId === 'add_to_tracker';
+          const isBodyTap = !actionId || actionId === 'default';
+          const hasTrackerData = !!d.trackerType && !!d.trackerId;
+
+          if (isGroupTracker && (isAddAction || (isBodyTap && hasTrackerData))) {
+            // Cold-start from group notification → open SplitEditor
+            setPendingQueue(prev => [...prev, {
+              transaction: parsed,
+              groupTracker: {
+                type: 'group',
+                id: d.trackerId,
+                label: d.trackerLabel || 'Group',
+              },
+            }]);
+          } else if (actionId === 'choose_tracker' || (isBodyTap && !hasTrackerData)) {
+            // Multiple trackers — show selection dialog
+            setPendingQueue(prev => [...prev, { transaction: parsed }]);
+          } else if (isAddAction && hasTrackerData) {
+            // Non-group single tracker → auto-save
+            const trackerType = d.trackerType as TrackerType;
+            const user = await getOrCreateUser();
+            await saveTransaction(parsed, trackerType, user.id);
+          } else if (isBodyTap && hasTrackerData && !isGroupTracker) {
+            // Body tap with non-group single tracker → auto-save
+            const trackerType = d.trackerType as TrackerType;
+            const user = await getOrCreateUser();
+            await saveTransaction(parsed, trackerType, user.id);
+          }
         }
       }
     })();
