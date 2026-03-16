@@ -27,6 +27,8 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function ProfileScreen() {
   const nav = useNavigation<Nav>();
   const { user, updateProfile, signOut } = useAuth();
+  // Premium UI hidden during free launch — set to true to re-enable
+  const SHOW_PREMIUM_UI = false;
   const { isPremium, isFamily, currentPlan, subscription, referralStats } = usePremium();
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(user?.displayName || '');
@@ -202,86 +204,88 @@ export default function ProfileScreen() {
           ) : null}
         </LinearGradient>
 
-        {/* ── Premium Status ─────────────────────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>SUBSCRIPTION</Text>
-        </View>
+        {/* ── Premium Status (hidden during free launch) ─────────── */}
+        {SHOW_PREMIUM_UI && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>SUBSCRIPTION</Text>
+            </View>
 
-        <TouchableOpacity
-          style={[styles.premiumCard, isPremium && styles.premiumCardActive]}
-          onPress={() => nav.navigate('Pricing')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.premiumRow}>
-            <View style={styles.premiumIconWrap}>
-              <Text style={styles.premiumIcon}>{isPremium ? '👑' : '✨'}</Text>
-            </View>
-            <View style={styles.premiumInfo}>
-              <Text style={styles.premiumTitle}>
-                {isPremium ? `${currentPlan.name} Plan` : 'Upgrade to Premium'}
-              </Text>
-              <Text style={styles.premiumSubtitle}>
-                {isPremium
-                  ? (subscription?.isFoundingMember ? 'Founding Member' : 'Active')
-                  : 'Less than your morning chai per day'}
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </View>
-          {isPremium && subscription?.endDate && subscription.endDate > 0 && (
-            <View style={styles.premiumExpiry}>
-              <Text style={styles.premiumExpiryText}>
-                Renews {new Date(subscription.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </Text>
-            </View>
-          )}
-          {isPremium && subscription?.endDate === -1 && (
-            <View style={styles.premiumExpiry}>
-              <Text style={[styles.premiumExpiryText, { color: COLORS.primary }]}>
-                Lifetime Access — forever yours
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.premiumCard, isPremium && styles.premiumCardActive]}
+              onPress={() => nav.navigate('Pricing')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.premiumRow}>
+                <View style={styles.premiumIconWrap}>
+                  <Text style={styles.premiumIcon}>{isPremium ? '👑' : '✨'}</Text>
+                </View>
+                <View style={styles.premiumInfo}>
+                  <Text style={styles.premiumTitle}>
+                    {isPremium ? `${currentPlan.name} Plan` : 'Upgrade to Premium'}
+                  </Text>
+                  <Text style={styles.premiumSubtitle}>
+                    {isPremium
+                      ? (subscription?.isFoundingMember ? 'Founding Member' : 'Active')
+                      : 'Less than your morning chai per day'}
+                  </Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </View>
+              {isPremium && subscription?.endDate && subscription.endDate > 0 && (
+                <View style={styles.premiumExpiry}>
+                  <Text style={styles.premiumExpiryText}>
+                    Renews {new Date(subscription.endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </Text>
+                </View>
+              )}
+              {isPremium && subscription?.endDate === -1 && (
+                <View style={styles.premiumExpiry}>
+                  <Text style={[styles.premiumExpiryText, { color: COLORS.primary }]}>
+                    Lifetime Access — forever yours
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
-        {/* ── Refer & Earn ──────────────────────────────────────── */}
-        <TouchableOpacity
-          style={styles.referralCard}
-          onPress={() => nav.navigate('Referral')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.premiumRow}>
-            <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.warning}18` }]}>
-              <Text style={styles.premiumIcon}>🎁</Text>
-            </View>
-            <View style={styles.premiumInfo}>
-              <Text style={styles.premiumTitle}>Refer & Earn</Text>
-              <Text style={styles.premiumSubtitle}>
-                {referralStats.freeMonthsEarned > 0
-                  ? `${referralStats.freeMonthsEarned} month(s) earned — keep going!`
-                  : 'Get up to 12 months free premium'}
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </View>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.referralCard}
+              onPress={() => nav.navigate('Referral')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.premiumRow}>
+                <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.warning}18` }]}>
+                  <Text style={styles.premiumIcon}>🎁</Text>
+                </View>
+                <View style={styles.premiumInfo}>
+                  <Text style={styles.premiumTitle}>Refer & Earn</Text>
+                  <Text style={styles.premiumSubtitle}>
+                    {referralStats.freeMonthsEarned > 0
+                      ? `${referralStats.freeMonthsEarned} month(s) earned — keep going!`
+                      : 'Get up to 12 months free premium'}
+                  </Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </View>
+            </TouchableOpacity>
 
-        {/* ── Family Plan Upsell ────────────────────────────────── */}
-        {isPremium && !isFamily && (
-          <TouchableOpacity
-            style={styles.familyUpsell}
-            onPress={() => nav.navigate('Pricing')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.familyUpsellIcon}>👨‍👩‍👧‍👦</Text>
-            <View style={styles.familyUpsellContent}>
-              <Text style={styles.familyUpsellTitle}>Add your family</Text>
-              <Text style={styles.familyUpsellText}>
-                ₹37/person/month — less than a samosa per day
-              </Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </TouchableOpacity>
+            {isPremium && !isFamily && (
+              <TouchableOpacity
+                style={styles.familyUpsell}
+                onPress={() => nav.navigate('Pricing')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.familyUpsellIcon}>👨‍👩‍👧‍👦</Text>
+                <View style={styles.familyUpsellContent}>
+                  <Text style={styles.familyUpsellTitle}>Add your family</Text>
+                  <Text style={styles.familyUpsellText}>
+                    ₹37/person/month — less than a samosa per day
+                  </Text>
+                </View>
+                <Text style={styles.chevron}>›</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
 
         {/* ── Connect Email ─────────────────────────────────────── */}
