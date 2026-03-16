@@ -2,7 +2,7 @@ import React, {
   createContext, useContext, useState, useEffect,
   useCallback, useRef, useMemo, ReactNode,
 } from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import notifee from '@notifee/react-native';
 import { TrackerState, ParsedTransaction, ActiveTracker, Group, TrackerType } from '../models/types';
@@ -15,6 +15,7 @@ import {
   setupNotificationChannel, requestNotificationPermission,
   showTransactionNotification, showAutoSavedNotification,
   registerNotificationCallbacks, handleNotificationEvent,
+  PENDING_GROUP_SPLIT_KEY,
 } from '../services/NotificationService';
 import { saveTransaction, addGroupTransaction, getGroup, getGoals, getOrCreateTodaySpend, getOrCreateUser } from '../services/StorageService';
 import { addGroupTransactionCloud, getGroupCloud } from '../services/SyncService';
@@ -115,6 +116,39 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   useEffect(() => { loadGroupTransactionsRef.current = loadGroupTransactions; }, [loadGroupTransactions]);
   useEffect(() => { activeGroupIdRef.current = activeGroupId; }, [activeGroupId]);
 
+  /**
+   * Check AsyncStorage for a pending group split stashed by the background handler.
+   * The background handler can't show UI, so it stashes the data for us to pick up
+   * when the app comes to foreground and route to SplitEditor.
+   */
+  const consumePendingGroupSplit = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(PENDING_GROUP_SPLIT_KEY);
+      if (!raw) return;
+      await AsyncStorage.removeItem(PENDING_GROUP_SPLIT_KEY);
+      const { transaction, trackerId, trackerLabel } = JSON.parse(raw);
+      if (!transaction || !trackerId) return;
+      setPendingQueue(prev => [...prev, {
+        transaction,
+        groupTracker: {
+          type: 'group' as const,
+          id: trackerId,
+          label: trackerLabel || 'Group',
+        },
+      }]);
+    } catch {}
+  }, []);
+
+  // When app comes back to foreground, check for stashed pending group splits
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        consumePendingGroupSplit();
+      }
+    });
+    return () => sub.remove();
+  }, [consumePendingGroupSplit]);
+
   // Load state on mount; also recover pending transaction if app was cold-launched
   // from a "Choose Tracker" notification action
   // Also auto-enable personal tracking if a goal exists
@@ -194,6 +228,10 @@ export function TrackerProvider({ children, groups, userId }: Props) {
           }
         }
       }
+
+      // Check for pending group split stashed by background handler
+      // (background handler can't show SplitEditor, so it stashes data for us)
+      await consumePendingGroupSplit();
     })();
   }, []);
 

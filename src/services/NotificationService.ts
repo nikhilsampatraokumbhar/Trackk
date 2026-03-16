@@ -3,10 +3,13 @@ import notifee, {
   EventType,
   AndroidCategory,
 } from '@notifee/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ParsedTransaction, ActiveTracker, TrackerType } from '../models/types';
 import { formatCurrency } from '../utils/helpers';
 import { saveTransaction, addGroupTransaction, getOrCreateUser } from './StorageService';
 import { processTransactionForTracking } from './AutoDetectionService';
+
+export const PENDING_GROUP_SPLIT_KEY = '@et_pending_group_split';
 
 const CHANNEL_ID = 'trackk-transactions';
 
@@ -224,14 +227,20 @@ export function registerBackgroundHandler(): void {
         };
         const trackerType = data.trackerType as TrackerType;
         const trackerId = data.trackerId;
-        const user = await getOrCreateUser();
 
         // Auto-detect subscriptions/EMIs/investments
         try { await processTransactionForTracking(parsed); } catch {}
 
         if (trackerType === 'group') {
-          await addGroupTransaction(parsed, trackerId, user.id);
+          // Don't auto-save group expenses — stash data so the app opens
+          // SplitEditor for the user to review and confirm the split
+          await AsyncStorage.setItem(PENDING_GROUP_SPLIT_KEY, JSON.stringify({
+            transaction: parsed,
+            trackerId,
+            trackerLabel: data.trackerLabel || 'Group',
+          }));
         } else {
+          const user = await getOrCreateUser();
           await saveTransaction(parsed, trackerType, user.id);
         }
       }
