@@ -862,6 +862,130 @@ async function groupAndSaveDetections(
   return result;
 }
 
+// ─── Reconcile Existing Items Against Recent Transactions ───────────────────
+
+/**
+ * Check recent transactions against all existing tracked subscriptions, EMIs,
+ * and investments. If a matching payment is found, auto-advance the billing
+ * date and mark as paid. This runs on every sync/refresh so the user doesn't
+ * need to manually tap "Mark Paid".
+ *
+ * Only looks at transactions since the last reconciliation (or last 45 days
+ * on first run) to avoid re-processing old history every time.
+ */
+const LAST_RECONCILE_KEY = '@et_last_reconcile_ts';
+
+export async function reconcileExistingItems(): Promise<{
+  subsUpdated: number;
+  emisUpdated: number;
+  investmentsUpdated: number;
+}> {
+  const stats = { subsUpdated: 0, emisUpdated: 0, investmentsUpdated: 0 };
+
+  // Determine the time window: from last reconcile (or 45 days ago)
+  const lastRaw = await AsyncStorage.getItem(LAST_RECONCILE_KEY);
+  const lastReconcile = lastRaw ? parseInt(lastRaw, 10) : Date.now() - (45 * 24 * 60 * 60 * 1000);
+  const now = Date.now();
+
+  // Save new reconcile timestamp immediately
+  await AsyncStorage.setItem(LAST_RECONCILE_KEY, String(now));
+
+  // Get transactions since last reconcile
+  const allTxns = await getTransactions();
+  const recentTxns = allTxns.filter(t => t.timestamp >= lastReconcile);
+  if (recentTxns.length === 0) return stats;
+
+  // Convert to ParsedTransaction format for matching
+  const parsed: ParsedTransaction[] = recentTxns.map(t => ({
+    amount: t.amount,
+    type: 'debit' as const,
+    merchant: t.merchant || t.description,
+    rawMessage: t.rawMessage || t.description || t.merchant || '',
+    timestamp: t.timestamp,
+    bank: t.source,
+  }));
+
+  // ── Reconcile Subscriptions ──
+  const subs = await getSubscriptions();
+  for (const sub of subs) {
+    if (!sub.active || !sub.confirmed) continue;
+
+    // Find a matching recent transaction
+    const match = parsed.find(p => {
+      const name = classifyTransaction(p).matchedMerchant || p.merchant || '';
+      if (!namesMatch(sub.name, name)) return false;
+      // Amount should be close (within 20% to handle price changes)
+      const amtRatio = Math.abs(p.amount - sub.amount) / sub.amount;
+      return amtRatio < 0.2;
+    });
+
+    if (match) {
+      const txnDate = new Date(match.timestamp);
+      const billingDay = txnDate.getDate();
+      sub.billingDay = billingDay;
+      sub.nextBillingDate = calcNextBillingDate(billingDay, sub.cycle);
+      sub.lastPaidDate = txnDate.toISOString().slice(0, 10);
+      // Update amount if it changed
+      if (Math.abs(match.amount - sub.amount) > 1) {
+        sub.amount = match.amount;
+      }
+      await saveSubscription(sub);
+      stats.subsUpdated++;
+    }
+  }
+
+  // ── Reconcile EMIs ──
+  const emis = await getEMIs();
+  for (const emi of emis) {
+    if (!emi.active || !emi.confirmed) continue;
+
+    const match = parsed.find(p => {
+      const name = classifyTransaction(p).matchedMerchant || p.merchant || '';
+      // EMIs match by name or by amount + billing day proximity
+      if (namesMatch(emi.name, name)) return true;
+      const amountClose = Math.abs(p.amount - emi.amount) < 5;
+      const dayClose = Math.abs(new Date(p.timestamp).getDate() - emi.billingDay) <= 2;
+      return amountClose && dayClose;
+    });
+
+    if (match) {
+      emi.monthsPaid = Math.min(emi.monthsPaid + 1, emi.totalMonths);
+      emi.monthsLeft = Math.max(emi.totalMonths - emi.monthsPaid, 0);
+      emi.nextBillingDate = calcNextBillingDate(emi.billingDay, 'monthly');
+      if (emi.monthsLeft === 0 && emi.totalMonths > 0) {
+        emi.active = false;
+      }
+      await saveEMI(emi);
+      stats.emisUpdated++;
+    }
+  }
+
+  // ── Reconcile Investments ──
+  const invs = await getInvestments();
+  for (const inv of invs) {
+    if (!inv.active || !inv.confirmed || inv.cycle === 'one-time') continue;
+
+    const match = parsed.find(p => {
+      const name = classifyTransaction(p).matchedMerchant || p.merchant || '';
+      return namesMatch(inv.name, name);
+    });
+
+    if (match) {
+      const txnDate = new Date(match.timestamp);
+      const billingDay = txnDate.getDate();
+      if (inv.billingDay) {
+        inv.billingDay = billingDay;
+        inv.nextBillingDate = calcNextBillingDate(billingDay, inv.cycle === 'monthly' ? 'monthly' : 'yearly');
+      }
+      inv.amount = match.amount; // variable SIPs
+      await saveInvestment(inv);
+      stats.investmentsUpdated++;
+    }
+  }
+
+  return stats;
+}
+
 // ─── Recurring Pattern Detection ───────────────────────────────────────────
 
 /**

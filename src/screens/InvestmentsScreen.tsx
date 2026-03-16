@@ -12,7 +12,7 @@ import {
   getInvestments, saveInvestment, deleteInvestment,
   hasInvestmentsOnboarded, setInvestmentsOnboarded,
 } from '../services/StorageService';
-import { scanAllSources } from '../services/AutoDetectionService';
+import { scanAllSources, reconcileExistingItems } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
 import EmptyState from '../components/EmptyState';
@@ -122,12 +122,12 @@ export default function InvestmentsScreen() {
     setSyncing(true);
     setScanResultText('');
     try {
+      const reconciled = await reconcileExistingItems();
       const result = await scanAllSources('investments');
-      if (result.investments.length > 0) {
-        setScanResultText(`Found ${result.investments.length} new investment${result.investments.length > 1 ? 's' : ''}`);
-      } else {
-        setScanResultText('No new investments found');
-      }
+      const parts: string[] = [];
+      if (reconciled.investmentsUpdated > 0) parts.push(`${reconciled.investmentsUpdated} updated`);
+      if (result.investments.length > 0) parts.push(`${result.investments.length} new`);
+      setScanResultText(parts.length > 0 ? parts.join(', ') : 'All up to date');
       await load();
     } catch (e) {
       setScanResultText('Sync failed. Try again later.');

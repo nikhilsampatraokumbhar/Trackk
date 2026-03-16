@@ -12,7 +12,7 @@ import {
   getEMIs, saveEMI, deleteEMI,
   hasEMIsOnboarded, setEMIsOnboarded,
 } from '../services/StorageService';
-import { scanAllSources, checkEMICompletions } from '../services/AutoDetectionService';
+import { scanAllSources, checkEMICompletions, reconcileExistingItems } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
 import EmptyState from '../components/EmptyState';
@@ -126,12 +126,12 @@ export default function EMIsScreen() {
     setSyncing(true);
     setScanResultText('');
     try {
+      const reconciled = await reconcileExistingItems();
       const result = await scanAllSources('emis');
-      if (result.emis.length > 0) {
-        setScanResultText(`Found ${result.emis.length} new EMI${result.emis.length > 1 ? 's' : ''}`);
-      } else {
-        setScanResultText('No new EMIs found');
-      }
+      const parts: string[] = [];
+      if (reconciled.emisUpdated > 0) parts.push(`${reconciled.emisUpdated} updated`);
+      if (result.emis.length > 0) parts.push(`${result.emis.length} new`);
+      setScanResultText(parts.length > 0 ? parts.join(', ') : 'All up to date');
       await load();
     } catch (e) {
       setScanResultText('Sync failed. Try again later.');

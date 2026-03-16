@@ -12,7 +12,7 @@ import {
   getSubscriptions, saveSubscription, deleteSubscription,
   hasSubscriptionsOnboarded, setSubscriptionsOnboarded,
 } from '../services/StorageService';
-import { checkSharedSubscriptionStatus, scanAllSources } from '../services/AutoDetectionService';
+import { checkSharedSubscriptionStatus, scanAllSources, reconcileExistingItems } from '../services/AutoDetectionService';
 import { checkSmsPermission, requestSmsPermission } from '../services/SmsService';
 import { COLORS, formatCurrency, generateId } from '../utils/helpers';
 import EmptyState from '../components/EmptyState';
@@ -143,12 +143,14 @@ export default function SubscriptionsScreen() {
     setSyncing(true);
     setScanResultText('');
     try {
+      // First reconcile existing items against recent transactions
+      const reconciled = await reconcileExistingItems();
+      // Then scan for new items
       const result = await scanAllSources('subscriptions');
-      if (result.subscriptions.length > 0) {
-        setScanResultText(`Found ${result.subscriptions.length} new subscription${result.subscriptions.length > 1 ? 's' : ''}`);
-      } else {
-        setScanResultText('No new subscriptions found');
-      }
+      const parts: string[] = [];
+      if (reconciled.subsUpdated > 0) parts.push(`${reconciled.subsUpdated} updated`);
+      if (result.subscriptions.length > 0) parts.push(`${result.subscriptions.length} new`);
+      setScanResultText(parts.length > 0 ? parts.join(', ') : 'All up to date');
       await load();
     } catch (e) {
       setScanResultText('Sync failed. Try again later.');
