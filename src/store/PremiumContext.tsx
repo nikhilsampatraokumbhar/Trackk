@@ -247,10 +247,11 @@ export function PremiumProvider({ children, userId }: { children: ReactNode; use
   }, [userId]);
 
   // ── Derived state ───────────────────────────────────────────────────────
-  const isPremium = subscription?.status === 'active' || subscription?.status === 'trial';
-  const isFamily = isPremium && (subscription?.planId === 'family_monthly' || subscription?.planId === 'family_annual' || subscription?.planId === 'family_lifetime');
-  const isTrial = subscription?.status === 'trial';
-  const currentPlan = PLANS[subscription?.planId || 'free'];
+  // All features are free during launch — everyone gets premium access
+  const isPremium = true;
+  const isFamily = true;
+  const isTrial = false;
+  const currentPlan = PLANS['premium_lifetime'];
 
   const referralStats: ReferralStats = {
     totalReferred: referrals.length,
@@ -429,12 +430,10 @@ export function PremiumProvider({ children, userId }: { children: ReactNode; use
   }, [referrals, subscription]);
 
   // ── Feature access check ──────────────────────────────────────────────
-  const checkFeatureAccess = useCallback((feature: PremiumFeature): boolean => {
-    if (FREE_FEATURES.has(feature)) return true;
-    if (!isPremium) return false;
-    if (feature === 'family_dashboard' || feature === 'shared_budgets') return isFamily;
+  // All features unlocked during launch — free for everyone
+  const checkFeatureAccess = useCallback((_feature: PremiumFeature): boolean => {
     return true;
-  }, [isPremium, isFamily]);
+  }, []);
 
   const refreshSubscription = useCallback(async () => {
     const raw = await AsyncStorage.getItem(KEYS.SUBSCRIPTION);

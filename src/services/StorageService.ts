@@ -276,7 +276,7 @@ export async function deleteGroupTransaction(
 export async function updateGroupTransaction(
   groupId: string,
   transactionId: string,
-  updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits'>>,
+  updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits' | 'note' | 'category' | 'currency'>>,
 ): Promise<void> {
   const all = await getGroupTransactions(groupId);
   const idx = all.findIndex(t => t.id === transactionId);

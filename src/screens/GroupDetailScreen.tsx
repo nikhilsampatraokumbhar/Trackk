@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, SectionList, TouchableOpacity,
+  View, Text, StyleSheet, SectionList, TouchableOpacity, ScrollView,
   RefreshControl, ActivityIndicator, Linking, Alert,
   TextInput, AppState, AppStateStatus,
 } from 'react-native';
@@ -22,6 +22,7 @@ import { simplifyDebts } from '../services/DebtCalculator';
 import TrackerToggle from '../components/TrackerToggle';
 import EmptyState from '../components/EmptyState';
 import { COLORS, formatCurrency, formatDate, getColorForId } from '../utils/helpers';
+import { GROUP_CATEGORIES } from '../utils/categories';
 import BottomSheet from '../components/BottomSheet';
 
 type Route = RouteProp<RootStackParamList, 'GroupDetail'>;
@@ -35,6 +36,8 @@ interface EditingTxn {
   txn: GroupTransaction;
   amount: string;
   description: string;
+  note: string;
+  category: string;
   members: Array<{ userId: string; displayName: string; included: boolean }>;
 }
 
@@ -265,6 +268,7 @@ export default function GroupDetailScreen() {
   const openEditExpense = (txn: GroupTransaction) => {
     setEditingTxn({
       txn, amount: String(txn.amount), description: txn.description,
+      note: txn.note || '', category: txn.category || '',
       members: group!.members.map(m => ({
         userId: m.userId,
         displayName: m.userId === userId ? 'You' : m.displayName,
@@ -297,6 +301,8 @@ export default function GroupDetailScreen() {
 
       await updateGroupTransaction(groupId, editingTxn.txn.id, {
         amount: parsedAmount, description: editingTxn.description.trim() || 'Group expense', splits: newSplits,
+        note: editingTxn.note.trim() || undefined,
+        category: editingTxn.category || undefined,
       });
       setEditingTxn(null);
       await load();
@@ -370,14 +376,21 @@ export default function GroupDetailScreen() {
         {/* Icon */}
         <View style={[styles.rowIcon, { backgroundColor: `${groupColor}20` }]}>
           <Text style={[styles.rowIconText, { color: groupColor }]}>
-            {(txn.merchant || txn.description)[0].toUpperCase()}
+            {txn.category
+              ? (GROUP_CATEGORIES.find(c => c.label === txn.category)?.icon || (txn.merchant || txn.description)[0].toUpperCase())
+              : (txn.merchant || txn.description)[0].toUpperCase()}
           </Text>
         </View>
 
         {/* Description */}
         <View style={styles.rowInfo}>
           <Text style={styles.rowDesc} numberOfLines={1}>{txn.description}</Text>
-          <Text style={styles.rowSub}>{payerName} paid {formatCurrency(txn.amount)}</Text>
+          <Text style={styles.rowSub}>
+            {payerName} paid {formatCurrency(txn.amount, txn.currency)}
+            {txn.currency && txn.currency !== 'INR' ? ` ${txn.currency}` : ''}
+            {txn.category ? ` · ${txn.category}` : ''}
+          </Text>
+          {txn.note ? <Text style={styles.rowNote} numberOfLines={1}>{txn.note}</Text> : null}
         </View>
 
         {/* User's share */}
@@ -670,6 +683,34 @@ export default function GroupDetailScreen() {
               maxLength={200}
             />
 
+            <Text style={styles.editLabel}>CATEGORY</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, marginHorizontal: -4 }}>
+              {GROUP_CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  key={cat.label}
+                  style={[styles.editChip, editingTxn.category === cat.label && { borderColor: COLORS.primary, backgroundColor: `${COLORS.primary}15` }]}
+                  onPress={() => setEditingTxn({ ...editingTxn, category: editingTxn.category === cat.label ? '' : cat.label })}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 12, marginRight: 4 }}>{cat.icon}</Text>
+                  <Text style={[styles.editChipName, editingTxn.category === cat.label ? { color: COLORS.primary } : { color: COLORS.textSecondary }]}>
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.editLabel}>NOTE</Text>
+            <TextInput
+              style={styles.editDescInput}
+              value={editingTxn.note}
+              onChangeText={v => setEditingTxn({ ...editingTxn, note: v })}
+              placeholder="Add a note..."
+              placeholderTextColor={COLORS.textLight}
+              multiline
+              maxLength={300}
+            />
+
             <Text style={styles.editLabel}>SPLIT BETWEEN (Equal)</Text>
             <View style={styles.editMembers}>
               {editingTxn.members.map(m => {
@@ -754,6 +795,7 @@ const styles = StyleSheet.create({
   rowInfo: { flex: 1 },
   rowDesc: { fontSize: 15, fontWeight: '600', color: COLORS.text, marginBottom: 2 },
   rowSub: { fontSize: 12, color: COLORS.textSecondary },
+  rowNote: { fontSize: 11, color: COLORS.textLight, fontStyle: 'italic', marginTop: 2 },
   rowSubBold: { fontWeight: '700', color: COLORS.text },
   rowRight: { alignItems: 'flex-end', marginLeft: 8 },
   rowRightLabel: { fontSize: 11, fontWeight: '500' },

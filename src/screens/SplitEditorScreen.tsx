@@ -14,6 +14,8 @@ import { getGroup as getGroupLocal } from '../services/StorageService';
 import { getGroupCloud, addGroupTransactionCloud } from '../services/SyncService';
 import { addGroupTransaction } from '../services/StorageService';
 import { generateId, COLORS, formatCurrency, getColorForId } from '../utils/helpers';
+import { GROUP_CATEGORIES } from '../utils/categories';
+import { CURRENCIES, getPreferredCurrency, getCurrencyInfo } from '../utils/currencies';
 
 type Route = RouteProp<RootStackParamList, 'SplitEditor'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -40,6 +42,10 @@ export default function SplitEditorScreen() {
   const [members, setMembers] = useState<MemberEntry[]>([]);
   const [amount, setAmount] = useState(paramAmount ? String(paramAmount) : '');
   const [note, setNote] = useState(paramDesc || '');
+  const [expenseNote, setExpenseNote] = useState('');
+  const [category, setCategory] = useState('');
+  const [expenseCurrency, setExpenseCurrency] = useState(getPreferredCurrency());
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [splitMode, setSplitMode] = useState<'equal' | 'amount'>('equal');
   const [saving, setSaving] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -243,6 +249,15 @@ export default function SplitEditorScreen() {
       if (paramMerchant) {
         txn.merchant = paramMerchant;
       }
+      if (category) {
+        txn.category = category;
+      }
+      if (expenseNote.trim()) {
+        txn.note = expenseNote.trim();
+      }
+      if (expenseCurrency !== 'INR') {
+        txn.currency = expenseCurrency;
+      }
 
       if (isAuthenticated) {
         const { db } = require('../services/FirebaseConfig');
@@ -293,9 +308,37 @@ export default function SplitEditorScreen() {
           {/* Amount input (only for manual entry) */}
           {isManual ? (
             <View style={styles.section}>
-              <Text style={styles.label}>AMOUNT</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={styles.label}>AMOUNT</Text>
+                <TouchableOpacity
+                  style={styles.currencyBadge}
+                  onPress={() => setShowCurrencyPicker(!showCurrencyPicker)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.currencyBadgeText}>
+                    {getCurrencyInfo(expenseCurrency).flag} {expenseCurrency}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {showCurrencyPicker && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                  {CURRENCIES.slice(0, 15).map(curr => (
+                    <TouchableOpacity
+                      key={curr.code}
+                      style={[styles.categoryChip, expenseCurrency === curr.code && styles.categoryChipActive]}
+                      onPress={() => { setExpenseCurrency(curr.code); setShowCurrencyPicker(false); }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.categoryChipIcon}>{curr.flag}</Text>
+                      <Text style={[styles.categoryChipText, expenseCurrency === curr.code && styles.categoryChipTextActive]}>
+                        {curr.code}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
               <View style={styles.amountRow}>
-                <Text style={styles.amountPrefix}>₹</Text>
+                <Text style={styles.amountPrefix}>{getCurrencyInfo(expenseCurrency).symbol}</Text>
                 <TextInput
                   style={styles.amountInput}
                   value={amount}
@@ -330,6 +373,40 @@ export default function SplitEditorScreen() {
               placeholderTextColor={COLORS.textLight}
               multiline
               maxLength={200}
+            />
+          </View>
+
+          {/* Category quick-pick */}
+          <View style={styles.section}>
+            <Text style={styles.label}>CATEGORY</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+              {GROUP_CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  key={cat.label}
+                  style={[styles.categoryChip, category === cat.label && styles.categoryChipActive]}
+                  onPress={() => setCategory(category === cat.label ? '' : cat.label)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
+                  <Text style={[styles.categoryChipText, category === cat.label && styles.categoryChipTextActive]}>
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* Expense note */}
+          <View style={styles.section}>
+            <Text style={styles.label}>NOTE (OPTIONAL)</Text>
+            <TextInput
+              style={styles.noteInput}
+              value={expenseNote}
+              onChangeText={setExpenseNote}
+              placeholder="Add a note for context..."
+              placeholderTextColor={COLORS.textLight}
+              multiline
+              maxLength={300}
             />
           </View>
 
@@ -652,6 +729,56 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     minHeight: 48,
     textAlignVertical: 'top',
+  },
+
+  /* ── Currency Badge ──────────────────────────────────────── */
+  currencyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: COLORS.surfaceHigh,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 6,
+  },
+  currencyBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+
+  /* ── Category Chips ──────────────────────────────────────── */
+  categoryScroll: {
+    marginHorizontal: -4,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: COLORS.surfaceHigh,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginRight: 8,
+  },
+  categoryChipActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: `${COLORS.primary}15`,
+  },
+  categoryChipIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  categoryChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  categoryChipTextActive: {
+    color: COLORS.primary,
   },
 
   /* ── Split Mode Toggle ──────────────────────────────────── */

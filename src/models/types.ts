@@ -91,6 +91,9 @@ export interface GroupTransaction {
   amount: number;
   description: string;
   merchant?: string;
+  note?: string;
+  category?: string;
+  currency?: string;       // ISO 4217 code, defaults to user's preferred currency
   timestamp: number;
   splits: Split[];
 }

@@ -12,6 +12,9 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { usePremium } from '../store/PremiumContext';
 import { COLORS } from '../utils/helpers';
+import { useTranslation } from 'react-i18next';
+import { SUPPORTED_LANGUAGES, changeLanguage } from '../i18n';
+import { CURRENCIES, getPreferredCurrency, setPreferredCurrency, getCurrencyInfo } from '../utils/currencies';
 import { isDevMode, setDevMode, loadDevMode } from '../utils/devMode';
 import {
   EmailProvider, connectEmail, disconnectEmail, parseOAuthRedirect,
@@ -32,6 +35,10 @@ export default function ProfileScreen() {
   });
   const [connectingProvider, setConnectingProvider] = useState<EmailProvider | null>(null);
   const [devMode, setDevModeState] = useState(false);
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [currentCurrency, setCurrentCurrency] = useState(getPreferredCurrency());
+  const { t, i18n } = useTranslation();
   const versionTapCount = useRef(0);
   const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -363,9 +370,122 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Language Section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{t('profile.language').toUpperCase()}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.premiumCard}
+          onPress={() => setShowLanguagePicker(!showLanguagePicker)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.premiumRow}>
+            <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.groupColor}18` }]}>
+              <Text style={styles.premiumIcon}>
+                {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.flag || '🌐'}
+              </Text>
+            </View>
+            <View style={styles.premiumInfo}>
+              <Text style={styles.premiumTitle}>
+                {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.name || 'English'}
+              </Text>
+              <Text style={styles.premiumSubtitle}>
+                {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.englishName || 'English'}
+              </Text>
+            </View>
+            <Text style={styles.chevron}>{showLanguagePicker ? '‹' : '›'}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {showLanguagePicker && (
+          <View style={[styles.emailCard, { marginTop: 8 }]}>
+            {SUPPORTED_LANGUAGES.map(lang => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[
+                  styles.emailProviderRow,
+                  i18n.language === lang.code && { backgroundColor: `${COLORS.primary}10` },
+                ]}
+                onPress={async () => {
+                  await changeLanguage(lang.code);
+                  setShowLanguagePicker(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 20, marginRight: 12 }}>{lang.flag}</Text>
+                <View style={styles.emailProviderInfo}>
+                  <Text style={styles.emailProviderName}>{lang.name}</Text>
+                  <Text style={styles.emailProviderStatus}>{lang.englishName}</Text>
+                </View>
+                {i18n.language === lang.code && (
+                  <Text style={{ color: COLORS.primary, fontWeight: '800' }}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Currency Section */}
+        <View style={[styles.sectionHeader, { marginTop: 12 }]}>
+          <Text style={styles.sectionTitle}>{t('profile.currency').toUpperCase()}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.premiumCard}
+          onPress={() => setShowCurrencyPicker(!showCurrencyPicker)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.premiumRow}>
+            <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.warning}18` }]}>
+              <Text style={styles.premiumIcon}>
+                {getCurrencyInfo(currentCurrency).flag}
+              </Text>
+            </View>
+            <View style={styles.premiumInfo}>
+              <Text style={styles.premiumTitle}>
+                {getCurrencyInfo(currentCurrency).symbol} {getCurrencyInfo(currentCurrency).code}
+              </Text>
+              <Text style={styles.premiumSubtitle}>
+                {getCurrencyInfo(currentCurrency).name}
+              </Text>
+            </View>
+            <Text style={styles.chevron}>{showCurrencyPicker ? '‹' : '›'}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {showCurrencyPicker && (
+          <View style={[styles.emailCard, { marginTop: 8 }]}>
+            {CURRENCIES.map(curr => (
+              <TouchableOpacity
+                key={curr.code}
+                style={[
+                  styles.emailProviderRow,
+                  currentCurrency === curr.code && { backgroundColor: `${COLORS.primary}10` },
+                ]}
+                onPress={async () => {
+                  await setPreferredCurrency(curr.code);
+                  setCurrentCurrency(curr.code);
+                  setShowCurrencyPicker(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 20, marginRight: 12 }}>{curr.flag}</Text>
+                <View style={styles.emailProviderInfo}>
+                  <Text style={styles.emailProviderName}>{curr.symbol} {curr.code}</Text>
+                  <Text style={styles.emailProviderStatus}>{curr.name}</Text>
+                </View>
+                {currentCurrency === curr.code && (
+                  <Text style={{ color: COLORS.primary, fontWeight: '800' }}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {/* About Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>ABOUT</Text>
+          <Text style={styles.sectionTitle}>{t('profile.about').toUpperCase()}</Text>
         </View>
 
         <View style={styles.aboutCard}>
