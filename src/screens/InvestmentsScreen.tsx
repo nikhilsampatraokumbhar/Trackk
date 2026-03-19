@@ -369,7 +369,7 @@ export default function InvestmentsScreen() {
             <Text style={styles.onboardingEmoji}>📈</Text>
             <Text style={styles.onboardingTitle}>Let's find your investments</Text>
             <Text style={styles.onboardingSub}>
-              We'll scan your SMS and connected email to find all SIPs, mutual funds, and recurring investments.
+              We'll scan your transaction history to find all SIPs, mutual funds, and recurring investments.
               {'\n\n'}Enter once, we'll track hereafter.
               {'\n\n'}Tip: Connect your email in Profile for best results!
             </Text>

@@ -362,16 +362,16 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.privacyDivider} />
           <Text style={styles.privacyText}>
-            Trackk uses event-driven SMS detection — it only wakes up when a
-            new bank SMS arrives. No background polling, no battery drain. You
-            can switch off tracking anytime.
+            Trackk only wakes up when an expense happens — no background
+            activity, no battery drain. Your data stays on your device and
+            you can switch off tracking anytime.
           </Text>
           <View style={styles.privacyBadgeRow}>
             <View style={styles.privacyBadge}>
-              <Text style={styles.privacyBadgeText}>Low Battery Usage</Text>
+              <Text style={styles.privacyBadgeText}>Zero Battery Drain</Text>
             </View>
             <View style={styles.privacyBadge}>
-              <Text style={styles.privacyBadgeText}>SMS Only When Active</Text>
+              <Text style={styles.privacyBadgeText}>Private & Secure</Text>
             </View>
           </View>
         </View>

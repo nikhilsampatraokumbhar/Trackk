@@ -401,7 +401,7 @@ export default function EMIsScreen() {
             <Text style={styles.onboardingEmoji}>🏦</Text>
             <Text style={styles.onboardingTitle}>Let's find your EMIs</Text>
             <Text style={styles.onboardingSub}>
-              We'll scan your SMS and connected email to find all EMI payments automatically.
+              We'll scan your transaction history to find all EMI payments automatically.
               {'\n\n'}Track loan repayments, auto EMIs, and never miss a payment.
               {'\n\n'}Tip: Connect your email in Profile for best results!
             </Text>

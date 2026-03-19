@@ -523,7 +523,7 @@ export default function HomeScreen() {
         {!loading && !isPremium && monthCount === 0 && (
           <View style={styles.privacyCard}>
             <Text style={styles.privacyText}>
-              🛡️ Trackk only reads SMS when a tracker is on. Zero battery drain.
+              🛡️ Trackk wakes up only when an expense happens. Zero battery drain.
             </Text>
           </View>
         )}

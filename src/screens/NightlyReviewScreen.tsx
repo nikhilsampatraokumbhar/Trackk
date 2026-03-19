@@ -576,7 +576,7 @@ export default function NightlyReviewScreen() {
             <EmptyState
               icon="🎉"
               title="All caught up!"
-              subtitle="Transactions detected via SMS, email, or Shortcuts will appear here for review"
+              subtitle="Detected transactions will appear here for review"
               accent={COLORS.success}
             />
           ) : null

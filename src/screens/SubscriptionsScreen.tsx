@@ -441,7 +441,7 @@ export default function SubscriptionsScreen() {
             <Text style={styles.onboardingEmoji}>🔄</Text>
             <Text style={styles.onboardingTitle}>Let's find your subscriptions</Text>
             <Text style={styles.onboardingSub}>
-              We'll scan your SMS{Platform.OS === 'android' ? '' : ''} and connected email (Gmail/Outlook) to find all recurring subscriptions automatically.
+              We'll scan your transaction history to find all recurring subscriptions automatically.
               {'\n\n'}Netflix, Spotify, YouTube Premium — we'll catch them all.
               {'\n\n'}Tip: Connect your email in Profile for best results!
             </Text>

@@ -254,7 +254,7 @@ export default function PersonalExpenseScreen() {
           <>
             <TrackerToggle
               label="Personal Expenses"
-              subtitle="Track daily spending from SMS"
+              subtitle="Track daily spending automatically"
               isActive={trackerState.personal}
               onToggle={() => { hapticLight(); togglePersonal(); }}
               color={COLORS.personalColor}

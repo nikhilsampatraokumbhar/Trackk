@@ -35,7 +35,7 @@ export default function TrackerSettingsScreen() {
               styles.statusTitle,
               { color: isListening ? COLORS.success : COLORS.textSecondary },
             ]}>
-              {isListening ? 'SMS Tracking Active' : 'SMS Tracking Inactive'}
+              {isListening ? 'Expense Tracking Active' : 'Expense Tracking Inactive'}
             </Text>
             <Text style={styles.statusSub}>
               {isListening
@@ -56,7 +56,7 @@ export default function TrackerSettingsScreen() {
         <Text style={styles.infoTitle}>HOW IT WORKS</Text>
         <View style={styles.infoRow}>
           <Text style={styles.infoIcon}>📱</Text>
-          <Text style={styles.infoText}>App reads bank SMS when trackers are on</Text>
+          <Text style={styles.infoText}>Detects expenses automatically when trackers are on</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoIcon}>🔔</Text>
@@ -64,7 +64,7 @@ export default function TrackerSettingsScreen() {
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoIcon}>📋</Text>
-          <Text style={styles.infoText}>2+ trackers → "Choose Tracker" in-app</Text>
+          <Text style={styles.infoText}>2+ trackers → adds to default, tap to change</Text>
         </View>
         <View style={[styles.infoRow, styles.infoWarning]}>
           <Text style={styles.infoIcon}>⚠️</Text>

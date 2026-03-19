@@ -213,8 +213,8 @@ const SLIDES = [
     subtitle: 'Zero manual entry. Zero battery drain.',
     accentColor: COLORS.primary,
     steps: [
-      { emoji: '📱', label: 'Get an SMS from your bank', sublabel: 'Debits, UPI, card payments' },
-      { emoji: '🔔', label: 'Trackk detects it instantly', sublabel: 'No battery drain — native SMS listener' },
+      { emoji: '📱', label: 'Make a payment anywhere', sublabel: 'Debits, UPI, card payments' },
+      { emoji: '🔔', label: 'Trackk detects it instantly', sublabel: 'Zero battery drain — wakes up only on expense' },
       { emoji: '✅', label: 'One tap to add or auto-save', sublabel: 'Review later at end of day' },
       { emoji: '📊', label: 'See where your money goes', sublabel: 'Personal, group, or reimbursement' },
     ],
@@ -230,7 +230,7 @@ const SLIDES = [
     accentColor: COLORS.groupColor,
     steps: [
       { emoji: '➕', label: 'Create a group', sublabel: 'Add members by name & phone' },
-      { emoji: '📡', label: 'Start the tracker', sublabel: 'Expenses are auto-detected from SMS' },
+      { emoji: '📡', label: 'Start the tracker', sublabel: 'Expenses are auto-detected instantly' },
       { emoji: '💸', label: 'Split in one tap', sublabel: 'Equal, custom, or with guests' },
       { emoji: '🤝', label: 'Settle via UPI or cash', sublabel: 'One tap — everyone gets notified' },
     ],
@@ -258,7 +258,7 @@ const SLIDES = [
     useLogo: false,
     headerEmoji: '🔄',
     title: 'Subscriptions, EMIs\n& Investments',
-    subtitle: 'All tracked automatically from your SMS.',
+    subtitle: 'All tracked automatically for you.',
     accentColor: COLORS.personalColor,
     isFlow: false,
     features: [
