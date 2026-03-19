@@ -4,7 +4,6 @@ import {
   TextInput, Alert, ActivityIndicator, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { hapticDevMode } from '../utils/haptics';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -152,12 +151,7 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <LinearGradient
-          colors={isDark ? ['#1A1210', '#100C0A', colors.background] : [colors.surface, '#FFF8F5', colors.background]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.headerCard, { borderColor: colors.glassBorder }]}
-        >
+        <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={[styles.headerGoldLine, { backgroundColor: colors.primary }]} />
 
           {/* Avatar */}
@@ -206,7 +200,7 @@ export default function ProfileScreen() {
               </View>
             </View>
           ) : null}
-        </LinearGradient>
+        </View>
 
         {/* ── Theme Toggle ─────────────────────────────────────────── */}
         <View style={[styles.sectionHeader, { marginTop: 0 }]}>
@@ -731,7 +725,7 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontSize: 36,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#FFFFFF',
   },
 
@@ -742,9 +736,9 @@ const styles = StyleSheet.create({
   },
   displayName: {
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: '700',
     color: COLORS.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   editHint: {
     fontSize: 11,
@@ -1046,7 +1040,7 @@ const styles = StyleSheet.create({
   },
   emailProviderLetter: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   emailProviderInfo: {
     flex: 1,

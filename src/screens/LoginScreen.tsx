@@ -207,7 +207,7 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
                 activeOpacity={0.8}
               >
                 {loading ? (
-                  <ActivityIndicator color="#0A0A0F" />
+                  <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={styles.primaryBtnText}>Send OTP</Text>
                 )}
@@ -318,10 +318,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '700',
     color: COLORS.text,
     marginBottom: 8,
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   subtitle: {
     fontSize: 14,
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.border,
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '700',
     color: COLORS.text,
     textAlign: 'center',
   },
@@ -408,22 +408,22 @@ const styles = StyleSheet.create({
   // Buttons
   primaryBtn: {
     backgroundColor: COLORS.primary,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 18,
     alignItems: 'center',
     marginBottom: 16,
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
   disabledBtn: {
     opacity: 0.4,
   },
   primaryBtnText: {
-    color: '#0A0A0F',
-    fontWeight: '800',
+    color: '#FFFFFF',
+    fontWeight: '600',
     fontSize: 16,
     letterSpacing: 0.3,
   },

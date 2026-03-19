@@ -4,8 +4,8 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '../store/ThemeContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { getTransactions, getGroups, getGroupTransactions } from '../services/StorageService';
@@ -43,6 +43,7 @@ export default function InsightsScreen() {
   const nav = useNavigation<Nav>();
   const { isPremium } = usePremium();
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [groupShareTxns, setGroupShareTxns] = useState<Transaction[]>([]);
   const [includeGroupShares, setIncludeGroupShares] = useState(false);
@@ -215,7 +216,7 @@ export default function InsightsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -299,8 +300,8 @@ export default function InsightsScreen() {
         )}
 
         {/* Summary hero */}
-        <LinearGradient colors={['#140E20', '#0A0A0F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
-          <View style={[styles.heroAccent, { backgroundColor: COLORS.primary }]} />
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.heroAccent, { backgroundColor: colors.primary }]} />
           <View style={styles.heroRow}>
             <View style={styles.heroStat}>
               <Text style={styles.heroStatLabel}>TOTAL SPENT</Text>
@@ -320,7 +321,7 @@ export default function InsightsScreen() {
               </>
             )}
           </View>
-        </LinearGradient>
+        </View>
 
         {/* Month comparison */}
         {selectedPeriod === 'month' && lastMonthTotal > 0 && (
@@ -541,7 +542,7 @@ const styles = StyleSheet.create({
   heroStat: { flex: 1, alignItems: 'center' },
   heroDivider: { width: 1, backgroundColor: COLORS.border, marginHorizontal: 16 },
   heroStatLabel: { fontSize: 10, color: COLORS.textSecondary, letterSpacing: 2, fontWeight: '700', marginBottom: 8 },
-  heroStatValue: { fontSize: 30, fontWeight: '800', color: COLORS.primary, letterSpacing: -0.5 },
+  heroStatValue: { fontSize: 30, fontWeight: '700', color: COLORS.primary, letterSpacing: -0.5 },
   heroStatSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4 },
 
   comparisonCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1, gap: 12 },
@@ -593,7 +594,7 @@ const styles = StyleSheet.create({
   merchantCard: { backgroundColor: COLORS.surface, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden', marginBottom: 16 },
   merchantRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   merchantRowLast: { borderBottomWidth: 0 },
-  merchantRank: { fontSize: 13, fontWeight: '800', color: COLORS.textSecondary, width: 28 },
+  merchantRank: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary, width: 28 },
   merchantInfo: { flex: 1 },
   merchantName: { fontSize: 13, fontWeight: '600', color: COLORS.text },
   merchantCount: { fontSize: 11, color: COLORS.textSecondary, marginTop: 1 },
@@ -616,7 +617,7 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 13, color: COLORS.textSecondary },
 
   /* Export Sheet */
-  exportSheetTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginBottom: 4 },
+  exportSheetTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
   exportSheetSub: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 20 },
   exportOption: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surfaceHigh, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 10 },
   exportOptionIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
