@@ -11,7 +11,6 @@ import { Platform, TextStyle, ViewStyle } from 'react-native';
 import { COLORS } from './helpers';
 
 // ─── Typography Scale ────────────────────────────────────────────────────────
-// Named sizes inspired by t-shirt sizing. Each entry defines fontSize + lineHeight.
 
 export const FONT_SIZE = {
   /** 10px — micro labels, badges, letter-spacing heavy */
@@ -70,46 +69,46 @@ export const TYPOGRAPHY = {
   hero: {
     fontSize: FONT_SIZE.hero,
     lineHeight: LINE_HEIGHT.hero,
-    fontWeight: FONT_WEIGHT.extrabold,
+    fontWeight: FONT_WEIGHT.bold,
     color: COLORS.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   } as TextStyle,
 
   display: {
     fontSize: FONT_SIZE.display,
     lineHeight: LINE_HEIGHT.display,
-    fontWeight: FONT_WEIGHT.extrabold,
+    fontWeight: FONT_WEIGHT.bold,
     color: COLORS.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   } as TextStyle,
 
   // Titles
   titleLg: {
     fontSize: FONT_SIZE.title_lg,
     lineHeight: LINE_HEIGHT.title_lg,
-    fontWeight: FONT_WEIGHT.extrabold,
+    fontWeight: FONT_WEIGHT.bold,
     color: COLORS.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   } as TextStyle,
 
   title: {
     fontSize: FONT_SIZE.title,
     lineHeight: LINE_HEIGHT.title,
-    fontWeight: FONT_WEIGHT.extrabold,
+    fontWeight: FONT_WEIGHT.semibold,
     color: COLORS.text,
   } as TextStyle,
 
   titleSm: {
     fontSize: FONT_SIZE.title_sm,
     lineHeight: LINE_HEIGHT.title_sm,
-    fontWeight: FONT_WEIGHT.bold,
+    fontWeight: FONT_WEIGHT.semibold,
     color: COLORS.text,
   } as TextStyle,
 
   subtitle: {
     fontSize: FONT_SIZE.subtitle,
     lineHeight: LINE_HEIGHT.subtitle,
-    fontWeight: FONT_WEIGHT.bold,
+    fontWeight: FONT_WEIGHT.semibold,
     color: COLORS.text,
   } as TextStyle,
 
@@ -117,21 +116,21 @@ export const TYPOGRAPHY = {
   bodyLg: {
     fontSize: FONT_SIZE.body_lg,
     lineHeight: LINE_HEIGHT.body_lg,
-    fontWeight: FONT_WEIGHT.semibold,
+    fontWeight: FONT_WEIGHT.medium,
     color: COLORS.text,
   } as TextStyle,
 
   body: {
     fontSize: FONT_SIZE.body,
     lineHeight: LINE_HEIGHT.body,
-    fontWeight: FONT_WEIGHT.semibold,
+    fontWeight: FONT_WEIGHT.regular,
     color: COLORS.text,
   } as TextStyle,
 
   bodySm: {
     fontSize: FONT_SIZE.body_sm,
     lineHeight: LINE_HEIGHT.body_sm,
-    fontWeight: FONT_WEIGHT.medium,
+    fontWeight: FONT_WEIGHT.regular,
     color: COLORS.textSecondary,
   } as TextStyle,
 
@@ -139,29 +138,28 @@ export const TYPOGRAPHY = {
   caption: {
     fontSize: FONT_SIZE.sm,
     lineHeight: LINE_HEIGHT.sm,
-    fontWeight: FONT_WEIGHT.semibold,
+    fontWeight: FONT_WEIGHT.medium,
     color: COLORS.textSecondary,
   } as TextStyle,
 
   label: {
     fontSize: FONT_SIZE.micro,
     lineHeight: LINE_HEIGHT.micro,
-    fontWeight: FONT_WEIGHT.bold,
+    fontWeight: FONT_WEIGHT.semibold,
     color: COLORS.textSecondary,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
   } as TextStyle,
 
   hint: {
     fontSize: FONT_SIZE.xs,
     lineHeight: LINE_HEIGHT.xs,
-    fontWeight: FONT_WEIGHT.medium,
+    fontWeight: FONT_WEIGHT.regular,
     color: COLORS.textLight,
   } as TextStyle,
 } as const;
 
 // ─── Spacing Scale ───────────────────────────────────────────────────────────
-// 4px base with common multipliers. Use SPACING.md for default padding, etc.
 
 export const SPACING = {
   /** 2px */  xxs: 2,
@@ -210,46 +208,46 @@ export const SHADOWS = {
   /** Subtle shadow for cards */
   card: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   } as ViewStyle,
 
   /** Medium shadow for floating elements */
   elevated: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
+    elevation: 4,
   } as ViewStyle,
 
   /** Heavy shadow for FABs, modals */
   heavy: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   } as ViewStyle,
 
   /** Glow effect using primary color */
   glow: {
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.20,
+    shadowRadius: 8,
+    elevation: 4,
   } as ViewStyle,
 
   /** Success glow */
   successGlow: {
     shadowColor: COLORS.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   } as ViewStyle,
 
   /** No shadow */
@@ -267,7 +265,7 @@ export const SHADOWS = {
 /** Standard card container style */
 export const CARD_STYLE: ViewStyle = {
   backgroundColor: COLORS.glass,
-  borderRadius: RADIUS.card,
+  borderRadius: RADIUS.lg,
   padding: SPACING.xl,
   borderWidth: 1,
   borderColor: COLORS.border,
@@ -276,7 +274,7 @@ export const CARD_STYLE: ViewStyle = {
 /** Elevated card with stronger background */
 export const CARD_ELEVATED_STYLE: ViewStyle = {
   backgroundColor: COLORS.glassHigh,
-  borderRadius: RADIUS.card,
+  borderRadius: RADIUS.lg,
   padding: SPACING.xl,
   borderWidth: 1,
   borderColor: COLORS.glassBorder,

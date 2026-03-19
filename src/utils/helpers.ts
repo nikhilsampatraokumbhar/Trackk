@@ -1,43 +1,43 @@
-// Clean dark palette — inspired by modern finance apps
+// Clean, minimal palette — inspired by modern dashboard UIs
 export const COLORS = {
-  // Backgrounds (deep dark, layered)
-  background: '#0A0A0F',
-  surface: '#141418',
-  surfaceHigh: '#1C1C22',
-  surfaceHigher: '#262630',
+  // Backgrounds
+  background: '#F0F2F5',
+  surface: '#FFFFFF',
+  surfaceHigh: '#F5F7FA',
+  surfaceHigher: '#E8ECF0',
 
-  // Card surfaces (solid dark gray, no transparency)
-  glass: '#1A1A20',
-  glassHigh: '#222228',
-  glassBorder: '#2A2A32',
+  // Card surfaces (clean white, no glass)
+  glass: '#FFFFFF',
+  glassHigh: '#F8F9FC',
+  glassBorder: '#E8ECF0',
 
-  // Warm orange accent
-  primary: '#E8734A',
-  primaryLight: '#F09070',
-  primaryDark: '#C05A35',
-  primaryGlow: 'rgba(232,115,74,0.15)',
+  // Blue accent
+  primary: '#1890FF',
+  primaryLight: '#40A9FF',
+  primaryDark: '#096DD9',
+  primaryGlow: 'rgba(24,144,255,0.10)',
 
   // Text
-  text: '#F0F0F5',
-  textSecondary: '#7A7A90',
-  textLight: '#4A4A5C',
+  text: '#1F1F1F',
+  textSecondary: '#8C8C8C',
+  textLight: '#BFBFBF',
 
-  // Borders (subtle solid)
-  border: '#1E1E26',
-  borderLight: '#161620',
+  // Borders (subtle)
+  border: '#E8ECF0',
+  borderLight: '#F0F2F5',
 
   // Status
-  success: '#3CB882',
-  warning: '#E8C06A',
-  danger: '#E0505E',
+  success: '#52C41A',
+  warning: '#FAAD14',
+  danger: '#FF4D4F',
 
   // Tracker type colors
-  personalColor: '#8A78F0',    // Soft purple
-  groupColor: '#3CB882',       // Muted green
-  reimbursementColor: '#E07888', // Salmon pink
+  personalColor: '#722ED1',    // Purple
+  groupColor: '#52C41A',       // Green
+  reimbursementColor: '#EB2F96', // Magenta
 
-  // Semantic aliases kept for backwards compat
-  secondary: '#E07888',
+  // Semantic aliases
+  secondary: '#EB2F96',
 };
 
 import { formatCurrencyAmount } from './currencies';
@@ -71,9 +71,9 @@ export function formatDate(timestamp: number): string {
 }
 
 const COLOR_PALETTE = [
-  '#8A78F0', '#3CB882', '#E07888', '#45A8D4', '#E8B84A',
-  '#DD70A0', '#6BCFC0', '#D4A853', '#70B0F0', '#F0886A',
-  '#88C870', '#C878E8',
+  '#722ED1', '#52C41A', '#EB2F96', '#1890FF', '#FAAD14',
+  '#13C2C2', '#FA8C16', '#2F54EB', '#FA541C', '#A0D911',
+  '#597EF7', '#F759AB',
 ];
 
 export function getColorForId(id: string): string {

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
-import { COLORS } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 import Logo from './Logo';
 
 export default function SplashScreen() {
+  const { colors } = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.8)).current;
   const dotOpacity = useRef(new Animated.Value(0)).current;
@@ -23,14 +24,14 @@ export default function SplashScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Animated.View style={{ opacity, transform: [{ scale }] }}>
         <Logo size={90} showName showSlogan />
       </Animated.View>
       <Animated.View style={[styles.dotRow, { opacity: dotOpacity }]}>
-        <View style={styles.dot} />
-        <View style={styles.dot} />
-        <View style={styles.dot} />
+        <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+        <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+        <View style={[styles.dot, { backgroundColor: colors.primary }]} />
       </Animated.View>
     </View>
   );
@@ -39,7 +40,6 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -52,6 +52,5 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: COLORS.primary,
   },
 });

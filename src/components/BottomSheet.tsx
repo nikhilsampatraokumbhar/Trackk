@@ -2,7 +2,7 @@ import React from 'react';
 import {
   Modal, View, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { COLORS } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 
 interface Props {
   visible: boolean;
@@ -11,12 +11,17 @@ interface Props {
 }
 
 export default function BottomSheet({ visible, onClose, children }: Props) {
+  const { colors, isDark } = useTheme();
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+        <View style={[styles.sheet, {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        }]}>
+          <View style={[styles.handle, { backgroundColor: colors.surfaceHigher }]} />
           {children}
         </View>
       </KeyboardAvoidingView>
@@ -31,23 +36,20 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   sheet: {
-    backgroundColor: COLORS.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 40,
     borderTopWidth: 1,
-    borderColor: COLORS.glassBorder,
   },
   handle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: COLORS.surfaceHigher,
     alignSelf: 'center',
     marginBottom: 20,
   },
