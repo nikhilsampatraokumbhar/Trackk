@@ -18,6 +18,7 @@ import { calculateDebts } from './src/services/DebtCalculator';
 import SplashScreen from './src/components/SplashScreen';
 import OfflineBanner from './src/components/OfflineBanner';
 import AppTour, { shouldShowTour } from './src/components/AppTour';
+import ErrorBoundary from './src/components/ErrorBoundary';
 
 import { COLORS } from './src/utils/helpers';
 import './src/i18n'; // Initialize i18n
@@ -25,7 +26,7 @@ import { loadSavedLanguage } from './src/i18n';
 import { loadSavedCurrency, fetchExchangeRates } from './src/utils/currencies';
 
 // Must be called at top level for background notifications
-registerBackgroundHandler();
+try { registerBackgroundHandler(); } catch (e) { console.log('Background handler failed:', e); }
 
 // Custom Paper themes mapped to our color palette
 const paperLightTheme = {
@@ -195,20 +196,22 @@ function PaperWrapper({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <PaperWrapper>
-          <NetworkProvider>
-            <AuthProvider>
-              <GroupProvider>
-                <StatusBarWrapper />
-                <AppContent />
-              </GroupProvider>
-            </AuthProvider>
-          </NetworkProvider>
-        </PaperWrapper>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <PaperWrapper>
+            <NetworkProvider>
+              <AuthProvider>
+                <GroupProvider>
+                  <StatusBarWrapper />
+                  <AppContent />
+                </GroupProvider>
+              </AuthProvider>
+            </NetworkProvider>
+          </PaperWrapper>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
-import { Banner } from 'react-native-paper';
 import { useNetwork } from '../store/NetworkContext';
 import { useTheme } from '../store/ThemeContext';
 
