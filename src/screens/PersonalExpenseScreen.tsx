@@ -5,13 +5,13 @@ import {
   TextInput, ScrollView, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { hapticLight, hapticMedium, hapticSuccess } from '../utils/haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useTracker } from '../store/TrackerContext';
+import { useTheme } from '../store/ThemeContext';
 import EmptyState from '../components/EmptyState';
 import PressableScale from '../components/PressableScale';
 import { getTransactions, saveTransaction, deleteTransaction } from '../services/StorageService';
@@ -36,6 +36,7 @@ export default function PersonalExpenseScreen() {
   const nav = useNavigation<Nav>();
   const { user } = useAuth();
   const { trackerState, togglePersonal, isListening, transactionVersion } = useTracker();
+  const { colors, isDark } = useTheme();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -208,9 +209,194 @@ export default function PersonalExpenseScreen() {
     return Array.from(cats).sort();
   }, [transactions]);
 
+  // Dynamic styles
+  const dynamicStyles = useMemo(() => ({
+    container: { flex: 1, backgroundColor: colors.background } as const,
+    dateHeaderLine: { flex: 1, height: 1, backgroundColor: colors.border } as const,
+    dateHeaderText: { fontSize: 10, fontWeight: '600' as const, color: colors.textSecondary, letterSpacing: 1.5, textTransform: 'uppercase' as const, paddingHorizontal: 12 },
+    heroCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      marginVertical: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden' as const,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    heroAccent: { height: 2, backgroundColor: colors.personalColor },
+    statDivider: { width: 1, backgroundColor: colors.border, marginHorizontal: 16 },
+    statLabel: { fontSize: 10, color: colors.textSecondary, letterSpacing: 2, fontWeight: '600' as const, marginBottom: 8 },
+    statValue: { fontSize: 32, fontWeight: '700' as const, letterSpacing: -0.5 },
+    statCount: { fontSize: 11, color: colors.textSecondary, marginTop: 4 },
+    quickAccessCard: {
+      flex: 1,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center' as const,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    quickAccessIconWrap: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 10 },
+    quickAccessTitle: { fontSize: 13, fontWeight: '600' as const, color: colors.text, marginBottom: 2 },
+    quickAccessSub: { fontSize: 10, color: colors.textSecondary, textAlign: 'center' as const, lineHeight: 14 },
+    debugBox: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 14,
+      marginVertical: 10,
+      borderWidth: 1,
+      borderColor: `${colors.warning}30`,
+    },
+    debugTitle: { fontSize: 10, fontWeight: '600' as const, color: colors.warning, letterSpacing: 1.5, marginBottom: 8 },
+    debugText: { fontSize: 12, color: colors.text, marginBottom: 4, fontFamily: 'monospace' as const },
+    debugBtn: { backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 10, alignItems: 'center' as const, marginTop: 10 },
+    debugBtnText: { color: '#FFFFFF', fontWeight: '600' as const, fontSize: 13 },
+    iosSetupBanner: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 16,
+      marginVertical: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 12,
+    },
+    iosSetupTitle: { fontSize: 14, fontWeight: '600' as const, color: colors.primary },
+    iosSetupSub: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+    iosSetupArrow: { fontSize: 18, color: colors.textSecondary, fontWeight: '600' as const },
+    fab: {
+      position: 'absolute' as const,
+      right: 20,
+      bottom: 20,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      backgroundColor: colors.primary,
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+      borderRadius: 30,
+      elevation: 2,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+    },
+    fabIcon: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' as const, marginRight: 6 },
+    fabText: { color: '#FFFFFF', fontWeight: '700' as const, fontSize: 14, letterSpacing: 0.3 },
+    addModalTitle: { fontSize: 20, fontWeight: '700' as const, color: colors.text, textAlign: 'center' as const, marginBottom: 4 },
+    addModalSub: { fontSize: 13, color: colors.textSecondary, textAlign: 'center' as const, marginBottom: 24 },
+    addModalLabel: { fontSize: 10, fontWeight: '600' as const, color: colors.textSecondary, letterSpacing: 1.5, marginBottom: 8 },
+    addModalAmountRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      paddingHorizontal: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 20,
+    },
+    addModalCurrency: { fontSize: 24, fontWeight: '700' as const, color: colors.primary, marginRight: 4 },
+    addModalAmountInput: { flex: 1, fontSize: 28, fontWeight: '700' as const, color: colors.text, paddingVertical: 14 },
+    categoryChip: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      backgroundColor: colors.surfaceHigh,
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    categoryChipActive: { borderColor: colors.personalColor, backgroundColor: `${colors.personalColor}15` },
+    categoryLabel: { fontSize: 12, fontWeight: '600' as const, color: colors.textSecondary },
+    categoryLabelActive: { color: colors.personalColor },
+    addModalDescInput: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+      fontSize: 14,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 24,
+    },
+    addModalSaveBtn: { borderRadius: 30, overflow: 'hidden' as const, marginBottom: 12, backgroundColor: colors.primary, paddingVertical: 16, alignItems: 'center' as const },
+    addModalSaveBtnText: { fontSize: 15, fontWeight: '600' as const, color: '#FFFFFF' },
+    addModalCancelText: { fontSize: 14, fontWeight: '600' as const, color: colors.textSecondary },
+    searchInputWrap: {
+      flex: 1,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    searchInput: { flex: 1, fontSize: 14, color: colors.text, paddingVertical: 12 },
+    searchClear: { fontSize: 14, color: colors.textSecondary, padding: 4 },
+    filterToggleBtn: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+    },
+    filterToggleBtnActive: { borderColor: colors.primary, backgroundColor: `${colors.primary}10` },
+    filterToggleText: { fontSize: 12, color: colors.textSecondary },
+    filterSection: {
+      backgroundColor: colors.surface,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    filterLabel: { fontSize: 10, fontWeight: '600' as const, color: colors.textSecondary, letterSpacing: 1.5, marginBottom: 8, marginTop: 4 },
+    sortBtn: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceHigh,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    sortBtnActive: { borderColor: colors.personalColor, backgroundColor: `${colors.personalColor}12` },
+    sortBtnText: { fontSize: 12, fontWeight: '600' as const, color: colors.textSecondary },
+    sortBtnTextActive: { color: colors.personalColor },
+    filterCatChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 10,
+      backgroundColor: colors.surfaceHigh,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginRight: 8,
+    },
+    filterCatChipActive: { borderColor: colors.personalColor, backgroundColor: `${colors.personalColor}12` },
+    filterCatText: { fontSize: 12, fontWeight: '600' as const, color: colors.textSecondary },
+    filterCatTextActive: { color: colors.personalColor },
+    clearFiltersText: { fontSize: 12, fontWeight: '600' as const, color: colors.primary },
+  }), [colors]);
+
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={dynamicStyles.container}>
         <View style={styles.content}>
           <HeroCardSkeleton />
           <TransactionListSkeleton count={4} />
@@ -220,21 +406,21 @@ export default function PersonalExpenseScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={dynamicStyles.container} edges={['top']}>
       <SectionList
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
         sections={sections}
         keyExtractor={item => item.id}
         stickySectionHeadersEnabled={false}
         renderSectionHeader={({ section: { title } }) => (
           <View style={styles.dateHeader}>
-            <View style={styles.dateHeaderLine} />
-            <Text style={styles.dateHeaderText}>{title}</Text>
-            <View style={styles.dateHeaderLine} />
+            <View style={dynamicStyles.dateHeaderLine} />
+            <Text style={dynamicStyles.dateHeaderText}>{title}</Text>
+            <View style={dynamicStyles.dateHeaderLine} />
           </View>
         )}
         renderItem={({ item, index }) => {
@@ -257,34 +443,34 @@ export default function PersonalExpenseScreen() {
               subtitle="Track daily spending automatically"
               isActive={trackerState.personal}
               onToggle={() => { hapticLight(); togglePersonal(); }}
-              color={COLORS.personalColor}
+              color={colors.personalColor}
             />
 
             {Platform.OS === 'ios' && (
-              <TouchableOpacity style={styles.iosSetupBanner} onPress={() => nav.navigate('IOSSetup' as any)} activeOpacity={0.7}>
+              <TouchableOpacity style={dynamicStyles.iosSetupBanner} onPress={() => nav.navigate('IOSSetup' as any)} activeOpacity={0.7}>
                 <Text style={styles.iosSetupEmoji}>📱</Text>
                 <View style={styles.iosSetupContent}>
-                  <Text style={styles.iosSetupTitle}>Set up iPhone automation</Text>
-                  <Text style={styles.iosSetupSub}>Use iOS Shortcuts for automatic tracking</Text>
+                  <Text style={dynamicStyles.iosSetupTitle}>Set up iPhone automation</Text>
+                  <Text style={dynamicStyles.iosSetupSub}>Use iOS Shortcuts for automatic tracking</Text>
                 </View>
-                <Text style={styles.iosSetupArrow}>{'>'}</Text>
+                <Text style={dynamicStyles.iosSetupArrow}>{'>'}</Text>
               </TouchableOpacity>
             )}
 
             {isDevMode() && trackerState.personal && Platform.OS === 'android' && (
-              <View style={styles.debugBox}>
-                <Text style={styles.debugTitle}>DIAGNOSTICS (DEV)</Text>
-                <Text style={styles.debugText}>Listener: {isListening ? 'YES' : 'NO'}</Text>
-                <Text style={styles.debugText}>SmsListenerModule: {NativeModules.SmsListenerModule ? 'OK' : 'MISSING'}</Text>
-                <Text style={styles.debugText}>SmsAndroid: {NativeModules.SmsAndroid ? 'OK' : 'MISSING'}</Text>
-                <TouchableOpacity style={styles.debugBtn} onPress={async () => {
+              <View style={dynamicStyles.debugBox}>
+                <Text style={dynamicStyles.debugTitle}>DIAGNOSTICS (DEV)</Text>
+                <Text style={dynamicStyles.debugText}>Listener: {isListening ? 'YES' : 'NO'}</Text>
+                <Text style={dynamicStyles.debugText}>SmsListenerModule: {NativeModules.SmsListenerModule ? 'OK' : 'MISSING'}</Text>
+                <Text style={dynamicStyles.debugText}>SmsAndroid: {NativeModules.SmsAndroid ? 'OK' : 'MISSING'}</Text>
+                <TouchableOpacity style={dynamicStyles.debugBtn} onPress={async () => {
                   const sms = await checkSmsPermission();
                   const notif = await requestNotificationPermission();
                   Alert.alert('Permissions', `SMS: ${sms ? 'GRANTED' : 'DENIED'}\nNotifications: ${notif ? 'GRANTED' : 'DENIED'}`);
                 }}>
-                  <Text style={styles.debugBtnText}>Check Permissions</Text>
+                  <Text style={dynamicStyles.debugBtnText}>Check Permissions</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.debugBtn, { marginTop: 8 }]} onPress={async () => {
+                <TouchableOpacity style={[dynamicStyles.debugBtn, { marginTop: 8 }]} onPress={async () => {
                   try {
                     await showTransactionNotification(
                       { amount: 1, type: 'debit', merchant: 'Test Merchant', bank: 'HDFC Bank', rawMessage: 'Test SMS message', timestamp: Date.now() },
@@ -293,55 +479,55 @@ export default function PersonalExpenseScreen() {
                     Alert.alert('Success', 'Test notification sent!');
                   } catch (e: any) { Alert.alert('Error', e.message); }
                 }}>
-                  <Text style={styles.debugBtnText}>Send Test Notification</Text>
+                  <Text style={dynamicStyles.debugBtnText}>Send Test Notification</Text>
                 </TouchableOpacity>
               </View>
             )}
 
             {/* Search + Filter Bar */}
             <View style={styles.searchRow}>
-              <View style={styles.searchInputWrap}>
+              <View style={dynamicStyles.searchInputWrap}>
                 <Text style={styles.searchIcon}>🔍</Text>
                 <TextInput
-                  style={styles.searchInput}
+                  style={dynamicStyles.searchInput}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   placeholder="Search expenses..."
-                  placeholderTextColor={COLORS.textLight}
+                  placeholderTextColor={colors.textLight}
                   returnKeyType="search"
                 />
                 {searchQuery.length > 0 && (
                   <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={styles.searchClear}>✕</Text>
+                    <Text style={dynamicStyles.searchClear}>✕</Text>
                   </TouchableOpacity>
                 )}
               </View>
               <TouchableOpacity
-                style={[styles.filterToggleBtn, showFilters && styles.filterToggleBtnActive]}
+                style={[dynamicStyles.filterToggleBtn, showFilters && dynamicStyles.filterToggleBtnActive]}
                 onPress={() => { hapticLight(); setShowFilters(!showFilters); }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.filterToggleText}>{showFilters ? '▲' : '▼'}</Text>
+                <Text style={dynamicStyles.filterToggleText}>{showFilters ? '▲' : '▼'}</Text>
               </TouchableOpacity>
             </View>
 
             {showFilters && (
-              <View style={styles.filterSection}>
+              <View style={dynamicStyles.filterSection}>
                 {/* Sort toggle */}
                 <View style={styles.sortRow}>
-                  <Text style={styles.filterLabel}>SORT BY</Text>
+                  <Text style={dynamicStyles.filterLabel}>SORT BY</Text>
                   <View style={styles.sortBtns}>
                     <TouchableOpacity
-                      style={[styles.sortBtn, sortBy === 'date' && styles.sortBtnActive]}
+                      style={[dynamicStyles.sortBtn, sortBy === 'date' && dynamicStyles.sortBtnActive]}
                       onPress={() => setSortBy('date')}
                     >
-                      <Text style={[styles.sortBtnText, sortBy === 'date' && styles.sortBtnTextActive]}>Date</Text>
+                      <Text style={[dynamicStyles.sortBtnText, sortBy === 'date' && dynamicStyles.sortBtnTextActive]}>Date</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.sortBtn, sortBy === 'amount' && styles.sortBtnActive]}
+                      style={[dynamicStyles.sortBtn, sortBy === 'amount' && dynamicStyles.sortBtnActive]}
                       onPress={() => setSortBy('amount')}
                     >
-                      <Text style={[styles.sortBtnText, sortBy === 'amount' && styles.sortBtnTextActive]}>Amount</Text>
+                      <Text style={[dynamicStyles.sortBtnText, sortBy === 'amount' && dynamicStyles.sortBtnTextActive]}>Amount</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -349,21 +535,21 @@ export default function PersonalExpenseScreen() {
                 {/* Category filter chips */}
                 {availableCategories.length > 0 && (
                   <>
-                    <Text style={styles.filterLabel}>CATEGORY</Text>
+                    <Text style={dynamicStyles.filterLabel}>CATEGORY</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterCatScroll}>
                       <TouchableOpacity
-                        style={[styles.filterCatChip, !selectedCategory && styles.filterCatChipActive]}
+                        style={[dynamicStyles.filterCatChip, !selectedCategory && dynamicStyles.filterCatChipActive]}
                         onPress={() => setSelectedCategory(null)}
                       >
-                        <Text style={[styles.filterCatText, !selectedCategory && styles.filterCatTextActive]}>All</Text>
+                        <Text style={[dynamicStyles.filterCatText, !selectedCategory && dynamicStyles.filterCatTextActive]}>All</Text>
                       </TouchableOpacity>
                       {availableCategories.map(cat => (
                         <TouchableOpacity
                           key={cat}
-                          style={[styles.filterCatChip, selectedCategory === cat && styles.filterCatChipActive]}
+                          style={[dynamicStyles.filterCatChip, selectedCategory === cat && dynamicStyles.filterCatChipActive]}
                           onPress={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
                         >
-                          <Text style={[styles.filterCatText, selectedCategory === cat && styles.filterCatTextActive]}>{cat}</Text>
+                          <Text style={[dynamicStyles.filterCatText, selectedCategory === cat && dynamicStyles.filterCatTextActive]}>{cat}</Text>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
@@ -375,43 +561,43 @@ export default function PersonalExpenseScreen() {
                     style={styles.clearFiltersBtn}
                     onPress={() => { setSearchQuery(''); setSelectedCategory(null); setSortBy('date'); }}
                   >
-                    <Text style={styles.clearFiltersText}>Clear all filters</Text>
+                    <Text style={dynamicStyles.clearFiltersText}>Clear all filters</Text>
                   </TouchableOpacity>
                 )}
               </View>
             )}
 
-            <LinearGradient colors={['#16121A', '#0A0A0F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
-              <View style={[styles.heroAccent, { backgroundColor: COLORS.personalColor }]} />
+            <View style={dynamicStyles.heroCard}>
+              <View style={dynamicStyles.heroAccent} />
               <View style={styles.statsRow}>
                 <View style={styles.stat}>
-                  <Text style={styles.statLabel}>THIS MONTH</Text>
-                  <AnimatedAmount value={totalMonthly} style={[styles.statValue, { color: COLORS.personalColor }]} />
-                  <Text style={styles.statCount}>{thisMonth.length} transactions</Text>
+                  <Text style={dynamicStyles.statLabel}>THIS MONTH</Text>
+                  <AnimatedAmount value={totalMonthly} style={[dynamicStyles.statValue, { color: colors.personalColor }]} />
+                  <Text style={dynamicStyles.statCount}>{thisMonth.length} transactions</Text>
                 </View>
-                <View style={styles.statDivider} />
+                <View style={dynamicStyles.statDivider} />
                 <View style={styles.stat}>
-                  <Text style={styles.statLabel}>ALL TIME</Text>
-                  <AnimatedAmount value={totalAll} style={[styles.statValue, { color: COLORS.text }]} />
-                  <Text style={styles.statCount}>{transactions.length} total</Text>
+                  <Text style={dynamicStyles.statLabel}>ALL TIME</Text>
+                  <AnimatedAmount value={totalAll} style={[dynamicStyles.statValue, { color: colors.text }]} />
+                  <Text style={dynamicStyles.statCount}>{transactions.length} total</Text>
                 </View>
               </View>
-            </LinearGradient>
+            </View>
 
             <View style={styles.quickAccessRow}>
-              <PressableScale style={styles.quickAccessCard} onPress={() => nav.navigate('Goals')}>
-                <View style={[styles.quickAccessIconWrap, { backgroundColor: `${COLORS.success}18`, borderColor: `${COLORS.success}30` }]}>
+              <PressableScale style={dynamicStyles.quickAccessCard} onPress={() => nav.navigate('Goals')}>
+                <View style={[dynamicStyles.quickAccessIconWrap, { backgroundColor: `${colors.success}18`, borderColor: `${colors.success}30` }]}>
                   <Text style={styles.quickAccessIcon}>🎯</Text>
                 </View>
-                <Text style={styles.quickAccessTitle}>Savings Goals</Text>
-                <Text style={styles.quickAccessSub}>Set targets & daily budgets</Text>
+                <Text style={dynamicStyles.quickAccessTitle}>Savings Goals</Text>
+                <Text style={dynamicStyles.quickAccessSub}>Set targets & daily budgets</Text>
               </PressableScale>
-              <PressableScale style={styles.quickAccessCard} onPress={() => nav.navigate('Reimbursement')}>
-                <View style={[styles.quickAccessIconWrap, { backgroundColor: `${COLORS.reimbursementColor}18`, borderColor: `${COLORS.reimbursementColor}30` }]}>
+              <PressableScale style={dynamicStyles.quickAccessCard} onPress={() => nav.navigate('Reimbursement')}>
+                <View style={[dynamicStyles.quickAccessIconWrap, { backgroundColor: `${colors.reimbursementColor}18`, borderColor: `${colors.reimbursementColor}30` }]}>
                   <Text style={styles.quickAccessIcon}>🧾</Text>
                 </View>
-                <Text style={styles.quickAccessTitle}>Reimbursement</Text>
-                <Text style={styles.quickAccessSub}>Track office expenses</Text>
+                <Text style={dynamicStyles.quickAccessTitle}>Reimbursement</Text>
+                <Text style={dynamicStyles.quickAccessSub}>Track office expenses</Text>
               </PressableScale>
             </View>
 
@@ -420,7 +606,7 @@ export default function PersonalExpenseScreen() {
                 icon="💳"
                 title={trackerState.personal ? 'No expenses yet' : 'Start tracking'}
                 subtitle={trackerState.personal ? 'Your expenses will show up here automatically' : 'Enable the tracker above or add manually'}
-                accent={COLORS.personalColor}
+                accent={colors.personalColor}
               />
             )}
           </>
@@ -429,68 +615,66 @@ export default function PersonalExpenseScreen() {
       />
 
       {/* Add Expense FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => { hapticMedium(); setShowAddModal(true); }} activeOpacity={0.8}>
-        <Text style={styles.fabIcon}>+</Text>
-        <Text style={styles.fabText}>Add Expense</Text>
+      <TouchableOpacity style={dynamicStyles.fab} onPress={() => { hapticMedium(); setShowAddModal(true); }} activeOpacity={0.8}>
+        <Text style={dynamicStyles.fabIcon}>+</Text>
+        <Text style={dynamicStyles.fabText}>Add Expense</Text>
       </TouchableOpacity>
 
       {/* Add Expense Bottom Sheet */}
       <BottomSheet visible={showAddModal} onClose={() => { setShowAddModal(false); setAddAmount(''); setAddDescription(''); }}>
-        <Text style={styles.addModalTitle}>Add Expense</Text>
-        <Text style={styles.addModalSub}>Log a cash or missed expense</Text>
+        <Text style={dynamicStyles.addModalTitle}>Add Expense</Text>
+        <Text style={dynamicStyles.addModalSub}>Log a cash or missed expense</Text>
 
-        <Text style={styles.addModalLabel}>AMOUNT</Text>
-        <View style={styles.addModalAmountRow}>
-          <Text style={styles.addModalCurrency}>₹</Text>
+        <Text style={dynamicStyles.addModalLabel}>AMOUNT</Text>
+        <View style={dynamicStyles.addModalAmountRow}>
+          <Text style={dynamicStyles.addModalCurrency}>₹</Text>
           <TextInput
-            style={styles.addModalAmountInput}
+            style={dynamicStyles.addModalAmountInput}
             value={addAmount}
             onChangeText={setAddAmount}
             placeholder="0"
-            placeholderTextColor={COLORS.textLight}
+            placeholderTextColor={colors.textLight}
             keyboardType="decimal-pad"
             autoFocus
           />
         </View>
 
-        <Text style={styles.addModalLabel}>QUICK PICK</Text>
+        <Text style={dynamicStyles.addModalLabel}>QUICK PICK</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll} contentContainerStyle={styles.categoryScrollContent}>
           {PERSONAL_CATEGORIES.map(cat => (
             <TouchableOpacity
               key={cat.label}
-              style={[styles.categoryChip, addDescription === cat.label && styles.categoryChipActive]}
+              style={[dynamicStyles.categoryChip, addDescription === cat.label && dynamicStyles.categoryChipActive]}
               onPress={() => { hapticLight(); selectCategory(cat.label); }}
               activeOpacity={0.7}
             >
               <Text style={styles.categoryIcon}>{cat.icon}</Text>
-              <Text style={[styles.categoryLabel, addDescription === cat.label && styles.categoryLabelActive]}>{cat.label}</Text>
+              <Text style={[dynamicStyles.categoryLabel, addDescription === cat.label && dynamicStyles.categoryLabelActive]}>{cat.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        <Text style={styles.addModalLabel}>OR DESCRIBE</Text>
+        <Text style={dynamicStyles.addModalLabel}>OR DESCRIBE</Text>
         <TextInput
-          style={styles.addModalDescInput}
+          style={dynamicStyles.addModalDescInput}
           value={addDescription}
           onChangeText={setAddDescription}
           placeholder="e.g. Parking, Snacks, Subscription..."
-          placeholderTextColor={COLORS.textLight}
+          placeholderTextColor={colors.textLight}
           maxLength={200}
         />
 
-        <TouchableOpacity style={[styles.addModalSaveBtn, saving && { opacity: 0.5 }]} onPress={handleAddExpense} disabled={saving} activeOpacity={0.8}>
-          <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.addModalSaveBtnGradient}>
-            <Text style={styles.addModalSaveBtnText}>{saving ? 'Saving...' : 'Save Expense'}</Text>
-          </LinearGradient>
+        <TouchableOpacity style={[dynamicStyles.addModalSaveBtn, saving && { opacity: 0.5 }]} onPress={handleAddExpense} disabled={saving} activeOpacity={0.8}>
+          <Text style={dynamicStyles.addModalSaveBtnText}>{saving ? 'Saving...' : 'Save Expense'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.addModalCancelBtn} onPress={() => { setShowAddModal(false); setAddAmount(''); setAddDescription(''); }}>
-          <Text style={styles.addModalCancelText}>Cancel</Text>
+          <Text style={dynamicStyles.addModalCancelText}>Cancel</Text>
         </TouchableOpacity>
       </BottomSheet>
 
       {/* Success overlay */}
-      <SuccessOverlay visible={showSuccess} message="Expense saved" subMessage={successAmount} onDone={() => setShowSuccess(false)} color={COLORS.personalColor} />
+      <SuccessOverlay visible={showSuccess} message="Expense saved" subMessage={successAmount} onDone={() => setShowSuccess(false)} color={colors.personalColor} />
 
       {/* Undo Toast */}
       <UndoToast visible={undoState.visible} message={undoState.message} onUndo={handleUndo} onDismiss={() => setUndoState({ visible: false, message: '', txn: null })} />
@@ -507,96 +691,31 @@ export default function PersonalExpenseScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 16, paddingBottom: 80 },
 
   dateHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 10 },
-  dateHeaderLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dateHeaderText: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, textTransform: 'uppercase', paddingHorizontal: 12 },
 
-  heroCard: { borderRadius: 24, marginVertical: 16, borderWidth: 1, borderColor: COLORS.glassBorder, overflow: 'hidden' },
-  heroAccent: { height: 2 },
   statsRow: { flexDirection: 'row', padding: 22 },
   stat: { flex: 1, alignItems: 'center' },
-  statDivider: { width: 1, backgroundColor: COLORS.glassBorder, marginHorizontal: 16 },
-  statLabel: { fontSize: 10, color: COLORS.textSecondary, letterSpacing: 2, fontWeight: '700', marginBottom: 8 },
-  statValue: { fontSize: 32, fontWeight: '800', letterSpacing: -0.5 },
-  statCount: { fontSize: 11, color: COLORS.textSecondary, marginTop: 4 },
 
   quickAccessRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  quickAccessCard: { flex: 1, backgroundColor: COLORS.glass, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center' },
-  quickAccessIconWrap: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   quickAccessIcon: { fontSize: 18 },
-  quickAccessTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
-  quickAccessSub: { fontSize: 10, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 14 },
 
-  empty: { alignItems: 'center', paddingVertical: 40 },
-  emptyIcon: { width: 64, height: 64, borderRadius: 20, backgroundColor: COLORS.glass, alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: COLORS.glassBorder },
-  emptyEmoji: { fontSize: 28 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, marginBottom: 6 },
-  emptyText: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 19 },
-
-  debugBox: { backgroundColor: COLORS.glass, borderRadius: 16, padding: 14, marginVertical: 10, borderWidth: 1, borderColor: `${COLORS.warning}30` },
-  debugTitle: { fontSize: 10, fontWeight: '700', color: COLORS.warning, letterSpacing: 1.5, marginBottom: 8 },
-  debugText: { fontSize: 12, color: COLORS.text, marginBottom: 4, fontFamily: 'monospace' },
-  debugBtn: { backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 10, alignItems: 'center' as const, marginTop: 10 },
-  debugBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-
-  iosSetupBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glass, borderRadius: 20, padding: 16, marginVertical: 10, borderWidth: 1, borderColor: `${COLORS.primary}20`, gap: 12 },
   iosSetupEmoji: { fontSize: 24 },
   iosSetupContent: { flex: 1 },
-  iosSetupTitle: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
-  iosSetupSub: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
-  iosSetupArrow: { fontSize: 18, color: COLORS.textSecondary, fontWeight: '600' },
 
-  fab: { position: 'absolute', right: 20, bottom: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.personalColor, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 30, elevation: 8, shadowColor: COLORS.personalColor, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12 },
-  fabIcon: { color: '#0A0A0F', fontSize: 20, fontWeight: '800', marginRight: 6 },
-  fabText: { color: '#0A0A0F', fontWeight: '800', fontSize: 14, letterSpacing: 0.3 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  searchIcon: { fontSize: 14, marginRight: 8 },
 
-  addModalTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 4 },
-  addModalSub: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 24 },
-  addModalLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 8 },
-  addModalAmountRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glass, borderRadius: 16, paddingHorizontal: 20, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: 20 },
-  addModalCurrency: { fontSize: 24, fontWeight: '800', color: COLORS.primary, marginRight: 4 },
-  addModalAmountInput: { flex: 1, fontSize: 28, fontWeight: '800', color: COLORS.text, paddingVertical: 14 },
+  sortRow: { marginBottom: 12 },
+  sortBtns: { flexDirection: 'row', gap: 8 },
+
+  filterCatScroll: { marginBottom: 8 },
+  clearFiltersBtn: { alignItems: 'center', paddingVertical: 8, marginTop: 4 },
 
   categoryScroll: { marginBottom: 16 },
   categoryScrollContent: { gap: 8 },
-  categoryChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surfaceHigh, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.border },
-  categoryChipActive: { borderColor: COLORS.personalColor, backgroundColor: `${COLORS.personalColor}15` },
   categoryIcon: { fontSize: 14, marginRight: 6 },
-  categoryLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
-  categoryLabelActive: { color: COLORS.personalColor },
 
-  addModalDescInput: { backgroundColor: COLORS.glass, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 14, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: 24 },
-  addModalSaveBtn: { borderRadius: 30, overflow: 'hidden', marginBottom: 12 },
-  addModalSaveBtnGradient: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
-  addModalSaveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   addModalCancelBtn: { paddingVertical: 12, alignItems: 'center' },
-  addModalCancelText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
-
-  // Search + Filter
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  searchInputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glass, borderRadius: 14, paddingHorizontal: 14, borderWidth: 1, borderColor: COLORS.glassBorder },
-  searchIcon: { fontSize: 14, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 14, color: COLORS.text, paddingVertical: 12 },
-  searchClear: { fontSize: 14, color: COLORS.textSecondary, padding: 4 },
-  filterToggleBtn: { width: 42, height: 42, borderRadius: 14, backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center', justifyContent: 'center' },
-  filterToggleBtnActive: { borderColor: `${COLORS.primary}40`, backgroundColor: `${COLORS.primary}15` },
-  filterToggleText: { fontSize: 12, color: COLORS.textSecondary },
-  filterSection: { backgroundColor: COLORS.glass, borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: COLORS.glassBorder },
-  filterLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 8, marginTop: 4 },
-  sortRow: { marginBottom: 12 },
-  sortBtns: { flexDirection: 'row', gap: 8 },
-  sortBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: COLORS.surfaceHigh, borderWidth: 1, borderColor: COLORS.border },
-  sortBtnActive: { borderColor: `${COLORS.personalColor}40`, backgroundColor: `${COLORS.personalColor}15` },
-  sortBtnText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
-  sortBtnTextActive: { color: COLORS.personalColor },
-  filterCatScroll: { marginBottom: 8 },
-  filterCatChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: COLORS.surfaceHigh, borderWidth: 1, borderColor: COLORS.border, marginRight: 8 },
-  filterCatChipActive: { borderColor: `${COLORS.personalColor}40`, backgroundColor: `${COLORS.personalColor}15` },
-  filterCatText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
-  filterCatTextActive: { color: COLORS.personalColor },
-  clearFiltersBtn: { alignItems: 'center', paddingVertical: 8, marginTop: 4 },
-  clearFiltersText: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
 });

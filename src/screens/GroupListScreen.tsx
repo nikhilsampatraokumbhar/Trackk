@@ -4,16 +4,16 @@ import {
   ActivityIndicator, RefreshControl, Alert, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
 import { usePremium } from '../store/PremiumContext';
+import { useTheme } from '../store/ThemeContext';
 import TrackerToggle from '../components/TrackerToggle';
 import EmptyState from '../components/EmptyState';
-import { COLORS, getColorForId, formatCurrency } from '../utils/helpers';
+import { getColorForId, formatCurrency } from '../utils/helpers';
 import {
   RetentionStatus,
   checkGroupRetentionStatus,
@@ -39,6 +39,7 @@ export default function GroupListScreen() {
   const { groups, loading, refreshGroups } = useGroups();
   const { trackerState, toggleGroup } = useTracker();
   const { isPremium } = usePremium();
+  const { colors, isDark } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
   const [retentionStatuses, setRetentionStatuses] = useState<RetentionStatus[]>([]);
   const [softAlertStatus, setSoftAlertStatus] = useState<RetentionStatus | null>(null);
@@ -152,28 +153,28 @@ export default function GroupListScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <FlatList
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={COLORS.primary}
-            colors={[COLORS.primary]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
-            <Text style={styles.screenTitle}>Your Groups</Text>
+            <Text style={[styles.screenTitle, { color: colors.text }]}>Your Groups</Text>
 
             {/* Overall Balances Summary */}
             {(() => {
@@ -184,21 +185,25 @@ export default function GroupListScreen() {
               const totalYouOwe = allStats.reduce((s, st) => s + Math.abs(Math.min(st.netOwed, 0)), 0);
               if (totalOwedToYou === 0 && totalYouOwe === 0) return null;
               return (
-                <View style={styles.balanceSummaryCard}>
+                <View style={[styles.balanceSummaryCard, {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  shadowColor: '#000',
+                }]}>
                   <View style={styles.balanceSummaryRow}>
                     <View style={styles.balanceStat}>
-                      <Text style={styles.balanceStatLabel}>YOU ARE OWED</Text>
-                      <Text style={[styles.balanceStatValue, { color: COLORS.success }]}>{formatCurrency(totalOwedToYou)}</Text>
+                      <Text style={[styles.balanceStatLabel, { color: colors.textSecondary }]}>YOU ARE OWED</Text>
+                      <Text style={[styles.balanceStatValue, { color: colors.success }]}>{formatCurrency(totalOwedToYou)}</Text>
                     </View>
-                    <View style={styles.balanceDivider} />
+                    <View style={[styles.balanceDivider, { backgroundColor: colors.border }]} />
                     <View style={styles.balanceStat}>
-                      <Text style={styles.balanceStatLabel}>YOU OWE</Text>
-                      <Text style={[styles.balanceStatValue, { color: COLORS.danger }]}>{formatCurrency(totalYouOwe)}</Text>
+                      <Text style={[styles.balanceStatLabel, { color: colors.textSecondary }]}>YOU OWE</Text>
+                      <Text style={[styles.balanceStatValue, { color: colors.danger }]}>{formatCurrency(totalYouOwe)}</Text>
                     </View>
                   </View>
-                  <View style={styles.balanceNetRow}>
-                    <Text style={styles.balanceNetLabel}>Net</Text>
-                    <Text style={[styles.balanceNetValue, { color: totalNetOwed >= 0 ? COLORS.success : COLORS.danger }]}>
+                  <View style={[styles.balanceNetRow, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.balanceNetLabel, { color: colors.textSecondary }]}>Net</Text>
+                    <Text style={[styles.balanceNetValue, { color: totalNetOwed >= 0 ? colors.success : colors.danger }]}>
                       {totalNetOwed >= 0 ? `+${formatCurrency(totalNetOwed)}` : `-${formatCurrency(Math.abs(totalNetOwed))}`}
                     </Text>
                   </View>
@@ -208,33 +213,29 @@ export default function GroupListScreen() {
 
             {!isPremium && (
               <TouchableOpacity
-                style={styles.premiumBanner}
+                style={[styles.premiumBanner, {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                }]}
                 onPress={() => nav.navigate('Pricing')}
                 activeOpacity={0.8}
               >
-                <LinearGradient
-                  colors={['#1C1708', '#12100A']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.premiumBannerGradient}
-                >
-                  <View style={styles.premiumBannerGoldLine} />
-                  <View style={styles.premiumBannerContent}>
-                    <View style={styles.premiumBannerLeft}>
-                      <View style={styles.premiumBadge}>
-                        <Text style={styles.premiumBadgeText}>PRO</Text>
-                      </View>
-                      <View>
-                        <Text style={styles.premiumBannerTitle}>Unlock Unlimited Groups</Text>
-                        <Text style={styles.premiumBannerSub}>Free plan: up to 3 groups</Text>
-                      </View>
+                <View style={[styles.premiumBannerGoldLine, { backgroundColor: colors.primary }]} />
+                <View style={styles.premiumBannerContent}>
+                  <View style={styles.premiumBannerLeft}>
+                    <View style={[styles.premiumBadge, { backgroundColor: colors.primary }]}>
+                      <Text style={styles.premiumBadgeText}>PRO</Text>
                     </View>
-                    <Text style={styles.premiumBannerChevron}>›</Text>
+                    <View>
+                      <Text style={[styles.premiumBannerTitle, { color: colors.primary }]}>Unlock Unlimited Groups</Text>
+                      <Text style={[styles.premiumBannerSub, { color: colors.textSecondary }]}>Free plan: up to 3 groups</Text>
+                    </View>
                   </View>
-                </LinearGradient>
+                  <Text style={[styles.premiumBannerChevron, { color: colors.primary }]}>›</Text>
+                </View>
               </TouchableOpacity>
             )}
-            <Text style={styles.sectionTitle}>YOUR GROUPS</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>YOUR GROUPS</Text>
           </>
         }
         ListEmptyComponent={
@@ -242,7 +243,7 @@ export default function GroupListScreen() {
             icon="👥"
             title="No groups yet"
             subtitle="Create a group to split expenses with friends"
-            accent={COLORS.groupColor}
+            accent={colors.groupColor}
           />
         }
         data={activeGroups}
@@ -255,7 +256,11 @@ export default function GroupListScreen() {
 
           return (
             <TouchableOpacity
-              style={[styles.groupCard, isActive && { borderColor: `${COLORS.groupColor}40` }]}
+              style={[styles.groupCard, {
+                backgroundColor: colors.surface,
+                borderColor: isActive ? `${colors.groupColor}40` : colors.border,
+                shadowColor: '#000',
+              }]}
               onPress={() => nav.navigate('GroupDetail', { groupId: item.id })}
               onLongPress={() => handleArchiveGroup(item.id, item.name)}
               delayLongPress={500}
@@ -269,16 +274,16 @@ export default function GroupListScreen() {
                   </Text>
                 </View>
                 <View style={styles.groupTextWrap}>
-                  <Text style={styles.groupName}>{item.name}</Text>
-                  <Text style={styles.groupMeta}>
+                  <Text style={[styles.groupName, { color: colors.text }]}>{item.name}</Text>
+                  <Text style={[styles.groupMeta, { color: colors.textSecondary }]}>
                     {item.members.length} members{stats && stats.txnCount > 0 ? ` · ${stats.txnCount} txn${stats.txnCount > 1 ? 's' : ''}` : ''}
                   </Text>
                 </View>
                 <View style={styles.groupStatsRight}>
                   {stats && stats.total > 0 && (
                     <>
-                      <Text style={styles.groupTotal}>{formatCurrency(stats.total)}</Text>
-                      <Text style={styles.groupSettled}>Settled {stats.settledPercent}%</Text>
+                      <Text style={[styles.groupTotal, { color: colors.text }]}>{formatCurrency(stats.total)}</Text>
+                      <Text style={[styles.groupSettled, { color: colors.textSecondary }]}>Settled {stats.settledPercent}%</Text>
                     </>
                   )}
                 </View>
@@ -287,8 +292,8 @@ export default function GroupListScreen() {
               {/* Net balance row */}
               {stats && stats.total > 0 && (
                 <View style={styles.netRow}>
-                  <Text style={styles.netLabel}>Net</Text>
-                  <Text style={[styles.netValue, { color: netOwed >= 0 ? COLORS.success : COLORS.danger }]}>
+                  <Text style={[styles.netLabel, { color: colors.textSecondary }]}>Net</Text>
+                  <Text style={[styles.netValue, { color: netOwed >= 0 ? colors.success : colors.danger }]}>
                     {netOwed >= 0 ? `You are owed ${formatCurrency(netOwed)}` : `You owe ${formatCurrency(Math.abs(netOwed))}`}
                   </Text>
                 </View>
@@ -298,23 +303,24 @@ export default function GroupListScreen() {
               {item.budget && item.budget > 0 && stats && (
                 <View style={styles.budgetRow}>
                   <View style={styles.budgetLabelRow}>
-                    <Text style={styles.budgetLabel}>Budget</Text>
+                    <Text style={[styles.budgetLabel, { color: colors.textSecondary }]}>Budget</Text>
                     <Text style={[
                       styles.budgetAmount,
-                      stats.total > item.budget && { color: COLORS.danger },
+                      { color: colors.text },
+                      stats.total > item.budget && { color: colors.danger },
                     ]}>
                       {formatCurrency(stats.total)} / {formatCurrency(item.budget)}
                     </Text>
                   </View>
-                  <View style={styles.budgetTrack}>
+                  <View style={[styles.budgetTrack, { backgroundColor: colors.surfaceHigher }]}>
                     <View
                       style={[
                         styles.budgetFill,
                         {
                           width: `${Math.min((stats.total / item.budget) * 100, 100)}%`,
-                          backgroundColor: stats.total > item.budget ? COLORS.danger
-                            : stats.total > item.budget * 0.8 ? COLORS.warning
-                            : COLORS.success,
+                          backgroundColor: stats.total > item.budget ? colors.danger
+                            : stats.total > item.budget * 0.8 ? colors.warning
+                            : colors.success,
                         },
                       ]}
                     />
@@ -325,18 +331,26 @@ export default function GroupListScreen() {
               {/* Action row: Settle Up + Tracker toggle */}
               <View style={styles.groupActionRow}>
                 <TouchableOpacity
-                  style={styles.settleUpBtn}
+                  style={[styles.settleUpBtn, {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceHigh,
+                  }]}
                   onPress={() => nav.navigate('GroupDetail', { groupId: item.id })}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.settleUpText}>Settle Up</Text>
+                  <Text style={[styles.settleUpText, { color: colors.text }]}>Settle Up</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.trackBtn, isActive && styles.trackBtnActive]}
+                  style={[styles.trackBtn, {
+                    borderColor: isActive ? `${colors.groupColor}50` : colors.border,
+                    backgroundColor: isActive ? `${colors.groupColor}15` : 'transparent',
+                  }]}
                   onPress={() => toggleGroup(item.id)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.trackBtnText, isActive && styles.trackBtnTextActive]}>
+                  <Text style={[styles.trackBtnText, {
+                    color: isActive ? colors.groupColor : colors.textSecondary,
+                  }]}>
                     {isActive ? 'Tracking' : 'Track'}
                   </Text>
                 </TouchableOpacity>
@@ -347,18 +361,24 @@ export default function GroupListScreen() {
                 const retention = getGroupRetentionBanner(item.id);
                 if (!retention) return null;
                 return (
-                  <View style={styles.retentionBanner}>
+                  <View style={[styles.retentionBanner, {
+                    backgroundColor: `${colors.warning}10`,
+                    borderTopColor: `${colors.warning}20`,
+                  }]}>
                     <View style={styles.retentionBannerContent}>
-                      <Text style={styles.retentionBannerText}>
+                      <Text style={[styles.retentionBannerText, { color: colors.warning }]}>
                         {retention.expiringCount} expense{retention.expiringCount > 1 ? 's' : ''} older than 75 days.
                         Older data is safe but locked.
                       </Text>
                       <View style={styles.retentionBannerActions}>
-                        <TouchableOpacity style={styles.retentionUpgradeBtn} onPress={() => nav.navigate('Pricing')}>
-                          <Text style={styles.retentionUpgradeText}>Keep with Premium</Text>
+                        <TouchableOpacity style={[styles.retentionUpgradeBtn, {
+                          backgroundColor: `${colors.primary}20`,
+                          borderColor: `${colors.primary}30`,
+                        }]} onPress={() => nav.navigate('Pricing')}>
+                          <Text style={[styles.retentionUpgradeText, { color: colors.primary }]}>Keep with Premium</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.retentionDismissBtn} onPress={() => handleDismissBanner(item.id)}>
-                          <Text style={styles.retentionDismissText}>Dismiss</Text>
+                          <Text style={[styles.retentionDismissText, { color: colors.textSecondary }]}>Dismiss</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -371,13 +391,18 @@ export default function GroupListScreen() {
         ListFooterComponent={
           archivedGroups.length > 0 ? (
             <View style={styles.archivedSection}>
-              <Text style={styles.sectionTitle}>ARCHIVED</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ARCHIVED</Text>
               {archivedGroups.map(item => {
                 const color = getColorForId(item.id);
                 return (
                   <TouchableOpacity
                     key={item.id}
-                    style={[styles.groupCard, { opacity: 0.6 }]}
+                    style={[styles.groupCard, {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      opacity: 0.6,
+                      shadowColor: '#000',
+                    }]}
                     onPress={() => nav.navigate('GroupDetail', { groupId: item.id })}
                     activeOpacity={0.7}
                   >
@@ -388,10 +413,10 @@ export default function GroupListScreen() {
                         </Text>
                       </View>
                       <View style={styles.groupTextWrap}>
-                        <Text style={styles.groupName}>{item.name}</Text>
-                        <Text style={styles.memberCount}>{item.members.length} members · Archived</Text>
+                        <Text style={[styles.groupName, { color: colors.text }]}>{item.name}</Text>
+                        <Text style={[styles.memberCount, { color: colors.textSecondary }]}>{item.members.length} members · Archived</Text>
                       </View>
-                      <Text style={styles.chevron}>›</Text>
+                      <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
                     </View>
                   </TouchableOpacity>
                 );
@@ -403,7 +428,7 @@ export default function GroupListScreen() {
 
       {/* FAB */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { backgroundColor: colors.primary }]}
         onPress={() => nav.navigate('CreateGroup')}
         activeOpacity={0.8}
       >
@@ -418,13 +443,21 @@ export default function GroupListScreen() {
         animationType="fade"
         onRequestClose={() => handleSoftAlertResponse('later')}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalIconWrap}>
+        <View style={[styles.modalOverlay, {
+          backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)',
+        }]}>
+          <View style={[styles.modalContent, {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          }]}>
+            <View style={[styles.modalIconWrap, {
+              backgroundColor: `${colors.warning}15`,
+              borderColor: `${colors.warning}25`,
+            }]}>
               <Text style={styles.modalIcon}>🗓️</Text>
             </View>
-            <Text style={styles.modalTitle}>Your data is safe</Text>
-            <Text style={styles.modalDesc}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Your data is safe</Text>
+            <Text style={[styles.modalDesc, { color: colors.textSecondary }]}>
               Group expenses older than 90 days will be locked
               {softAlertStatus?.daysUntilLock
                 ? ` in ${softAlertStatus.daysUntilLock} day${softAlertStatus.daysUntilLock > 1 ? 's' : ''}`
@@ -433,7 +466,7 @@ export default function GroupListScreen() {
             </Text>
 
             <TouchableOpacity
-              style={styles.modalUpgradeBtn}
+              style={[styles.modalUpgradeBtn, { backgroundColor: colors.primary }]}
               onPress={() => handleSoftAlertResponse('upgrade')}
               activeOpacity={0.8}
             >
@@ -445,7 +478,7 @@ export default function GroupListScreen() {
               onPress={() => handleSoftAlertResponse('later')}
               activeOpacity={0.7}
             >
-              <Text style={styles.modalTertiaryBtnText}>Got it</Text>
+              <Text style={[styles.modalTertiaryBtnText, { color: colors.textSecondary }]}>Got it</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -455,26 +488,25 @@ export default function GroupListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1 },
   content: { padding: 16, paddingBottom: 100 },
-  screenTitle: { fontSize: 24, fontWeight: '800', color: COLORS.text, marginBottom: 16 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background },
+  screenTitle: { fontSize: 24, fontWeight: '700', marginBottom: 16 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   /* ── Premium Banner ──────────────────────────────────────── */
   premiumBanner: {
     marginBottom: 16,
     borderRadius: 16,
-    overflow: 'hidden',
-  },
-  premiumBannerGradient: {
-    borderRadius: 20,
     borderWidth: 1,
-    borderColor: `${COLORS.primary}20`,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   premiumBannerGoldLine: {
     height: 2,
-    backgroundColor: COLORS.primary,
   },
   premiumBannerContent: {
     flexDirection: 'row',
@@ -488,37 +520,32 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   premiumBadge: {
-    backgroundColor: COLORS.primary,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   premiumBadgeText: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#0A0A0F',
+    fontWeight: '700',
+    color: '#FFFFFF',
     letterSpacing: 1,
   },
   premiumBannerTitle: {
     fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.primary,
+    fontWeight: '600',
     marginBottom: 2,
   },
   premiumBannerSub: {
     fontSize: 11,
-    color: COLORS.textSecondary,
   },
   premiumBannerChevron: {
     fontSize: 22,
-    color: COLORS.primary,
     fontWeight: '600',
   },
 
   sectionTitle: {
     fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
+    fontWeight: '600',
     letterSpacing: 1.5,
     marginBottom: 14,
   },
@@ -528,34 +555,32 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 22,
-    backgroundColor: COLORS.surfaceHigh,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
   emptyEmoji: { fontSize: 32 },
   emptyText: {
     fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text,
+    fontWeight: '600',
   },
   emptySubtext: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 20,
   },
 
   groupCard: {
-    backgroundColor: COLORS.glass,
-    borderRadius: 18,
+    borderRadius: 12,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
     padding: 16,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   groupTopRow: {
     flexDirection: 'row',
@@ -570,30 +595,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  groupInitial: { fontSize: 18, fontWeight: '800' },
+  groupInitial: { fontSize: 18, fontWeight: '700' },
   groupTextWrap: { flex: 1 },
   groupName: {
     fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text,
+    fontWeight: '600',
     marginBottom: 2,
   },
   groupMeta: {
     fontSize: 12,
-    color: COLORS.textSecondary,
   },
   groupStatsRight: {
     alignItems: 'flex-end',
   },
   groupTotal: {
     fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
+    fontWeight: '700',
     marginBottom: 2,
   },
   groupSettled: {
     fontSize: 11,
-    color: COLORS.textSecondary,
   },
   netRow: {
     flexDirection: 'row',
@@ -604,11 +625,10 @@ const styles = StyleSheet.create({
   },
   netLabel: {
     fontSize: 11,
-    color: COLORS.textSecondary,
   },
   netValue: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   groupActionRow: {
     flexDirection: 'row',
@@ -617,15 +637,12 @@ const styles = StyleSheet.create({
   settleUpBtn: {
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    backgroundColor: COLORS.surfaceHigh,
   },
   settleUpText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.text,
+    fontWeight: '600',
   },
 
   /* ── Budget Progress ─────────────────────────────────────── */
@@ -641,16 +658,13 @@ const styles = StyleSheet.create({
   budgetLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: COLORS.textSecondary,
   },
   budgetAmount: {
     fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.text,
+    fontWeight: '600',
   },
   budgetTrack: {
     height: 5,
-    backgroundColor: COLORS.surfaceHigher,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -662,25 +676,15 @@ const styles = StyleSheet.create({
   trackBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  trackBtnActive: {
-    borderColor: `${COLORS.groupColor}50`,
-    backgroundColor: `${COLORS.groupColor}15`,
   },
   trackBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  trackBtnTextActive: {
-    color: COLORS.groupColor,
   },
   memberCount: {
     fontSize: 11,
-    color: COLORS.textSecondary,
   },
   groupInfoRow: {
     flexDirection: 'row',
@@ -689,15 +693,12 @@ const styles = StyleSheet.create({
   },
   chevron: {
     fontSize: 22,
-    color: COLORS.textSecondary,
     marginLeft: 8,
   },
 
   /* ── Retention Banner (per group card) ───────────────────── */
   retentionBanner: {
-    backgroundColor: `${COLORS.warning}10`,
     borderTopWidth: 1,
-    borderTopColor: `${COLORS.warning}20`,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -706,7 +707,6 @@ const styles = StyleSheet.create({
   },
   retentionBannerText: {
     fontSize: 11,
-    color: COLORS.warning,
     lineHeight: 16,
   },
   retentionBannerActions: {
@@ -714,17 +714,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   retentionUpgradeBtn: {
-    backgroundColor: `${COLORS.primary}20`,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
   },
   retentionUpgradeText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
+    fontWeight: '600',
   },
   retentionDismissBtn: {
     paddingHorizontal: 12,
@@ -733,56 +730,52 @@ const styles = StyleSheet.create({
   retentionDismissText: {
     fontSize: 11,
     fontWeight: '600',
-    color: COLORS.textSecondary,
   },
 
   /* ── Soft Alert Modal ──────────────────────────────────── */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   modalContent: {
-    backgroundColor: '#131318',
     borderRadius: 24,
     padding: 28,
     width: '100%',
     maxWidth: 340,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   modalIconWrap: {
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: `${COLORS.warning}15`,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: `${COLORS.warning}25`,
   },
   modalIcon: {
     fontSize: 28,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text,
+    fontWeight: '700',
     marginBottom: 8,
   },
   modalDesc: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 24,
   },
   modalUpgradeBtn: {
-    backgroundColor: COLORS.primary,
     borderRadius: 12,
     paddingVertical: 14,
     width: '100%',
@@ -791,23 +784,20 @@ const styles = StyleSheet.create({
   },
   modalUpgradeBtnText: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0A0A0F',
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   modalSecondaryBtn: {
     borderRadius: 12,
     paddingVertical: 12,
     width: '100%',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceHigh,
     borderWidth: 1,
-    borderColor: COLORS.border,
     marginBottom: 6,
   },
   modalSecondaryBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text,
   },
   modalTertiaryBtn: {
     paddingVertical: 10,
@@ -815,17 +805,18 @@ const styles = StyleSheet.create({
   modalTertiaryBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textSecondary,
   },
 
   /* ── Overall Balance Summary ────────────────────────────── */
   balanceSummaryCard: {
-    backgroundColor: COLORS.glass,
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 16,
+    padding: 24,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   balanceSummaryRow: {
     flexDirection: 'row',
@@ -837,20 +828,18 @@ const styles = StyleSheet.create({
   },
   balanceStatLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
+    fontWeight: '600',
     letterSpacing: 1.5,
     marginBottom: 4,
   },
   balanceStatValue: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: -0.3,
   },
   balanceDivider: {
     width: 1,
     height: 36,
-    backgroundColor: COLORS.glassBorder,
     marginHorizontal: 12,
   },
   balanceNetRow: {
@@ -860,17 +849,15 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: COLORS.glassBorder,
     gap: 8,
   },
   balanceNetLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textSecondary,
   },
   balanceNetValue: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 
   archivedSection: { marginTop: 24 },
@@ -881,25 +868,24 @@ const styles = StyleSheet.create({
     bottom: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
     paddingHorizontal: 22,
     paddingVertical: 14,
-    borderRadius: 28,
-    elevation: 8,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   fabIcon: {
     color: '#FFFFFF',
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '700',
     marginRight: 6,
   },
   fabText: {
     color: '#FFFFFF',
-    fontWeight: '800',
+    fontWeight: '700',
     fontSize: 14,
     letterSpacing: 0.3,
   },
