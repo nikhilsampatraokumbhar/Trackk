@@ -23,6 +23,7 @@ import TrackerSelectionDialog from '../components/TrackerSelectionDialog';
 import UndoToast from '../components/UndoToast';
 import { checkOverdueSubscriptions, skipOverdueSubscription, removeOverdueSubscription, checkEMICompletions, OverdueSubscription, EMICompletionResult } from '../services/AutoDetectionService';
 import { COLORS, formatCurrency } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 import PressableScale from '../components/PressableScale';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -32,6 +33,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { groups } = useGroups();
   const { isPremium } = usePremium();
+  const { colors, isDark } = useTheme();
   const {
     trackerState, getActiveTrackers, pendingTransaction, pendingGroupTracker,
     pendingTargetTracker, clearPendingTransaction, addTransactionToTracker,
@@ -276,11 +278,11 @@ export default function HomeScreen() {
   const emiMonthly = emis.reduce((sum, e) => sum + e.amount, 0);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <Animated.ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
@@ -291,42 +293,42 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>{greeting()}</Text>
-          <Text style={styles.name}>{user?.displayName || 'User'}</Text>
-          <Text style={styles.contextSub}>{contextualSubtext}</Text>
+          <Text style={[styles.greeting, { color: colors.textSecondary }]}>{greeting()}</Text>
+          <Text style={[styles.name, { color: colors.text }]}>{user?.displayName || 'User'}</Text>
+          <Text style={[styles.contextSub, { color: colors.textLight }]}>{contextualSubtext}</Text>
         </View>
 
         {/* Active Trackers — inline section */}
         {activeTrackers.length > 0 && (
-          <View style={styles.trackersCard}>
+          <View style={[styles.trackersCard, { backgroundColor: colors.surface, borderColor: `${colors.success}20` }]}>
             <View style={styles.trackersHeader}>
               <View style={styles.trackersHeaderLeft}>
-                <View style={styles.trackerPulse} />
-                <Text style={styles.trackersTitle}>Active Trackers</Text>
+                <View style={[styles.trackerPulse, { backgroundColor: colors.success }]} />
+                <Text style={[styles.trackersTitle, { color: colors.text }]}>Active Trackers</Text>
               </View>
               <TouchableOpacity onPress={() => nav.navigate('TrackerSettings')} activeOpacity={0.7}>
-                <Text style={styles.trackersManage}>Manage</Text>
+                <Text style={[styles.trackersManage, { color: colors.primary }]}>Manage</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.trackersChips}>
               {activeTrackers.map(t => {
                 const isDefault = t.id === trackerState.defaultTrackerId;
-                const chipColor = t.type === 'personal' ? COLORS.personalColor
-                  : t.type === 'reimbursement' ? COLORS.reimbursementColor
-                  : COLORS.groupColor;
+                const chipColor = t.type === 'personal' ? colors.personalColor
+                  : t.type === 'reimbursement' ? colors.reimbursementColor
+                  : colors.groupColor;
                 return (
                   <TouchableOpacity
                     key={t.id}
                     style={[
                       styles.trackerChip,
-                      { borderColor: `${chipColor}40` },
+                      { borderColor: `${chipColor}40`, backgroundColor: colors.glass },
                       isDefault && { borderColor: chipColor, backgroundColor: `${chipColor}12` },
                     ]}
                     onPress={() => setDefaultTracker(t.id)}
                     activeOpacity={0.7}
                   >
                     <View style={[styles.trackerChipDot, { backgroundColor: chipColor }]} />
-                    <Text style={[styles.trackerChipText, isDefault && { color: chipColor, fontWeight: '700' }]}>{t.label}</Text>
+                    <Text style={[styles.trackerChipText, { color: colors.textSecondary }, isDefault && { color: chipColor, fontWeight: '700' }]}>{t.label}</Text>
                     {isDefault && <Text style={[styles.trackerDefaultBadge, { color: chipColor }]}>Default</Text>}
                   </TouchableOpacity>
                 );
@@ -341,12 +343,12 @@ export default function HomeScreen() {
         ) : (
           <Animated.View style={{ transform: [{ scale: heroScale }] }}>
             <LinearGradient
-              colors={['#1A1210', '#100C0A', COLORS.background]}
+              colors={isDark ? ['#1A1210', '#100C0A', colors.background] : [colors.surface, '#FFF8F5', colors.background]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.heroCard}
+              style={[styles.heroCard, { borderColor: colors.glassBorder }]}
             >
-              <View style={styles.heroGoldLine} />
+              <View style={[styles.heroGoldLine, { backgroundColor: colors.primary }]} />
 
               {/* Streak badge top-right */}
               {activeGoal && activeGoal.streak > 0 && (
@@ -356,9 +358,9 @@ export default function HomeScreen() {
                 </View>
               )}
 
-              <Text style={styles.heroLabel}>TOTAL SPENT</Text>
-              <AnimatedAmount value={totalSpent} style={styles.heroAmount} />
-              <Text style={styles.heroSub}>
+              <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>TOTAL SPENT</Text>
+              <AnimatedAmount value={totalSpent} style={[styles.heroAmount, { color: colors.text }]} />
+              <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
                 {monthCount > 0
                   ? `${monthCount} transactions this month`
                   : 'No transactions yet'}
@@ -391,49 +393,49 @@ export default function HomeScreen() {
         {/* Metrics Row — Today's Jar + This Month (no streak card) */}
         <View style={styles.metricsRow}>
           {/* Today's Budget / Savings Jar */}
-          <PressableScale style={styles.metricCard} onPress={() => nav.navigate('Goals')}>
+          <PressableScale style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => nav.navigate('Goals')}>
             <Text style={styles.metricIcon}>🏺</Text>
-            <Text style={styles.metricLabel}>TODAY'S JAR</Text>
+            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>TODAY'S JAR</Text>
             {activeGoal ? (
               <>
-                <Text style={[styles.metricValue, todaySpend > activeGoal.dailyBudget && { color: COLORS.danger }]}>
+                <Text style={[styles.metricValue, { color: colors.text }, todaySpend > activeGoal.dailyBudget && { color: colors.danger }]}>
                   {formatCurrency(savingsRemaining)}
                 </Text>
-                <Text style={styles.metricSub}>of {formatCurrency(activeGoal.dailyBudget)}</Text>
+                <Text style={[styles.metricSub, { color: colors.textSecondary }]}>of {formatCurrency(activeGoal.dailyBudget)}</Text>
               </>
             ) : (
               <>
-                <Text style={[styles.metricValue, { fontSize: 14, color: COLORS.textSecondary }]}>No goal set</Text>
-                <Text style={styles.metricSub}>Tap to create</Text>
+                <Text style={[styles.metricValue, { fontSize: 14, color: colors.textSecondary }]}>No goal set</Text>
+                <Text style={[styles.metricSub, { color: colors.textSecondary }]}>Tap to create</Text>
               </>
             )}
           </PressableScale>
 
           {/* This Month */}
-          <PressableScale style={styles.metricCard} onPress={() => (nav as any).navigate('Insights')}>
+          <PressableScale style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => (nav as any).navigate('Insights')}>
             <Text style={styles.metricIcon}>📊</Text>
-            <Text style={styles.metricLabel}>THIS MONTH</Text>
-            <Text style={styles.metricValue}>{formatCurrency(monthSpent)}</Text>
-            <Text style={styles.metricSub}>{monthCount} txns</Text>
+            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>THIS MONTH</Text>
+            <Text style={[styles.metricValue, { color: colors.text }]}>{formatCurrency(monthSpent)}</Text>
+            <Text style={[styles.metricSub, { color: colors.textSecondary }]}>{monthCount} txns</Text>
           </PressableScale>
         </View>
 
         {/* Review Expenses — always visible, premium-gated */}
         <PressableScale
-          style={styles.reviewCard}
+          style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: `${colors.personalColor}15` }]}
           onPress={() => nav.navigate('NightlyReview')}
         >
           <View style={styles.reviewLeft}>
             <View style={styles.reviewIconRow}>
               <Text style={styles.reviewEmoji}>🌙</Text>
               {!isPremium && (
-                <View style={styles.premiumBadge}>
+                <View style={[styles.premiumBadge, { backgroundColor: colors.primary }]}>
                   <Text style={styles.premiumBadgeText}>PRO</Text>
                 </View>
               )}
             </View>
-            <Text style={styles.reviewTitle}>Review Expenses</Text>
-            <Text style={styles.reviewSub}>
+            <Text style={[styles.reviewTitle, { color: colors.text }]}>Review Expenses</Text>
+            <Text style={[styles.reviewSub, { color: colors.textSecondary }]}>
               {pendingReviewCount > 0
                 ? `${pendingReviewCount} transaction${pendingReviewCount > 1 ? 's' : ''} to review`
                 : 'All caught up'}
@@ -448,75 +450,75 @@ export default function HomeScreen() {
 
         {/* Goal Budget Card */}
         {activeGoal && (
-          <PressableScale style={styles.goalBudgetCard} onPress={() => nav.navigate('Goals')}>
+          <PressableScale style={[styles.goalBudgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => nav.navigate('Goals')}>
             <View style={styles.goalBudgetLeft}>
-              <Text style={styles.goalBudgetLabel}>ACTIVE GOAL</Text>
-              <Text style={styles.goalBudgetName}>{activeGoal.name}</Text>
+              <Text style={[styles.goalBudgetLabel, { color: colors.textSecondary }]}>ACTIVE GOAL</Text>
+              <Text style={[styles.goalBudgetName, { color: colors.text }]}>{activeGoal.name}</Text>
             </View>
             <View style={styles.goalBudgetRight}>
-              <Text style={[styles.goalBudgetAmount, todaySpend > activeGoal.dailyBudget && { color: COLORS.danger }]}>
+              <Text style={[styles.goalBudgetAmount, { color: colors.success }, todaySpend > activeGoal.dailyBudget && { color: colors.danger }]}>
                 {formatCurrency(Math.max(activeGoal.dailyBudget - todaySpend, 0))}
               </Text>
-              <Text style={styles.goalBudgetSub}>left today</Text>
+              <Text style={[styles.goalBudgetSub, { color: colors.textSecondary }]}>left today</Text>
             </View>
           </PressableScale>
         )}
 
         {/* Subscriptions Card */}
         <PressableScale
-          style={styles.financeCard}
+          style={[styles.financeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => nav.navigate('Subscriptions')}
         >
           <View style={styles.financeLeft}>
             <Text style={styles.financeEmoji}>🔄</Text>
             <View>
-              <Text style={styles.financeTitle}>Subscriptions</Text>
-              <Text style={styles.financeSub}>
+              <Text style={[styles.financeTitle, { color: colors.text }]}>Subscriptions</Text>
+              <Text style={[styles.financeSub, { color: colors.textSecondary }]}>
                 {subscriptions.length > 0
                   ? `${subscriptions.length} active · ${formatCurrency(subsMonthly)}/mo`
                   : 'Track your subscriptions'}
               </Text>
             </View>
           </View>
-          <Text style={styles.financeArrow}>›</Text>
+          <Text style={[styles.financeArrow, { color: colors.textSecondary }]}>›</Text>
         </PressableScale>
 
         {/* Investments Card */}
         <PressableScale
-          style={styles.financeCard}
+          style={[styles.financeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => nav.navigate('Investments')}
         >
           <View style={styles.financeLeft}>
             <Text style={styles.financeEmoji}>📈</Text>
             <View>
-              <Text style={styles.financeTitle}>Investments</Text>
-              <Text style={styles.financeSub}>
+              <Text style={[styles.financeTitle, { color: colors.text }]}>Investments</Text>
+              <Text style={[styles.financeSub, { color: colors.textSecondary }]}>
                 {investments.length > 0
                   ? `${investments.length} active · ${formatCurrency(investMonthly)}/mo`
                   : 'Track your investments'}
               </Text>
             </View>
           </View>
-          <Text style={styles.financeArrow}>›</Text>
+          <Text style={[styles.financeArrow, { color: colors.textSecondary }]}>›</Text>
         </PressableScale>
 
         {/* EMIs Card */}
         <PressableScale
-          style={styles.financeCard}
+          style={[styles.financeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => nav.navigate('EMIs')}
         >
           <View style={styles.financeLeft}>
             <Text style={styles.financeEmoji}>🏦</Text>
             <View>
-              <Text style={styles.financeTitle}>EMIs</Text>
-              <Text style={styles.financeSub}>
+              <Text style={[styles.financeTitle, { color: colors.text }]}>EMIs</Text>
+              <Text style={[styles.financeSub, { color: colors.textSecondary }]}>
                 {emis.length > 0
                   ? `${emis.length} active · ${formatCurrency(emiMonthly)}/mo`
                   : 'Track your EMIs'}
               </Text>
             </View>
           </View>
-          <Text style={styles.financeArrow}>›</Text>
+          <Text style={[styles.financeArrow, { color: colors.textSecondary }]}>›</Text>
         </PressableScale>
 
         {/* Privacy Shield — subtle, hidden for premium users */}
@@ -593,7 +595,7 @@ export default function HomeScreen() {
 
       {/* Quick Add FAB */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
         onPress={() => nav.navigate('QuickAdd', undefined)}
         activeOpacity={0.8}
       >

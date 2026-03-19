@@ -12,6 +12,7 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { usePremium } from '../store/PremiumContext';
 import { COLORS, formatDate } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, changeLanguage } from '../i18n';
 import { CURRENCIES, getPreferredCurrency, setPreferredCurrency, getCurrencyInfo } from '../utils/currencies';
@@ -29,6 +30,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function ProfileScreen() {
   const nav = useNavigation<Nav>();
   const { user, updateProfile, signOut } = useAuth();
+  const { colors, isDark, toggleTheme } = useTheme();
   // Premium UI hidden during free launch — set to true to re-enable
   const SHOW_PREMIUM_UI = false;
   const { isPremium, isFamily, currentPlan, subscription, referralStats } = usePremium();
@@ -144,22 +146,22 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <LinearGradient
-          colors={['#1A1210', '#100C0A', COLORS.background]}
+          colors={isDark ? ['#1A1210', '#100C0A', colors.background] : [colors.surface, '#FFF8F5', colors.background]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.headerCard}
+          style={[styles.headerCard, { borderColor: colors.glassBorder }]}
         >
-          <View style={styles.headerGoldLine} />
+          <View style={[styles.headerGoldLine, { backgroundColor: colors.primary }]} />
 
           {/* Avatar */}
-          <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+          <View style={[styles.avatar, { backgroundColor: avatarColor, borderColor: `${colors.primary}40` }]}>
             <Text style={styles.avatarText}>{initial}</Text>
           </View>
 
@@ -167,18 +169,18 @@ export default function ProfileScreen() {
           {isEditingName ? (
             <View style={styles.editNameRow}>
               <TextInput
-                style={styles.nameInput}
+                style={[styles.nameInput, { color: colors.text, backgroundColor: colors.surfaceHigh, borderColor: colors.primary }]}
                 value={editName}
                 onChangeText={setEditName}
                 autoFocus
                 maxLength={30}
-                placeholderTextColor={COLORS.textSecondary}
-                selectionColor={COLORS.primary}
+                placeholderTextColor={colors.textSecondary}
+                selectionColor={colors.primary}
                 onSubmitEditing={handleSaveName}
                 returnKeyType="done"
               />
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveName}>
-                <Text style={styles.saveBtnText}>Save</Text>
+              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={handleSaveName}>
+                <Text style={[styles.saveBtnText, { color: isDark ? colors.background : '#FFF' }]}>Save</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -189,8 +191,8 @@ export default function ProfileScreen() {
               }}
               style={styles.nameRow}
             >
-              <Text style={styles.displayName}>{user?.displayName || 'User'}</Text>
-              <Text style={styles.editHint}>tap to edit</Text>
+              <Text style={[styles.displayName, { color: colors.text }]}>{user?.displayName || 'User'}</Text>
+              <Text style={[styles.editHint, { color: colors.textSecondary }]}>tap to edit</Text>
             </TouchableOpacity>
           )}
 
@@ -198,13 +200,58 @@ export default function ProfileScreen() {
           {user?.phone ? (
             <View style={styles.phoneRow}>
               <Text style={styles.phoneIcon}>📱</Text>
-              <Text style={styles.phoneText}>+91 {user.phone}</Text>
-              <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedText}>Verified</Text>
+              <Text style={[styles.phoneText, { color: colors.textSecondary }]}>+91 {user.phone}</Text>
+              <View style={[styles.verifiedBadge, { backgroundColor: `${colors.success}18`, borderColor: `${colors.success}30` }]}>
+                <Text style={[styles.verifiedText, { color: colors.success }]}>Verified</Text>
               </View>
             </View>
           ) : null}
         </LinearGradient>
+
+        {/* ── Theme Toggle ─────────────────────────────────────────── */}
+        <View style={[styles.sectionHeader, { marginTop: 0 }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>APPEARANCE</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.premiumCard, { backgroundColor: colors.surfaceHigh, borderColor: colors.glassBorder }]}
+          onPress={toggleTheme}
+          activeOpacity={0.8}
+        >
+          <View style={styles.premiumRow}>
+            <View style={[styles.premiumIconWrap, { backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}30` }]}>
+              <Text style={styles.premiumIcon}>{isDark ? '🌙' : '☀️'}</Text>
+            </View>
+            <View style={styles.premiumInfo}>
+              <Text style={[styles.premiumTitle, { color: colors.text }]}>
+                {isDark ? 'Dark Mode' : 'Light Mode'}
+              </Text>
+              <Text style={[styles.premiumSubtitle, { color: colors.textSecondary }]}>
+                Tap to switch to {isDark ? 'light' : 'dark'} theme
+              </Text>
+            </View>
+            <View style={[
+              {
+                width: 50, height: 28, borderRadius: 14, justifyContent: 'center',
+                backgroundColor: isDark ? colors.primary : colors.surfaceHigher,
+                paddingHorizontal: 3,
+              },
+            ]}>
+              <View style={[
+                {
+                  width: 22, height: 22, borderRadius: 11,
+                  backgroundColor: '#FFFFFF',
+                  alignSelf: isDark ? 'flex-end' : 'flex-start',
+                  elevation: 2,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 2,
+                },
+              ]} />
+            </View>
+          </View>
+        </TouchableOpacity>
 
         {/* ── Premium Status (hidden during free launch) ─────────── */}
         {SHOW_PREMIUM_UI && (
@@ -292,11 +339,11 @@ export default function ProfileScreen() {
 
         {/* ── Connect Email ─────────────────────────────────────── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>EMAIL TRANSACTION DETECTION</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>EMAIL TRANSACTION DETECTION</Text>
         </View>
 
-        <View style={styles.emailCard}>
-          <Text style={styles.emailCardDesc}>
+        <View style={[styles.emailCard, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+          <Text style={[styles.emailCardDesc, { color: colors.textSecondary }]}>
             We only connect your email if you allow us to — and only for detecting transaction alerts. Your data stays private, is never shared, and you can disconnect and delete it anytime.
           </Text>
 
@@ -306,18 +353,18 @@ export default function ProfileScreen() {
             const color = getProviderColor(provider);
 
             return (
-              <View key={provider} style={styles.emailProviderRow}>
+              <View key={provider} style={[styles.emailProviderRow, { borderTopColor: colors.border }]}>
                 <View style={[styles.emailProviderIcon, { backgroundColor: `${color}18`, borderColor: `${color}30` }]}>
                   <Text style={[styles.emailProviderLetter, { color }]}>
                     {provider === 'gmail' ? 'G' : provider === 'outlook' ? 'O' : 'Y'}
                   </Text>
                 </View>
                 <View style={styles.emailProviderInfo}>
-                  <Text style={styles.emailProviderName}>{getProviderDisplayName(provider)}</Text>
+                  <Text style={[styles.emailProviderName, { color: colors.text }]}>{getProviderDisplayName(provider)}</Text>
                   {email ? (
-                    <Text style={styles.emailProviderEmail} numberOfLines={1}>{email}</Text>
+                    <Text style={[styles.emailProviderEmail, { color: colors.success }]} numberOfLines={1}>{email}</Text>
                   ) : (
-                    <Text style={styles.emailProviderStatus}>Not connected</Text>
+                    <Text style={[styles.emailProviderStatus, { color: colors.textSecondary }]}>Not connected</Text>
                   )}
                 </View>
                 {isConnecting ? (
@@ -350,68 +397,69 @@ export default function ProfileScreen() {
 
         {/* Privacy & Data Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>PRIVACY & DATA</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>PRIVACY & DATA</Text>
         </View>
 
-        <View style={styles.privacyCard}>
+        <View style={[styles.privacyCard, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
           <View style={styles.privacyHeader}>
-            <View style={styles.shieldIcon}>
+            <View style={[styles.shieldIcon, { backgroundColor: `${colors.success}18`, borderColor: `${colors.success}30` }]}>
               <Text style={styles.shieldEmoji}>🛡️</Text>
             </View>
-            <Text style={styles.privacyTitle}>Your data is safe</Text>
+            <Text style={[styles.privacyTitle, { color: colors.success }]}>Your data is safe</Text>
           </View>
-          <View style={styles.privacyDivider} />
-          <Text style={styles.privacyText}>
+          <View style={[styles.privacyDivider, { backgroundColor: colors.border }]} />
+          <Text style={[styles.privacyText, { color: colors.textSecondary }]}>
             Trackk only wakes up when an expense happens — no background
             activity, no battery drain. Your data stays on your device and
             you can switch off tracking anytime.
           </Text>
           <View style={styles.privacyBadgeRow}>
-            <View style={styles.privacyBadge}>
-              <Text style={styles.privacyBadgeText}>Zero Battery Drain</Text>
+            <View style={[styles.privacyBadge, { backgroundColor: `${colors.success}15`, borderColor: `${colors.success}25` }]}>
+              <Text style={[styles.privacyBadgeText, { color: colors.success }]}>Zero Battery Drain</Text>
             </View>
-            <View style={styles.privacyBadge}>
-              <Text style={styles.privacyBadgeText}>Private & Secure</Text>
+            <View style={[styles.privacyBadge, { backgroundColor: `${colors.success}15`, borderColor: `${colors.success}25` }]}>
+              <Text style={[styles.privacyBadgeText, { color: colors.success }]}>Private & Secure</Text>
             </View>
           </View>
         </View>
 
         {/* Language Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('profile.language').toUpperCase()}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('profile.language').toUpperCase()}</Text>
         </View>
 
         <TouchableOpacity
-          style={styles.premiumCard}
+          style={[styles.premiumCard, { backgroundColor: colors.surfaceHigh, borderColor: colors.glassBorder }]}
           onPress={() => setShowLanguagePicker(!showLanguagePicker)}
           activeOpacity={0.8}
         >
           <View style={styles.premiumRow}>
-            <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.groupColor}18` }]}>
+            <View style={[styles.premiumIconWrap, { backgroundColor: `${colors.groupColor}18`, borderColor: `${colors.groupColor}30` }]}>
               <Text style={styles.premiumIcon}>
                 {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.flag || '🌐'}
               </Text>
             </View>
             <View style={styles.premiumInfo}>
-              <Text style={styles.premiumTitle}>
+              <Text style={[styles.premiumTitle, { color: colors.text }]}>
                 {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.name || 'English'}
               </Text>
-              <Text style={styles.premiumSubtitle}>
+              <Text style={[styles.premiumSubtitle, { color: colors.textSecondary }]}>
                 {SUPPORTED_LANGUAGES.find(l => l.code === i18n.language)?.englishName || 'English'}
               </Text>
             </View>
-            <Text style={styles.chevron}>{showLanguagePicker ? '‹' : '›'}</Text>
+            <Text style={[styles.chevron, { color: colors.textSecondary }]}>{showLanguagePicker ? '‹' : '›'}</Text>
           </View>
         </TouchableOpacity>
 
         {showLanguagePicker && (
-          <View style={[styles.emailCard, { marginTop: 8 }]}>
+          <View style={[styles.emailCard, { marginTop: 8, backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
             {SUPPORTED_LANGUAGES.map(lang => (
               <TouchableOpacity
                 key={lang.code}
                 style={[
                   styles.emailProviderRow,
-                  i18n.language === lang.code && { backgroundColor: `${COLORS.primary}10` },
+                  { borderTopColor: colors.border },
+                  i18n.language === lang.code && { backgroundColor: `${colors.primary}10` },
                 ]}
                 onPress={async () => {
                   await changeLanguage(lang.code);
@@ -421,11 +469,11 @@ export default function ProfileScreen() {
               >
                 <Text style={{ fontSize: 20, marginRight: 12 }}>{lang.flag}</Text>
                 <View style={styles.emailProviderInfo}>
-                  <Text style={styles.emailProviderName}>{lang.name}</Text>
-                  <Text style={styles.emailProviderStatus}>{lang.englishName}</Text>
+                  <Text style={[styles.emailProviderName, { color: colors.text }]}>{lang.name}</Text>
+                  <Text style={[styles.emailProviderStatus, { color: colors.textSecondary }]}>{lang.englishName}</Text>
                 </View>
                 {i18n.language === lang.code && (
-                  <Text style={{ color: COLORS.primary, fontWeight: '800' }}>✓</Text>
+                  <Text style={{ color: colors.primary, fontWeight: '800' }}>✓</Text>
                 )}
               </TouchableOpacity>
             ))}
@@ -434,40 +482,41 @@ export default function ProfileScreen() {
 
         {/* Currency Section */}
         <View style={[styles.sectionHeader, { marginTop: 12 }]}>
-          <Text style={styles.sectionTitle}>{t('profile.currency').toUpperCase()}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('profile.currency').toUpperCase()}</Text>
         </View>
 
         <TouchableOpacity
-          style={styles.premiumCard}
+          style={[styles.premiumCard, { backgroundColor: colors.surfaceHigh, borderColor: colors.glassBorder }]}
           onPress={() => setShowCurrencyPicker(!showCurrencyPicker)}
           activeOpacity={0.8}
         >
           <View style={styles.premiumRow}>
-            <View style={[styles.premiumIconWrap, { backgroundColor: `${COLORS.warning}18` }]}>
+            <View style={[styles.premiumIconWrap, { backgroundColor: `${colors.warning}18`, borderColor: `${colors.warning}30` }]}>
               <Text style={styles.premiumIcon}>
                 {getCurrencyInfo(currentCurrency).flag}
               </Text>
             </View>
             <View style={styles.premiumInfo}>
-              <Text style={styles.premiumTitle}>
+              <Text style={[styles.premiumTitle, { color: colors.text }]}>
                 {getCurrencyInfo(currentCurrency).symbol} {getCurrencyInfo(currentCurrency).code}
               </Text>
-              <Text style={styles.premiumSubtitle}>
+              <Text style={[styles.premiumSubtitle, { color: colors.textSecondary }]}>
                 {getCurrencyInfo(currentCurrency).name}
               </Text>
             </View>
-            <Text style={styles.chevron}>{showCurrencyPicker ? '‹' : '›'}</Text>
+            <Text style={[styles.chevron, { color: colors.textSecondary }]}>{showCurrencyPicker ? '‹' : '›'}</Text>
           </View>
         </TouchableOpacity>
 
         {showCurrencyPicker && (
-          <View style={[styles.emailCard, { marginTop: 8 }]}>
+          <View style={[styles.emailCard, { marginTop: 8, backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
             {CURRENCIES.map(curr => (
               <TouchableOpacity
                 key={curr.code}
                 style={[
                   styles.emailProviderRow,
-                  currentCurrency === curr.code && { backgroundColor: `${COLORS.primary}10` },
+                  { borderTopColor: colors.border },
+                  currentCurrency === curr.code && { backgroundColor: `${colors.primary}10` },
                 ]}
                 onPress={async () => {
                   await setPreferredCurrency(curr.code);
@@ -478,11 +527,11 @@ export default function ProfileScreen() {
               >
                 <Text style={{ fontSize: 20, marginRight: 12 }}>{curr.flag}</Text>
                 <View style={styles.emailProviderInfo}>
-                  <Text style={styles.emailProviderName}>{curr.symbol} {curr.code}</Text>
-                  <Text style={styles.emailProviderStatus}>{curr.name}</Text>
+                  <Text style={[styles.emailProviderName, { color: colors.text }]}>{curr.symbol} {curr.code}</Text>
+                  <Text style={[styles.emailProviderStatus, { color: colors.textSecondary }]}>{curr.name}</Text>
                 </View>
                 {currentCurrency === curr.code && (
-                  <Text style={{ color: COLORS.primary, fontWeight: '800' }}>✓</Text>
+                  <Text style={{ color: colors.primary, fontWeight: '800' }}>✓</Text>
                 )}
               </TouchableOpacity>
             ))}
@@ -491,27 +540,27 @@ export default function ProfileScreen() {
 
         {/* About Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('profile.about').toUpperCase()}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('profile.about').toUpperCase()}</Text>
         </View>
 
-        <View style={styles.aboutCard}>
+        <View style={[styles.aboutCard, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
           <TouchableOpacity style={styles.aboutRow} onPress={handleVersionTap} activeOpacity={0.7}>
-            <Text style={styles.aboutLabel}>App Version</Text>
-            <Text style={styles.aboutValue}>1.0.0{devMode ? ' (Dev)' : ''}</Text>
+            <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>App Version</Text>
+            <Text style={[styles.aboutValue, { color: colors.text }]}>1.0.0{devMode ? ' (Dev)' : ''}</Text>
           </TouchableOpacity>
-          <View style={styles.aboutDivider} />
+          <View style={[styles.aboutDivider, { backgroundColor: colors.border }]} />
           <View style={styles.aboutRow}>
-            <Text style={styles.aboutLabel}>Storage</Text>
-            <Text style={styles.aboutValue}>Personal data local, groups synced via cloud</Text>
+            <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>Storage</Text>
+            <Text style={[styles.aboutValue, { color: colors.text }]}>Personal data local, groups synced via cloud</Text>
           </View>
         </View>
 
         {/* Backup & Restore */}
-        <View style={styles.dataSection}>
-          <Text style={styles.dataSectionTitle}>DATA</Text>
+        <View style={[styles.dataSection, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+          <Text style={[styles.dataSectionTitle, { color: colors.textSecondary }]}>DATA</Text>
 
           <TouchableOpacity
-            style={styles.settingRow}
+            style={[styles.settingRow, { borderBottomColor: colors.border }]}
             onPress={async () => {
               try {
                 await backupAllData();
@@ -522,17 +571,17 @@ export default function ProfileScreen() {
             }}
             activeOpacity={0.7}
           >
-            <View style={[styles.settingIcon, { backgroundColor: `${COLORS.success}15` }]}>
+            <View style={[styles.settingIcon, { backgroundColor: `${colors.success}15` }]}>
               <Text style={styles.settingEmoji}>💾</Text>
             </View>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Backup Data</Text>
-              <Text style={styles.settingSub}>Export all personal data as JSON</Text>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>Backup Data</Text>
+              <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Export all personal data as JSON</Text>
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.settingRow}
+            style={[styles.settingRow, { borderBottomColor: colors.border }]}
             onPress={async () => {
               Alert.alert(
                 'Restore Backup',
@@ -558,19 +607,19 @@ export default function ProfileScreen() {
             }}
             activeOpacity={0.7}
           >
-            <View style={[styles.settingIcon, { backgroundColor: `${COLORS.warning}15` }]}>
+            <View style={[styles.settingIcon, { backgroundColor: `${colors.warning}15` }]}>
               <Text style={styles.settingEmoji}>📥</Text>
             </View>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Restore Backup</Text>
-              <Text style={styles.settingSub}>Import data from a backup file</Text>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>Restore Backup</Text>
+              <Text style={[styles.settingSub, { color: colors.textSecondary }]}>Import data from a backup file</Text>
             </View>
           </TouchableOpacity>
         </View>
 
         {/* Sign Out */}
         <TouchableOpacity
-          style={styles.signOutBtn}
+          style={[styles.signOutBtn, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}
           onPress={() => {
             Alert.alert(
               'Sign Out',
@@ -586,12 +635,12 @@ export default function ProfileScreen() {
           }}
           activeOpacity={0.8}
         >
-          <Text style={styles.signOutBtnText}>Sign Out</Text>
+          <Text style={[styles.signOutBtnText, { color: colors.textSecondary }]}>Sign Out</Text>
         </TouchableOpacity>
 
         {/* Delete Account */}
         <TouchableOpacity
-          style={styles.deleteAccountBtn}
+          style={[styles.deleteAccountBtn, { backgroundColor: `${colors.danger}08`, borderColor: `${colors.danger}20` }]}
           onPress={() => {
             Alert.alert(
               'Delete Account',
@@ -628,7 +677,7 @@ export default function ProfileScreen() {
           }}
           activeOpacity={0.8}
         >
-          <Text style={styles.deleteAccountBtnText}>Delete Account</Text>
+          <Text style={[styles.deleteAccountBtnText, { color: colors.danger }]}>Delete Account</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />

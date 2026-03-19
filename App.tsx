@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
@@ -7,6 +7,7 @@ import { GroupProvider, useGroups } from './src/store/GroupContext';
 import { TrackerProvider } from './src/store/TrackerContext';
 import { PremiumProvider } from './src/store/PremiumContext';
 import { NetworkProvider } from './src/store/NetworkContext';
+import { ThemeProvider, useTheme } from './src/store/ThemeContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { registerBackgroundHandler } from './src/services/NotificationService';
 import { setupReminderChannel, checkAndSendReminders } from './src/services/DebtReminderService';
@@ -14,6 +15,7 @@ import { getGroupTransactions } from './src/services/StorageService';
 import { calculateDebts } from './src/services/DebtCalculator';
 import SplashScreen from './src/components/SplashScreen';
 import OfflineBanner from './src/components/OfflineBanner';
+import AppTour, { shouldShowTour } from './src/components/AppTour';
 
 import { COLORS } from './src/utils/helpers';
 import './src/i18n'; // Initialize i18n
@@ -26,6 +28,8 @@ registerBackgroundHandler();
 function AppContent() {
   const { user, loading, isAuthenticated } = useAuth();
   const { groups } = useGroups();
+  const { isDark } = useTheme();
+  const [showTour, setShowTour] = useState(false);
 
   // Load saved language and currency on app start
   useEffect(() => {
@@ -33,6 +37,15 @@ function AppContent() {
     loadSavedCurrency();
     fetchExchangeRates();
   }, []);
+
+  // Check if we should show the app tour after auth
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      shouldShowTour().then(show => {
+        if (show) setShowTour(true);
+      });
+    }
+  }, [isAuthenticated, user?.id]);
 
   // Set up gentle debt reminders on app open
   useEffect(() => {
@@ -73,6 +86,7 @@ function AppContent() {
         <View style={{ flex: 1 }}>
           <AppNavigator />
           <OfflineBanner />
+          <AppTour visible={showTour} onComplete={() => setShowTour(false)} />
         </View>
       </TrackerProvider>
     </PremiumProvider>
@@ -81,16 +95,23 @@ function AppContent() {
 
 
 
+function StatusBarWrapper() {
+  const { isDark } = useTheme();
+  return <StatusBar style={isDark ? 'light' : 'dark'} />;
+}
+
 export default function App() {
   return (
-    <NetworkProvider>
-      <AuthProvider>
-        <GroupProvider>
-          <StatusBar style="light" />
-          <AppContent />
-        </GroupProvider>
-      </AuthProvider>
-    </NetworkProvider>
+    <ThemeProvider>
+      <NetworkProvider>
+        <AuthProvider>
+          <GroupProvider>
+            <StatusBarWrapper />
+            <AppContent />
+          </GroupProvider>
+        </AuthProvider>
+      </NetworkProvider>
+    </ThemeProvider>
   );
 }
 
