@@ -1,6 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
-import { COLORS } from '../utils/helpers';
+import { Switch } from 'react-native-paper';
+import { useTheme } from '../store/ThemeContext';
 
 interface Props {
   label: string;
@@ -11,50 +12,45 @@ interface Props {
 }
 
 export default function TrackerToggle({ label, subtitle, isActive, onToggle, color }: Props) {
-  const activeColor = color || COLORS.primary;
+  const { colors } = useTheme();
+  const activeColor = color || colors.primary;
 
   return (
     <TouchableOpacity
-      style={[styles.container, isActive && { borderColor: `${activeColor}25` }]}
+      style={[styles.container, {
+        borderColor: isActive ? `${activeColor}25` : colors.border,
+        backgroundColor: colors.surface,
+      }]}
       onPress={onToggle}
       activeOpacity={0.7}
     >
       <View style={styles.left}>
-        {/* Icon with line-style icon feel */}
+        {/* Icon with dot indicator */}
         <View style={[
           styles.iconWrap,
-          { backgroundColor: isActive ? `${activeColor}15` : COLORS.glassHigh },
+          { backgroundColor: isActive ? `${activeColor}12` : colors.surfaceHigh },
         ]}>
           <View style={[
             styles.dot,
-            { backgroundColor: isActive ? activeColor : COLORS.textLight },
+            { backgroundColor: isActive ? activeColor : colors.textLight },
           ]} />
         </View>
 
         <View style={styles.textWrap}>
           {label ? (
-            <Text style={[styles.label, isActive && { color: COLORS.text }]}>{label}</Text>
+            <Text style={[styles.label, { color: isActive ? colors.text : colors.textSecondary }]}>{label}</Text>
           ) : null}
           {subtitle ? (
-            <Text style={styles.subtitle}>{subtitle}</Text>
+            <Text style={[styles.subtitle, { color: colors.textLight }]}>{subtitle}</Text>
           ) : null}
         </View>
       </View>
 
-      {/* Hume-style circle toggle */}
-      <View style={[
-        styles.toggleTrack,
-        isActive
-          ? { backgroundColor: `${activeColor}20`, borderColor: `${activeColor}30` }
-          : { backgroundColor: COLORS.glass, borderColor: COLORS.glassBorder },
-      ]}>
-        <View style={[
-          styles.toggleThumb,
-          isActive
-            ? { backgroundColor: activeColor, transform: [{ translateX: 16 }] }
-            : { backgroundColor: COLORS.textLight, transform: [{ translateX: 0 }] },
-        ]} />
-      </View>
+      <Switch
+        value={isActive}
+        onValueChange={onToggle}
+        color={activeColor}
+      />
     </TouchableOpacity>
   );
 }
@@ -66,10 +62,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    backgroundColor: COLORS.glass,
     marginBottom: 10,
   },
   left: {
@@ -94,25 +88,10 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 15,
     fontWeight: '600',
-    color: COLORS.textSecondary,
   },
   subtitle: {
     fontSize: 11,
-    color: COLORS.textLight,
     marginTop: 2,
     letterSpacing: 0.2,
-  },
-  toggleTrack: {
-    width: 42,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  toggleThumb: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
   },
 });

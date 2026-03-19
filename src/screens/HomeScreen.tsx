@@ -4,7 +4,6 @@ import {
   RefreshControl, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, AppState, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -18,11 +17,12 @@ import { getTodayPendingCount } from '../services/TransactionSignalEngine';
 import { Transaction, SavingsGoal, UserSubscriptionItem, InvestmentItem, EMIItem } from '../models/types';
 import AnimatedAmount from '../components/AnimatedAmount';
 import { HeroCardSkeleton } from '../components/SkeletonLoader';
-import ActiveTrackerBanner from '../components/ActiveTrackerBanner';
+// ActiveTrackerBanner removed — trackers now shown inline in scroll view
 import TrackerSelectionDialog from '../components/TrackerSelectionDialog';
 import UndoToast from '../components/UndoToast';
 import { checkOverdueSubscriptions, skipOverdueSubscription, removeOverdueSubscription, checkEMICompletions, OverdueSubscription, EMICompletionResult } from '../services/AutoDetectionService';
 import { COLORS, formatCurrency } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 import PressableScale from '../components/PressableScale';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -32,10 +32,11 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { groups } = useGroups();
   const { isPremium } = usePremium();
+  const { colors, isDark } = useTheme();
   const {
     trackerState, getActiveTrackers, pendingTransaction, pendingGroupTracker,
     pendingTargetTracker, clearPendingTransaction, addTransactionToTracker,
-    transactionVersion,
+    transactionVersion, setDefaultTracker,
   } = useTracker();
 
   const [totalSpent, setTotalSpent] = useState(0);
@@ -113,8 +114,7 @@ export default function HomeScreen() {
   }, [pendingTransaction, pendingTargetTracker, pendingGroupTracker]);
 
   const loadTransactions = useCallback(async () => {
-    const all = await getTransactions();
-    const personalOnly = all.filter(t => !t.groupId);
+    const personalOnly = await getTransactions('personal');
     setTotalSpent(personalOnly.reduce((s, t) => s + t.amount, 0));
 
     const now = new Date();
@@ -277,16 +277,11 @@ export default function HomeScreen() {
   const emiMonthly = emis.reduce((sum, e) => sum + e.amount, 0);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ActiveTrackerBanner
-        activeTrackers={activeTrackers}
-        onManage={() => nav.navigate('TrackerSettings')}
-      />
-
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <Animated.ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
@@ -297,35 +292,69 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>{greeting()}</Text>
-          <Text style={styles.name}>{user?.displayName || 'User'}</Text>
-          <Text style={styles.contextSub}>{contextualSubtext}</Text>
+          <Text style={[styles.greeting, { color: colors.textSecondary }]}>{greeting()}</Text>
+          <Text style={[styles.name, { color: colors.text }]}>{user?.displayName || 'User'}</Text>
+          <Text style={[styles.contextSub, { color: colors.textLight }]}>{contextualSubtext}</Text>
         </View>
+
+        {/* Active Trackers — inline section */}
+        {activeTrackers.length > 0 && (
+          <View style={[styles.trackersCard, { backgroundColor: colors.surface, borderColor: `${colors.success}20` }]}>
+            <View style={styles.trackersHeader}>
+              <View style={styles.trackersHeaderLeft}>
+                <View style={[styles.trackerPulse, { backgroundColor: colors.success }]} />
+                <Text style={[styles.trackersTitle, { color: colors.text }]}>Active Trackers</Text>
+              </View>
+              <TouchableOpacity onPress={() => nav.navigate('TrackerSettings')} activeOpacity={0.7}>
+                <Text style={[styles.trackersManage, { color: colors.primary }]}>Manage</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.trackersChips}>
+              {activeTrackers.map(t => {
+                const isDefault = t.id === trackerState.defaultTrackerId;
+                const chipColor = t.type === 'personal' ? colors.personalColor
+                  : t.type === 'reimbursement' ? colors.reimbursementColor
+                  : colors.groupColor;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[
+                      styles.trackerChip,
+                      { borderColor: `${chipColor}40`, backgroundColor: colors.glass },
+                      isDefault && { borderColor: chipColor, backgroundColor: `${chipColor}12` },
+                    ]}
+                    onPress={() => setDefaultTracker(t.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.trackerChipDot, { backgroundColor: chipColor }]} />
+                    <Text style={[styles.trackerChipText, { color: colors.textSecondary }, isDefault && { color: chipColor, fontWeight: '700' }]}>{t.label}</Text>
+                    {isDefault && <Text style={[styles.trackerDefaultBadge, { color: chipColor }]}>Default</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         {/* Hero card — Total Spent with streak on top-right */}
         {loading ? (
           <HeroCardSkeleton />
         ) : (
           <Animated.View style={{ transform: [{ scale: heroScale }] }}>
-            <LinearGradient
-              colors={['#1A1210', '#100C0A', COLORS.background]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroCard}
-            >
-              <View style={styles.heroGoldLine} />
+            <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.heroGoldLine, { backgroundColor: colors.primary }]} />
 
               {/* Streak badge top-right */}
               {activeGoal && activeGoal.streak > 0 && (
-                <View style={styles.streakBadge}>
+                <View style={[styles.streakBadge, { backgroundColor: `${colors.primary}12` }]}>
                   <Text style={styles.streakIcon}>🔥</Text>
-                  <Text style={styles.streakText}>{activeGoal.streak}d</Text>
+                  <Text style={[styles.streakText, { color: colors.primary }]}>{activeGoal.streak}d</Text>
                 </View>
               )}
 
-              <Text style={styles.heroLabel}>TOTAL SPENT</Text>
-              <AnimatedAmount value={totalSpent} style={styles.heroAmount} />
-              <Text style={styles.heroSub}>
+              <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>TOTAL SPENT</Text>
+              <AnimatedAmount value={totalSpent} style={[styles.heroAmount, { color: colors.text }]} />
+              <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
                 {monthCount > 0
                   ? `${monthCount} transactions this month`
                   : 'No transactions yet'}
@@ -333,74 +362,74 @@ export default function HomeScreen() {
 
               {budgetStatus ? (
                 <TouchableOpacity onPress={openBudgetModal} activeOpacity={0.7}>
-                  <View style={styles.budgetInline}>
+                  <View style={[styles.budgetInline, { borderTopColor: colors.border }]}>
                     <View style={styles.budgetRow}>
                       <Text style={[styles.budgetMessage, { color: budgetStatus.color }]}>{budgetStatus.message}</Text>
-                      <Text style={styles.budgetDetail}>{formatCurrency(Math.max(budgetStatus.budget.amount - budgetStatus.spent, 0))} left</Text>
+                      <Text style={[styles.budgetDetail, { color: colors.textSecondary }]}>{formatCurrency(Math.max(budgetStatus.budget.amount - budgetStatus.spent, 0))} left</Text>
                     </View>
-                    <View style={styles.budgetTrack}>
+                    <View style={[styles.budgetTrack, { backgroundColor: colors.surfaceHigh }]}>
                       <View style={[styles.budgetFill, { width: `${Math.min(budgetStatus.percentage, 100)}%`, backgroundColor: budgetStatus.color }]} />
                     </View>
-                    <Text style={styles.budgetEditHint}>Tap to edit budget</Text>
+                    <Text style={[styles.budgetEditHint, { color: colors.textLight }]}>Tap to edit budget</Text>
                   </View>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity onPress={openBudgetModal} activeOpacity={0.7}>
-                  <View style={styles.budgetInline}>
-                    <Text style={styles.setBudgetText}>+ Set monthly budget</Text>
+                  <View style={[styles.budgetInline, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.setBudgetText, { color: colors.primary }]}>+ Set monthly budget</Text>
                   </View>
                 </TouchableOpacity>
               )}
-            </LinearGradient>
+            </View>
           </Animated.View>
         )}
 
         {/* Metrics Row — Today's Jar + This Month (no streak card) */}
         <View style={styles.metricsRow}>
           {/* Today's Budget / Savings Jar */}
-          <PressableScale style={styles.metricCard} onPress={() => nav.navigate('Goals')}>
+          <PressableScale style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => nav.navigate('Goals')}>
             <Text style={styles.metricIcon}>🏺</Text>
-            <Text style={styles.metricLabel}>TODAY'S JAR</Text>
+            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>TODAY'S JAR</Text>
             {activeGoal ? (
               <>
-                <Text style={[styles.metricValue, todaySpend > activeGoal.dailyBudget && { color: COLORS.danger }]}>
+                <Text style={[styles.metricValue, { color: colors.text }, todaySpend > activeGoal.dailyBudget && { color: colors.danger }]}>
                   {formatCurrency(savingsRemaining)}
                 </Text>
-                <Text style={styles.metricSub}>of {formatCurrency(activeGoal.dailyBudget)}</Text>
+                <Text style={[styles.metricSub, { color: colors.textSecondary }]}>of {formatCurrency(activeGoal.dailyBudget)}</Text>
               </>
             ) : (
               <>
-                <Text style={[styles.metricValue, { fontSize: 14, color: COLORS.textSecondary }]}>No goal set</Text>
-                <Text style={styles.metricSub}>Tap to create</Text>
+                <Text style={[styles.metricValue, { fontSize: 14, color: colors.textSecondary }]}>No goal set</Text>
+                <Text style={[styles.metricSub, { color: colors.textSecondary }]}>Tap to create</Text>
               </>
             )}
           </PressableScale>
 
           {/* This Month */}
-          <PressableScale style={styles.metricCard} onPress={() => (nav as any).navigate('Insights')}>
+          <PressableScale style={[styles.metricCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => (nav as any).navigate('Insights')}>
             <Text style={styles.metricIcon}>📊</Text>
-            <Text style={styles.metricLabel}>THIS MONTH</Text>
-            <Text style={styles.metricValue}>{formatCurrency(monthSpent)}</Text>
-            <Text style={styles.metricSub}>{monthCount} txns</Text>
+            <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>THIS MONTH</Text>
+            <Text style={[styles.metricValue, { color: colors.text }]}>{formatCurrency(monthSpent)}</Text>
+            <Text style={[styles.metricSub, { color: colors.textSecondary }]}>{monthCount} txns</Text>
           </PressableScale>
         </View>
 
         {/* Review Expenses — always visible, premium-gated */}
         <PressableScale
-          style={styles.reviewCard}
+          style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: `${colors.personalColor}15` }]}
           onPress={() => nav.navigate('NightlyReview')}
         >
           <View style={styles.reviewLeft}>
             <View style={styles.reviewIconRow}>
               <Text style={styles.reviewEmoji}>🌙</Text>
               {!isPremium && (
-                <View style={styles.premiumBadge}>
+                <View style={[styles.premiumBadge, { backgroundColor: colors.primary }]}>
                   <Text style={styles.premiumBadgeText}>PRO</Text>
                 </View>
               )}
             </View>
-            <Text style={styles.reviewTitle}>Review Expenses</Text>
-            <Text style={styles.reviewSub}>
+            <Text style={[styles.reviewTitle, { color: colors.text }]}>Review Expenses</Text>
+            <Text style={[styles.reviewSub, { color: colors.textSecondary }]}>
               {pendingReviewCount > 0
                 ? `${pendingReviewCount} transaction${pendingReviewCount > 1 ? 's' : ''} to review`
                 : 'All caught up'}
@@ -415,82 +444,82 @@ export default function HomeScreen() {
 
         {/* Goal Budget Card */}
         {activeGoal && (
-          <PressableScale style={styles.goalBudgetCard} onPress={() => nav.navigate('Goals')}>
+          <PressableScale style={[styles.goalBudgetCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => nav.navigate('Goals')}>
             <View style={styles.goalBudgetLeft}>
-              <Text style={styles.goalBudgetLabel}>ACTIVE GOAL</Text>
-              <Text style={styles.goalBudgetName}>{activeGoal.name}</Text>
+              <Text style={[styles.goalBudgetLabel, { color: colors.textSecondary }]}>ACTIVE GOAL</Text>
+              <Text style={[styles.goalBudgetName, { color: colors.text }]}>{activeGoal.name}</Text>
             </View>
             <View style={styles.goalBudgetRight}>
-              <Text style={[styles.goalBudgetAmount, todaySpend > activeGoal.dailyBudget && { color: COLORS.danger }]}>
+              <Text style={[styles.goalBudgetAmount, { color: colors.success }, todaySpend > activeGoal.dailyBudget && { color: colors.danger }]}>
                 {formatCurrency(Math.max(activeGoal.dailyBudget - todaySpend, 0))}
               </Text>
-              <Text style={styles.goalBudgetSub}>left today</Text>
+              <Text style={[styles.goalBudgetSub, { color: colors.textSecondary }]}>left today</Text>
             </View>
           </PressableScale>
         )}
 
         {/* Subscriptions Card */}
         <PressableScale
-          style={styles.financeCard}
+          style={[styles.financeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => nav.navigate('Subscriptions')}
         >
           <View style={styles.financeLeft}>
             <Text style={styles.financeEmoji}>🔄</Text>
             <View>
-              <Text style={styles.financeTitle}>Subscriptions</Text>
-              <Text style={styles.financeSub}>
+              <Text style={[styles.financeTitle, { color: colors.text }]}>Subscriptions</Text>
+              <Text style={[styles.financeSub, { color: colors.textSecondary }]}>
                 {subscriptions.length > 0
                   ? `${subscriptions.length} active · ${formatCurrency(subsMonthly)}/mo`
                   : 'Track your subscriptions'}
               </Text>
             </View>
           </View>
-          <Text style={styles.financeArrow}>›</Text>
+          <Text style={[styles.financeArrow, { color: colors.textSecondary }]}>›</Text>
         </PressableScale>
 
         {/* Investments Card */}
         <PressableScale
-          style={styles.financeCard}
+          style={[styles.financeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => nav.navigate('Investments')}
         >
           <View style={styles.financeLeft}>
             <Text style={styles.financeEmoji}>📈</Text>
             <View>
-              <Text style={styles.financeTitle}>Investments</Text>
-              <Text style={styles.financeSub}>
+              <Text style={[styles.financeTitle, { color: colors.text }]}>Investments</Text>
+              <Text style={[styles.financeSub, { color: colors.textSecondary }]}>
                 {investments.length > 0
                   ? `${investments.length} active · ${formatCurrency(investMonthly)}/mo`
                   : 'Track your investments'}
               </Text>
             </View>
           </View>
-          <Text style={styles.financeArrow}>›</Text>
+          <Text style={[styles.financeArrow, { color: colors.textSecondary }]}>›</Text>
         </PressableScale>
 
         {/* EMIs Card */}
         <PressableScale
-          style={styles.financeCard}
+          style={[styles.financeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => nav.navigate('EMIs')}
         >
           <View style={styles.financeLeft}>
             <Text style={styles.financeEmoji}>🏦</Text>
             <View>
-              <Text style={styles.financeTitle}>EMIs</Text>
-              <Text style={styles.financeSub}>
+              <Text style={[styles.financeTitle, { color: colors.text }]}>EMIs</Text>
+              <Text style={[styles.financeSub, { color: colors.textSecondary }]}>
                 {emis.length > 0
                   ? `${emis.length} active · ${formatCurrency(emiMonthly)}/mo`
                   : 'Track your EMIs'}
               </Text>
             </View>
           </View>
-          <Text style={styles.financeArrow}>›</Text>
+          <Text style={[styles.financeArrow, { color: colors.textSecondary }]}>›</Text>
         </PressableScale>
 
         {/* Privacy Shield — subtle, hidden for premium users */}
         {!loading && !isPremium && monthCount === 0 && (
           <View style={styles.privacyCard}>
             <Text style={styles.privacyText}>
-              🛡️ Trackk only reads SMS when a tracker is on. Zero battery drain.
+              🛡️ Trackk wakes up only when an expense happens. Zero battery drain.
             </Text>
           </View>
         )}
@@ -510,15 +539,13 @@ export default function HomeScreen() {
               value={budgetInput}
               onChangeText={setBudgetInput}
               placeholder="e.g. 30000"
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={colors.textLight}
               keyboardType="numeric"
               autoFocus
-              selectionColor={COLORS.primary}
+              selectionColor={colors.primary}
             />
-            <TouchableOpacity style={styles.budgetModalSaveBtn} onPress={handleSaveBudget} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.budgetModalSaveBtnGradient}>
-                <Text style={styles.budgetModalSaveBtnText}>{budgetStatus ? 'Update Budget' : 'Set Budget'}</Text>
-              </LinearGradient>
+            <TouchableOpacity style={[styles.budgetModalSaveBtn, { backgroundColor: colors.primary }]} onPress={handleSaveBudget} activeOpacity={0.8}>
+              <Text style={styles.budgetModalSaveBtnText}>{budgetStatus ? 'Update Budget' : 'Set Budget'}</Text>
             </TouchableOpacity>
             {budgetStatus && (
               <TouchableOpacity style={styles.budgetModalDeleteBtn} onPress={handleDeleteBudget} activeOpacity={0.7}>
@@ -560,7 +587,7 @@ export default function HomeScreen() {
 
       {/* Quick Add FAB */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
         onPress={() => nav.navigate('QuickAdd', undefined)}
         activeOpacity={0.8}
       >
@@ -626,10 +653,8 @@ export default function HomeScreen() {
             <View style={styles.celebrationBadge}>
               <Text style={styles.celebrationBadgeText}>EMI CLOSED</Text>
             </View>
-            <TouchableOpacity style={styles.celebrationBtn} onPress={() => setShowEMICelebration(false)} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.success, '#2A9A6A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.celebrationBtnGrad}>
-                <Text style={styles.celebrationBtnText}>Amazing!</Text>
-              </LinearGradient>
+            <TouchableOpacity style={[styles.celebrationBtn, { backgroundColor: colors.success }]} onPress={() => setShowEMICelebration(false)} activeOpacity={0.8}>
+              <Text style={styles.celebrationBtnText}>Amazing!</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -647,115 +672,126 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1 },
   scroll: { padding: 16, paddingBottom: 80 },
 
   header: { marginBottom: 24, marginTop: 8 },
-  greeting: { fontSize: 14, color: COLORS.textSecondary, letterSpacing: 0.3 },
-  name: { fontSize: 28, fontWeight: '800', color: COLORS.text, marginTop: 2, letterSpacing: -0.5 },
-  contextSub: { fontSize: 12, color: COLORS.textLight, marginTop: 4, letterSpacing: 0.2 },
+  greeting: { fontSize: 14, letterSpacing: 0.3 },
+  name: { fontSize: 28, fontWeight: '700', marginTop: 2, letterSpacing: -0.3 },
+  contextSub: { fontSize: 12, marginTop: 4, letterSpacing: 0.2 },
 
-  /* Privacy Shield — subtle single-line */
-  privacyCard: { backgroundColor: COLORS.glass, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 16, borderWidth: 1, borderColor: `${COLORS.success}12` },
-  privacyText: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 18 },
+  /* Active Trackers inline card */
+  trackersCard: { borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1 },
+  trackersHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  trackersHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trackerPulse: { width: 8, height: 8, borderRadius: 4 },
+  trackersTitle: { fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
+  trackersManage: { fontSize: 12, fontWeight: '600' },
+  trackersChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  trackerChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
+  trackerChipDot: { width: 8, height: 8, borderRadius: 4 },
+  trackerChipText: { fontSize: 12, fontWeight: '500' },
+  trackerDefaultBadge: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5, marginLeft: 2 },
+
+  /* Privacy Shield */
+  privacyCard: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 16, borderWidth: 1 },
+  privacyText: { fontSize: 12, lineHeight: 18 },
 
   /* Hero card */
-  heroCard: { borderRadius: 24, padding: 24, marginBottom: 24, borderWidth: 1, borderColor: COLORS.glassBorder, position: 'relative', overflow: 'hidden' },
-  heroGoldLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: COLORS.primary, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-  heroLabel: { fontSize: 10, color: COLORS.textSecondary, letterSpacing: 2, fontWeight: '700', marginBottom: 10 },
-  heroAmount: { fontSize: 42, fontWeight: '800', color: COLORS.text, letterSpacing: -1 },
-  heroSub: { fontSize: 13, color: COLORS.textSecondary, marginTop: 6 },
+  heroCard: { borderRadius: 16, padding: 24, marginBottom: 24, borderWidth: 1, position: 'relative', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  heroGoldLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  heroLabel: { fontSize: 10, letterSpacing: 2, fontWeight: '600', marginBottom: 10 },
+  heroAmount: { fontSize: 38, fontWeight: '700', letterSpacing: -0.5 },
+  heroSub: { fontSize: 13, marginTop: 6 },
 
   /* Streak badge on hero card */
-  streakBadge: { position: 'absolute', top: 16, right: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(232,115,74,0.12)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, gap: 4 },
+  streakBadge: { position: 'absolute', top: 16, right: 16, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, gap: 4 },
   streakIcon: { fontSize: 14 },
-  streakText: { fontSize: 13, fontWeight: '800', color: COLORS.primary },
+  streakText: { fontSize: 13, fontWeight: '700' },
 
-  budgetInline: { marginTop: 18, paddingTop: 16, borderTopWidth: 1, borderTopColor: COLORS.glassBorder },
+  budgetInline: { marginTop: 18, paddingTop: 16, borderTopWidth: 1 },
   budgetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  budgetMessage: { fontSize: 13, fontWeight: '700' },
-  budgetDetail: { fontSize: 12, color: COLORS.textSecondary },
-  budgetTrack: { height: 6, backgroundColor: COLORS.glassHigh, borderRadius: 3, overflow: 'hidden' },
+  budgetMessage: { fontSize: 13, fontWeight: '600' },
+  budgetDetail: { fontSize: 12 },
+  budgetTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   budgetFill: { height: '100%', borderRadius: 3 },
-  budgetEditHint: { fontSize: 10, color: COLORS.textLight, marginTop: 8, textAlign: 'right' },
-  setBudgetText: { fontSize: 13, fontWeight: '600', color: COLORS.primary, textAlign: 'center', paddingVertical: 4 },
+  budgetEditHint: { fontSize: 10, marginTop: 8, textAlign: 'right' },
+  setBudgetText: { fontSize: 13, fontWeight: '600', textAlign: 'center', paddingVertical: 4 },
 
-  /* Metrics Row — 2 cards now */
+  /* Metrics Row */
   metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  metricCard: { flex: 1, backgroundColor: COLORS.surface, borderRadius: 18, padding: 14, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center' },
+  metricCard: { flex: 1, borderRadius: 12, padding: 14, borderWidth: 1, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   metricIcon: { fontSize: 22, marginBottom: 8 },
-  metricLabel: { fontSize: 8, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 6 },
-  metricValue: { fontSize: 18, fontWeight: '800', color: COLORS.text, letterSpacing: -0.5 },
-  metricSub: { fontSize: 10, color: COLORS.textSecondary, marginTop: 3 },
+  metricLabel: { fontSize: 8, fontWeight: '600', letterSpacing: 1.5, marginBottom: 6 },
+  metricValue: { fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
+  metricSub: { fontSize: 10, marginTop: 3 },
 
   /* Review Expenses Card */
-  reviewCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surface, borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(138,120,240,0.15)' },
+  reviewCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1 },
   reviewLeft: { flex: 1 },
   reviewIconRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   reviewEmoji: { fontSize: 22 },
-  premiumBadge: { backgroundColor: COLORS.primary, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
-  premiumBadgeText: { fontSize: 8, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 },
-  reviewTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
-  reviewSub: { fontSize: 12, color: COLORS.textSecondary },
-  reviewBadge: { backgroundColor: COLORS.danger, borderRadius: 12, minWidth: 24, height: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
-  reviewBadgeText: { fontSize: 12, fontWeight: '800', color: '#FFF' },
+  premiumBadge: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
+  premiumBadgeText: { fontSize: 8, fontWeight: '700', color: '#FFF', letterSpacing: 0.5 },
+  reviewTitle: { fontSize: 15, fontWeight: '600', marginBottom: 4 },
+  reviewSub: { fontSize: 12 },
+  reviewBadge: { borderRadius: 12, minWidth: 24, height: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  reviewBadgeText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
 
   /* Goal Budget Card */
-  goalBudgetCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surface, borderRadius: 20, padding: 18, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
+  goalBudgetCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, padding: 18, marginBottom: 12, borderWidth: 1 },
   goalBudgetLeft: { flex: 1 },
-  goalBudgetLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
-  goalBudgetName: { fontSize: 15, fontWeight: '600', color: COLORS.text },
+  goalBudgetLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 1.5, marginBottom: 4 },
+  goalBudgetName: { fontSize: 15, fontWeight: '500' },
   goalBudgetRight: { alignItems: 'flex-end' },
-  goalBudgetAmount: { fontSize: 22, fontWeight: '800', color: COLORS.success, letterSpacing: -0.5 },
-  goalBudgetSub: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+  goalBudgetAmount: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
+  goalBudgetSub: { fontSize: 11, marginTop: 2 },
 
-  /* Finance Cards (Subscriptions, Investments, EMIs) */
-  financeCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surface, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: COLORS.border },
+  /* Finance Cards */
+  financeCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1 },
   financeLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
   financeEmoji: { fontSize: 24 },
-  financeTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 3 },
-  financeSub: { fontSize: 12, color: COLORS.textSecondary },
-  financeArrow: { fontSize: 22, color: COLORS.textSecondary, fontWeight: '300' },
+  financeTitle: { fontSize: 15, fontWeight: '600', marginBottom: 3 },
+  financeSub: { fontSize: 12 },
+  financeArrow: { fontSize: 22, fontWeight: '300' },
 
   /* Budget Modal */
-  budgetModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  budgetModalContainer: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.glassBorder, borderBottomWidth: 0 },
+  budgetModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  budgetModalContainer: { backgroundColor: COLORS.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.border, borderBottomWidth: 0 },
   budgetModalHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.surfaceHigher, alignSelf: 'center', marginBottom: 20 },
-  budgetModalTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 6 },
+  budgetModalTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text, textAlign: 'center', marginBottom: 6 },
   budgetModalSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 24 },
-  budgetModalInput: { backgroundColor: COLORS.glass, borderRadius: 16, paddingHorizontal: 20, paddingVertical: 16, fontSize: 24, fontWeight: '700', color: COLORS.text, textAlign: 'center', borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: 20 },
-  budgetModalSaveBtn: { borderRadius: 30, overflow: 'hidden', marginBottom: 12 },
-  budgetModalSaveBtnGradient: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
-  budgetModalSaveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
-  budgetModalDeleteBtn: { paddingVertical: 14, alignItems: 'center', borderRadius: 16, borderWidth: 1, borderColor: `${COLORS.danger}30`, backgroundColor: `${COLORS.danger}08`, marginBottom: 8 },
-  budgetModalDeleteBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.danger },
+  budgetModalInput: { backgroundColor: COLORS.surfaceHigh, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 16, fontSize: 24, fontWeight: '600', color: COLORS.text, textAlign: 'center', borderWidth: 1, borderColor: COLORS.border, marginBottom: 20 },
+  budgetModalSaveBtn: { borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 12 },
+  budgetModalSaveBtnText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+  budgetModalDeleteBtn: { paddingVertical: 14, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: `${COLORS.danger}30`, backgroundColor: `${COLORS.danger}08`, marginBottom: 8 },
+  budgetModalDeleteBtnText: { fontSize: 14, fontWeight: '500', color: COLORS.danger },
   budgetModalCancelBtn: { paddingVertical: 12, alignItems: 'center' },
-  budgetModalCancelText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  budgetModalCancelText: { fontSize: 14, fontWeight: '500', color: COLORS.textSecondary },
 
   /* Quick Add FAB */
-  fab: { position: 'absolute', right: 20, bottom: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: 28, elevation: 8, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 16 },
-  fabIcon: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginRight: 6 },
-  fabText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14, letterSpacing: 0.3 },
+  fab: { position: 'absolute', right: 20, bottom: 20, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 22, paddingVertical: 14, borderRadius: 28, elevation: 4, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 8 },
+  fabIcon: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', marginRight: 6 },
+  fabText: { color: '#FFFFFF', fontWeight: '600', fontSize: 14, letterSpacing: 0.3 },
 
   /* Overdue Subscription Popup */
-  overdueOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  overdueContent: { backgroundColor: COLORS.surface, borderRadius: 24, padding: 28, margin: 24, width: '85%', alignItems: 'center', borderWidth: 1, borderColor: COLORS.glassBorder },
+  overdueOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  overdueContent: { backgroundColor: COLORS.surface, borderRadius: 16, padding: 28, margin: 24, width: '85%', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
   overdueEmoji: { fontSize: 40, marginBottom: 12 },
-  overdueTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 8 },
+  overdueTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, textAlign: 'center', marginBottom: 8 },
   overdueSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
-  overdueRemoveBtn: { backgroundColor: `${COLORS.danger}15`, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 24, width: '100%', alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: `${COLORS.danger}30` },
-  overdueRemoveText: { fontSize: 15, fontWeight: '700', color: COLORS.danger },
-  overdueSkipBtn: { backgroundColor: COLORS.glass, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 24, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: COLORS.glassBorder },
-  overdueSkipText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  overdueRemoveBtn: { backgroundColor: `${COLORS.danger}10`, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24, width: '100%', alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: `${COLORS.danger}25` },
+  overdueRemoveText: { fontSize: 15, fontWeight: '600', color: COLORS.danger },
+  overdueSkipBtn: { backgroundColor: COLORS.surfaceHigh, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+  overdueSkipText: { fontSize: 14, fontWeight: '500', color: COLORS.textSecondary },
 
   /* EMI Celebration */
-  celebrationContent: { backgroundColor: COLORS.surface, borderRadius: 28, padding: 32, margin: 24, width: '85%', alignItems: 'center', borderWidth: 1, borderColor: COLORS.glassBorder },
+  celebrationContent: { backgroundColor: COLORS.surface, borderRadius: 16, padding: 32, margin: 24, width: '85%', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
   celebrationEmoji: { fontSize: 64, marginBottom: 16 },
-  celebrationTitle: { fontSize: 28, fontWeight: '800', color: COLORS.success, textAlign: 'center', marginBottom: 8 },
+  celebrationTitle: { fontSize: 28, fontWeight: '700', color: COLORS.success, textAlign: 'center', marginBottom: 8 },
   celebrationSub: { fontSize: 16, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 24, marginBottom: 16 },
-  celebrationBadge: { backgroundColor: `${COLORS.success}20`, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginBottom: 24 },
-  celebrationBadgeText: { fontSize: 13, fontWeight: '800', color: COLORS.success, letterSpacing: 1 },
-  celebrationBtn: { borderRadius: 30, overflow: 'hidden', width: '100%' },
-  celebrationBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
-  celebrationBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  celebrationBadge: { backgroundColor: `${COLORS.success}15`, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginBottom: 24 },
+  celebrationBadgeText: { fontSize: 13, fontWeight: '700', color: COLORS.success, letterSpacing: 1 },
+  celebrationBtn: { borderRadius: 12, paddingVertical: 16, alignItems: 'center', width: '100%' },
+  celebrationBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
 });

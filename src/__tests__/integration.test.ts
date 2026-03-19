@@ -100,24 +100,24 @@ describe('Integration: Personal Expense → Goal Daily Budget', () => {
   });
 });
 
-describe('Integration: Group Expense → Personal Split → Goal Budget', () => {
-  it('should only count user split in personal transactions', async () => {
+describe('Integration: Group expenses stay separate from personal budget', () => {
+  it('should not count group expenses in personal spend', async () => {
     const group = await createGroup(
       'Dinner',
       [{ displayName: 'Bob', phone: '111' }],
       'user1',
     );
 
-    // Total bill is 1000, split between 2 people
+    // Total bill is 1000, split between 2 people — stays in group only
     await addGroupTransaction(makeParsed({ amount: 1000 }), group.id, 'user1');
 
-    // Check that only 500 (user's split) appears in personal
+    // Group expenses should not appear in personal spend
     const spend = await computeTodaySpendFromTransactions();
-    expect(spend).toBe(500); // not 1000
+    expect(spend).toBe(0);
 
     const entry = await getOrCreateTodaySpend(1000);
-    expect(entry.spent).toBe(500);
-    expect(entry.leftover).toBe(500);
+    expect(entry.spent).toBe(0);
+    expect(entry.leftover).toBe(1000);
   });
 
   it('should correctly calculate debts in group', async () => {

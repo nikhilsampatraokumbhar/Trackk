@@ -2,9 +2,10 @@ import React from 'react';
 import {
   Modal, View, Text, TouchableOpacity, StyleSheet,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Surface, Divider } from 'react-native-paper';
 import { ActiveTracker, ParsedTransaction } from '../models/types';
-import { COLORS, formatCurrency } from '../utils/helpers';
+import { formatCurrency } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 
 interface Props {
   visible: boolean;
@@ -14,39 +15,42 @@ interface Props {
   onIgnore: () => void;
 }
 
-const TRACKER_META: Record<string, { color: string; icon: string; desc: string }> = {
-  personal:      { color: COLORS.personalColor,      icon: '💳', desc: 'Your personal expenses' },
-  reimbursement: { color: COLORS.reimbursementColor, icon: '🧾', desc: 'Office / business' },
-  group:         { color: COLORS.groupColor,         icon: '👥', desc: 'Split with group' },
-};
-
 export default function TrackerSelectionDialog({
   visible, transaction, trackers, onSelect, onIgnore,
 }: Props) {
+  const { colors } = useTheme();
+
   if (!transaction) return null;
+
+  const TRACKER_META: Record<string, { color: string; icon: string; desc: string }> = {
+    personal:      { color: colors.personalColor,      icon: '💳', desc: 'Your personal expenses' },
+    reimbursement: { color: colors.reimbursementColor, icon: '🧾', desc: 'Office / business' },
+    group:         { color: colors.groupColor,         icon: '👥', desc: 'Split with group' },
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.overlay}>
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        }]}>
           {/* Handle bar */}
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: colors.surfaceHigher }]} />
 
           {/* Amount display */}
-          <LinearGradient
-            colors={['#1E1A0A', COLORS.surface]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.amountCard}
-          >
-            <Text style={styles.amountLabel}>Amount Debited</Text>
-            <Text style={styles.amount}>{formatCurrency(transaction.amount)}</Text>
-            <Text style={styles.merchant} numberOfLines={1}>
+          <View style={[styles.amountCard, {
+            backgroundColor: colors.surfaceHigh,
+            borderColor: colors.border,
+          }]}>
+            <Text style={[styles.amountLabel, { color: colors.textSecondary }]}>Amount Debited</Text>
+            <Text style={[styles.amount, { color: colors.primary }]}>{formatCurrency(transaction.amount)}</Text>
+            <Text style={[styles.merchant, { color: colors.textSecondary }]} numberOfLines={1}>
               {transaction.merchant || transaction.bank || 'Bank transaction'}
             </Text>
-          </LinearGradient>
+          </View>
 
-          <Text style={styles.question}>Where should this go?</Text>
+          <Text style={[styles.question, { color: colors.textSecondary }]}>Where should this go?</Text>
 
           {/* Tracker options */}
           {trackers.map(tracker => {
@@ -54,17 +58,20 @@ export default function TrackerSelectionDialog({
             return (
               <TouchableOpacity
                 key={tracker.id}
-                style={styles.option}
+                style={[styles.option, {
+                  backgroundColor: colors.surfaceHigh,
+                  borderColor: colors.border,
+                }]}
                 onPress={() => onSelect(tracker)}
                 activeOpacity={0.7}
               >
                 <View style={[styles.optionAccent, { backgroundColor: meta.color }]} />
-                <View style={[styles.optionIconWrap, { backgroundColor: `${meta.color}20` }]}>
+                <View style={[styles.optionIconWrap, { backgroundColor: `${meta.color}15` }]}>
                   <Text style={styles.optionIcon}>{meta.icon}</Text>
                 </View>
                 <View style={styles.optionInfo}>
-                  <Text style={styles.optionLabel}>{tracker.label}</Text>
-                  <Text style={styles.optionDesc}>{meta.desc}</Text>
+                  <Text style={[styles.optionLabel, { color: colors.text }]}>{tracker.label}</Text>
+                  <Text style={[styles.optionDesc, { color: colors.textSecondary }]}>{meta.desc}</Text>
                 </View>
                 <View style={[styles.optionArrow, { borderColor: meta.color }]}>
                   <Text style={[styles.optionArrowText, { color: meta.color }]}>→</Text>
@@ -75,7 +82,7 @@ export default function TrackerSelectionDialog({
 
           {/* Ignore */}
           <TouchableOpacity style={styles.ignoreBtn} onPress={onIgnore} activeOpacity={0.6}>
-            <Text style={styles.ignoreText}>Ignore this transaction</Text>
+            <Text style={[styles.ignoreText, { color: colors.textSecondary }]}>Ignore this transaction</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -86,24 +93,21 @@ export default function TrackerSelectionDialog({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingBottom: 44,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderColor: COLORS.border,
   },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: COLORS.border,
     alignSelf: 'center',
     marginBottom: 20,
   },
@@ -113,29 +117,24 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
   },
   amountLabel: {
     fontSize: 11,
-    color: COLORS.textSecondary,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     marginBottom: 6,
   },
   amount: {
     fontSize: 32,
-    fontWeight: '800',
-    color: COLORS.primary,
+    fontWeight: '700',
     letterSpacing: -0.5,
   },
   merchant: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     marginTop: 4,
   },
   question: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginBottom: 12,
@@ -143,12 +142,10 @@ const styles = StyleSheet.create({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 14,
     marginBottom: 10,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
   optionAccent: {
     width: 4,
@@ -166,12 +163,10 @@ const styles = StyleSheet.create({
   optionInfo: { flex: 1, paddingVertical: 14 },
   optionLabel: {
     fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
+    fontWeight: '600',
   },
   optionDesc: {
     fontSize: 12,
-    color: COLORS.textSecondary,
     marginTop: 2,
   },
   optionArrow: {
@@ -183,7 +178,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 14,
   },
-  optionArrowText: { fontSize: 16, fontWeight: '700' },
+  optionArrowText: { fontSize: 16, fontWeight: '600' },
   ignoreBtn: {
     alignItems: 'center',
     paddingVertical: 16,
@@ -191,6 +186,5 @@ const styles = StyleSheet.create({
   },
   ignoreText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
   },
 });

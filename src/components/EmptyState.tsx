@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
-import { COLORS } from '../utils/helpers';
-import { TYPOGRAPHY, SPACING, RADIUS } from '../utils/theme';
-import { SPRING, DURATION, EASING, fadeIn } from '../utils/motion';
+import { View, Text, StyleSheet, Animated } from 'react-native';
+import { Button } from 'react-native-paper';
+import { useTheme } from '../store/ThemeContext';
+import { SPACING, RADIUS } from '../utils/theme';
+import { SPRING, DURATION, fadeIn } from '../utils/motion';
 
 interface EmptyStateProps {
   /** Emoji displayed prominently */
@@ -29,17 +30,18 @@ export default function EmptyState({
   subtitle,
   actionLabel,
   onAction,
-  accent = COLORS.primary,
+  accent,
 }: EmptyStateProps) {
+  const { colors } = useTheme();
+  const accentColor = accent || colors.primary;
+
   const iconScale = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslateY = useRef(new Animated.Value(12)).current;
 
   useEffect(() => {
     Animated.sequence([
-      // Icon pops in
       Animated.spring(iconScale, { toValue: 1, ...SPRING.bouncy }),
-      // Text slides up + fades in
       Animated.parallel([
         fadeIn(contentOpacity, DURATION.normal),
         Animated.spring(contentTranslateY, { toValue: 0, ...SPRING.gentle }),
@@ -54,8 +56,8 @@ export default function EmptyState({
         style={[
           styles.iconRing,
           {
-            backgroundColor: `${accent}10`,
-            borderColor: `${accent}25`,
+            backgroundColor: `${accentColor}10`,
+            borderColor: `${accentColor}25`,
             transform: [{ scale: iconScale }],
           },
         ]}
@@ -71,17 +73,21 @@ export default function EmptyState({
           alignItems: 'center',
         }}
       >
-        <Text style={styles.title}>{title}</Text>
-        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+        {subtitle && (
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
+        )}
 
         {actionLabel && onAction && (
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: accent }]}
+          <Button
+            mode="contained"
             onPress={onAction}
-            activeOpacity={0.8}
+            style={[styles.actionBtn, { backgroundColor: accentColor }]}
+            labelStyle={styles.actionText}
+            contentStyle={{ paddingVertical: 4 }}
           >
-            <Text style={styles.actionText}>{actionLabel}</Text>
-          </TouchableOpacity>
+            {actionLabel}
+          </Button>
         )}
       </Animated.View>
     </View>
@@ -108,25 +114,24 @@ const styles = StyleSheet.create({
     fontSize: 36,
   },
   title: {
-    ...TYPOGRAPHY.titleSm,
+    fontSize: 18,
+    fontWeight: '600',
     textAlign: 'center',
     marginBottom: SPACING.md,
   },
   subtitle: {
-    ...TYPOGRAPHY.bodySm,
+    fontSize: 13,
     textAlign: 'center',
     maxWidth: 280,
   },
   actionBtn: {
     marginTop: SPACING.xxl,
-    paddingHorizontal: SPACING._24,
-    paddingVertical: SPACING.lg,
     borderRadius: RADIUS.lg,
   },
   actionText: {
     fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.background,
+    fontWeight: '600',
+    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
 });

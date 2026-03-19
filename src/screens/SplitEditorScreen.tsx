@@ -9,11 +9,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useGroups } from '../store/GroupContext';
-import { GroupMember, Split } from '../models/types';
+import { useTheme } from '../store/ThemeContext';
+import { Group, GroupMember, Split } from '../models/types';
 import { getGroup as getGroupLocal } from '../services/StorageService';
 import { getGroupCloud, addGroupTransactionCloud } from '../services/SyncService';
 import { addGroupTransaction } from '../services/StorageService';
-import { generateId, COLORS, formatCurrency, getColorForId } from '../utils/helpers';
+import { generateId, formatCurrency, getColorForId } from '../utils/helpers';
 import { GROUP_CATEGORIES } from '../utils/categories';
 import { CURRENCIES, getPreferredCurrency, getCurrencyInfo } from '../utils/currencies';
 
@@ -34,7 +35,8 @@ export default function SplitEditorScreen() {
   const route = useRoute<Route>();
   const nav = useNavigation<Nav>();
   const { user, isAuthenticated } = useAuth();
-  const { loadGroupTransactions, activeGroupId } = useGroups();
+  const { loadGroupTransactions, activeGroupId, updateGroup } = useGroups();
+  const { colors } = useTheme();
 
   const { groupId, amount: paramAmount, description: paramDesc, merchant: paramMerchant, isManual } = route.params;
 
@@ -49,6 +51,7 @@ export default function SplitEditorScreen() {
   const [splitMode, setSplitMode] = useState<'equal' | 'amount'>('equal');
   const [saving, setSaving] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [groupRef, setGroupRef] = useState<Group | null>(null);
 
   const savingRef = useRef(false); // ref guard against double-tap race
 
@@ -72,6 +75,7 @@ export default function SplitEditorScreen() {
         return;
       }
       setGroupName(group.name);
+      setGroupRef(group);
       setMembers(group.members.map(m => ({
         userId: m.userId,
         displayName: m.userId === userId ? 'You' : m.displayName,
@@ -158,6 +162,19 @@ export default function SplitEditorScreen() {
       Alert.alert(
         'Amounts don\'t match',
         `Individual amounts must add up to ${formatCurrency(parsedAmount)}. Currently off by ${formatCurrency(Math.abs(customDiff))}.`,
+      );
+      return;
+    }
+
+    // Validate that guests' tagged members are included in the split
+    const guestsWithExcludedTags = includedMembers.filter(m =>
+      m.isGuest && m.taggedTo && !members.find(mem => mem.userId === m.taggedTo && mem.included)
+    );
+    if (guestsWithExcludedTags.length > 0) {
+      const names = guestsWithExcludedTags.map(g => g.displayName).join(', ');
+      Alert.alert(
+        'Guest tag issue',
+        `${names} ${guestsWithExcludedTags.length > 1 ? 'are' : 'is'} tagged to a member who is not included in the split. Please include the tagged member or remove the guest.`,
       );
       return;
     }
@@ -272,6 +289,11 @@ export default function SplitEditorScreen() {
         await AsyncStorage.setItem(key, JSON.stringify(all));
       }
 
+      // Auto-unarchive if the group was archived
+      if (groupRef?.archived) {
+        await updateGroup(groupId, { archived: false });
+      }
+
       // Refresh group transactions in context
       if (activeGroupId === groupId) {
         loadGroupTransactions(groupId);
@@ -290,7 +312,7 @@ export default function SplitEditorScreen() {
   const tagOptions = members.filter(m => !m.isGuest && m.included);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior="padding"
@@ -301,21 +323,21 @@ export default function SplitEditorScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Group badge */}
-          <View style={styles.groupBadge}>
-            <Text style={styles.groupBadgeText}>{groupName}</Text>
+          <View style={[styles.groupBadge, { backgroundColor: `${colors.groupColor}10`, borderColor: `${colors.groupColor}30` }]}>
+            <Text style={[styles.groupBadgeText, { color: colors.groupColor }]}>{groupName}</Text>
           </View>
 
           {/* Amount input (only for manual entry) */}
           {isManual ? (
             <View style={styles.section}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>AMOUNT</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>AMOUNT</Text>
                 <TouchableOpacity
-                  style={styles.currencyBadge}
+                  style={[styles.currencyBadge, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}
                   onPress={() => setShowCurrencyPicker(!showCurrencyPicker)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.currencyBadgeText}>
+                  <Text style={[styles.currencyBadgeText, { color: colors.textSecondary }]}>
                     {getCurrencyInfo(expenseCurrency).flag} {expenseCurrency}
                   </Text>
                 </TouchableOpacity>
@@ -325,52 +347,52 @@ export default function SplitEditorScreen() {
                   {CURRENCIES.slice(0, 15).map(curr => (
                     <TouchableOpacity
                       key={curr.code}
-                      style={[styles.categoryChip, expenseCurrency === curr.code && styles.categoryChipActive]}
+                      style={[styles.categoryChip, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }, expenseCurrency === curr.code && { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }]}
                       onPress={() => { setExpenseCurrency(curr.code); setShowCurrencyPicker(false); }}
                       activeOpacity={0.7}
                     >
                       <Text style={styles.categoryChipIcon}>{curr.flag}</Text>
-                      <Text style={[styles.categoryChipText, expenseCurrency === curr.code && styles.categoryChipTextActive]}>
+                      <Text style={[styles.categoryChipText, { color: colors.textSecondary }, expenseCurrency === curr.code && { color: colors.primary }]}>
                         {curr.code}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
               )}
-              <View style={styles.amountRow}>
-                <Text style={styles.amountPrefix}>{getCurrencyInfo(expenseCurrency).symbol}</Text>
+              <View style={[styles.amountRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.amountPrefix, { color: colors.primary }]}>{getCurrencyInfo(expenseCurrency).symbol}</Text>
                 <TextInput
-                  style={styles.amountInput}
+                  style={[styles.amountInput, { color: colors.text }]}
                   value={amount}
                   onChangeText={setAmount}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
-                  placeholderTextColor={COLORS.textLight}
+                  placeholderTextColor={colors.textLight}
                   autoFocus
                 />
               </View>
             </View>
           ) : (
             <View style={styles.amountDisplay}>
-              <Text style={styles.amountDisplayLabel}>AMOUNT</Text>
-              <Text style={styles.amountDisplayValue}>{formatCurrency(parsedAmount)}</Text>
+              <Text style={[styles.amountDisplayLabel, { color: colors.textSecondary }]}>AMOUNT</Text>
+              <Text style={[styles.amountDisplayValue, { color: colors.primary }]}>{formatCurrency(parsedAmount)}</Text>
               {paramMerchant && (
-                <Text style={styles.amountDisplayMerchant}>{paramMerchant}</Text>
+                <Text style={[styles.amountDisplayMerchant, { color: colors.textSecondary }]}>{paramMerchant}</Text>
               )}
             </View>
           )}
 
           {/* Note / Description */}
           <View style={styles.section}>
-            <Text style={styles.label}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>
               {isManual ? 'DESCRIPTION' : 'ADD A NOTE'}
             </Text>
             <TextInput
-              style={styles.noteInput}
+              style={[styles.noteInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
               value={note}
               onChangeText={setNote}
               placeholder={isManual ? 'e.g. Dinner at BBQ Nation, Groceries...' : 'e.g. Ordered for Rahul too, Cash payment...'}
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={colors.textLight}
               multiline
               maxLength={200}
             />
@@ -378,17 +400,17 @@ export default function SplitEditorScreen() {
 
           {/* Category quick-pick */}
           <View style={styles.section}>
-            <Text style={styles.label}>CATEGORY</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>CATEGORY</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
               {GROUP_CATEGORIES.map(cat => (
                 <TouchableOpacity
                   key={cat.label}
-                  style={[styles.categoryChip, category === cat.label && styles.categoryChipActive]}
+                  style={[styles.categoryChip, { backgroundColor: colors.surface, borderColor: colors.border }, category === cat.label && { borderColor: colors.primary, backgroundColor: `${colors.primary}10` }]}
                   onPress={() => setCategory(category === cat.label ? '' : cat.label)}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
-                  <Text style={[styles.categoryChipText, category === cat.label && styles.categoryChipTextActive]}>
+                  <Text style={[styles.categoryChipText, { color: colors.textSecondary }, category === cat.label && { color: colors.primary }]}>
                     {cat.label}
                   </Text>
                 </TouchableOpacity>
@@ -398,13 +420,13 @@ export default function SplitEditorScreen() {
 
           {/* Expense note */}
           <View style={styles.section}>
-            <Text style={styles.label}>NOTE (OPTIONAL)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>NOTE (OPTIONAL)</Text>
             <TextInput
-              style={styles.noteInput}
+              style={[styles.noteInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
               value={expenseNote}
               onChangeText={setExpenseNote}
               placeholder="Add a note for context..."
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={colors.textLight}
               multiline
               maxLength={300}
             />
@@ -412,23 +434,23 @@ export default function SplitEditorScreen() {
 
           {/* Split mode toggle */}
           <View style={styles.section}>
-            <Text style={styles.label}>SPLIT TYPE</Text>
-            <View style={styles.modeRow}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>SPLIT TYPE</Text>
+            <View style={[styles.modeRow, { backgroundColor: colors.surfaceHigh }]}>
               <TouchableOpacity
-                style={[styles.modeBtn, splitMode === 'equal' && styles.modeBtnActive]}
+                style={[styles.modeBtn, splitMode === 'equal' && { backgroundColor: colors.primary }]}
                 onPress={() => setSplitMode('equal')}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.modeBtnText, splitMode === 'equal' && styles.modeBtnTextActive]}>
+                <Text style={[styles.modeBtnText, { color: colors.textSecondary }, splitMode === 'equal' && { color: '#FFFFFF' }]}>
                   Equal
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modeBtn, splitMode === 'amount' && styles.modeBtnActive]}
+                style={[styles.modeBtn, splitMode === 'amount' && { backgroundColor: colors.primary }]}
                 onPress={() => setSplitMode('amount')}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.modeBtnText, splitMode === 'amount' && styles.modeBtnTextActive]}>
+                <Text style={[styles.modeBtnText, { color: colors.textSecondary }, splitMode === 'amount' && { color: '#FFFFFF' }]}>
                   By Amount
                 </Text>
               </TouchableOpacity>
@@ -437,8 +459,8 @@ export default function SplitEditorScreen() {
 
           {/* Member selection */}
           <View style={styles.section}>
-            <Text style={styles.label}>WHO'S IN?</Text>
-            <Text style={styles.sublabel}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>WHO'S IN?</Text>
+            <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
               {includedMembers.length} of {members.length} selected
               {splitMode === 'equal' && parsedAmount > 0 && includedMembers.length > 0
                 ? ` · ${formatCurrency(getEqualSplit())} each`
@@ -452,13 +474,13 @@ export default function SplitEditorScreen() {
                 : null;
 
               return (
-                <View key={m.userId} style={styles.memberRow}>
+                <View key={m.userId} style={[styles.memberRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   {/* Checkbox */}
                   <TouchableOpacity
                     style={[
                       styles.checkbox,
-                      m.included && styles.checkboxActive,
-                      m.included && { borderColor: color, backgroundColor: `${color}20` },
+                      { borderColor: colors.border },
+                      m.included && { borderColor: color, backgroundColor: `${color}15` },
                     ]}
                     onPress={() => m.isGuest ? removeGuest(m.userId) : toggleMember(m.userId)}
                     activeOpacity={0.7}
@@ -467,7 +489,7 @@ export default function SplitEditorScreen() {
                   </TouchableOpacity>
 
                   {/* Avatar + Name */}
-                  <View style={[styles.memberAvatar, { backgroundColor: `${color}20` }]}>
+                  <View style={[styles.memberAvatar, { backgroundColor: `${color}15` }]}>
                     <Text style={[styles.memberInitial, { color }]}>
                       {m.displayName[0].toUpperCase()}
                     </Text>
@@ -475,53 +497,41 @@ export default function SplitEditorScreen() {
                   <View style={styles.memberInfo}>
                     <Text style={[
                       styles.memberName,
-                      !m.included && styles.memberNameDisabled,
+                      { color: colors.text },
+                      !m.included && { color: colors.textSecondary, textDecorationLine: 'line-through' },
                     ]}>
                       {m.displayName}
                     </Text>
                     {m.isGuest && taggedMember && (
-                      <Text style={styles.guestTag}>
+                      <Text style={[styles.guestTag, { color: colors.textSecondary }]}>
                         Guest · tagged to {taggedMember.displayName}
                       </Text>
                     )}
                     {m.isGuest && (
                       <TouchableOpacity onPress={() => removeGuest(m.userId)}>
-                        <Text style={styles.removeGuestText}>Remove</Text>
+                        <Text style={[styles.removeGuestText, { color: colors.danger }]}>Remove</Text>
                       </TouchableOpacity>
                     )}
                   </View>
 
                   {/* Custom amount input (By Amount mode) */}
-                  {splitMode === 'amount' && m.included && !m.isGuest && (
-                    <View style={styles.customAmountWrap}>
-                      <Text style={styles.customAmountPrefix}>₹</Text>
+                  {splitMode === 'amount' && m.included && (
+                    <View style={[styles.customAmountWrap, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
+                      <Text style={[styles.customAmountPrefix, { color: colors.primary }]}>{getCurrencyInfo(expenseCurrency).symbol}</Text>
                       <TextInput
-                        style={styles.customAmountInput}
+                        style={[styles.customAmountInput, { color: colors.text }]}
                         value={m.customAmount}
                         onChangeText={v => updateCustomAmount(m.userId, v)}
                         keyboardType="decimal-pad"
                         placeholder="0"
-                        placeholderTextColor={COLORS.textLight}
-                      />
-                    </View>
-                  )}
-                  {splitMode === 'amount' && m.included && m.isGuest && (
-                    <View style={styles.customAmountWrap}>
-                      <Text style={styles.customAmountPrefix}>₹</Text>
-                      <TextInput
-                        style={styles.customAmountInput}
-                        value={m.customAmount}
-                        onChangeText={v => updateCustomAmount(m.userId, v)}
-                        keyboardType="decimal-pad"
-                        placeholder="0"
-                        placeholderTextColor={COLORS.textLight}
+                        placeholderTextColor={colors.textLight}
                       />
                     </View>
                   )}
 
                   {/* Equal amount display */}
                   {splitMode === 'equal' && m.included && parsedAmount > 0 && (
-                    <Text style={styles.equalAmount}>{formatCurrency(getEqualSplit())}</Text>
+                    <Text style={[styles.equalAmount, { color: colors.textSecondary }]}>{formatCurrency(getEqualSplit())}</Text>
                   )}
                 </View>
               );
@@ -532,14 +542,14 @@ export default function SplitEditorScreen() {
               <View style={[
                 styles.validationRow,
                 Math.abs(customDiff) < 0.01
-                  ? { borderColor: `${COLORS.success}40` }
-                  : { borderColor: `${COLORS.danger}40` },
+                  ? { borderColor: `${colors.success}40` }
+                  : { borderColor: `${colors.danger}40` },
               ]}>
                 <Text style={[
                   styles.validationText,
                   Math.abs(customDiff) < 0.01
-                    ? { color: COLORS.success }
-                    : { color: COLORS.danger },
+                    ? { color: colors.success }
+                    : { color: colors.danger },
                 ]}>
                   {Math.abs(customDiff) < 0.01
                     ? 'Amounts add up correctly'
@@ -552,27 +562,27 @@ export default function SplitEditorScreen() {
           {/* Add Guest */}
           {!showGuestInput ? (
             <TouchableOpacity
-              style={styles.addGuestBtn}
+              style={[styles.addGuestBtn, { borderColor: `${colors.primary}40` }]}
               onPress={() => setShowGuestInput(true)}
               activeOpacity={0.7}
             >
-              <Text style={styles.addGuestIcon}>+</Text>
-              <Text style={styles.addGuestText}>Add a guest</Text>
-              <Text style={styles.addGuestHint}>One-time, tagged to a member</Text>
+              <Text style={[styles.addGuestIcon, { color: colors.primary }]}>+</Text>
+              <Text style={[styles.addGuestText, { color: colors.primary }]}>Add a guest</Text>
+              <Text style={[styles.addGuestHint, { color: colors.textSecondary }]}>One-time, tagged to a member</Text>
             </TouchableOpacity>
           ) : (
-            <View style={styles.guestInputCard}>
-              <Text style={styles.label}>ADD GUEST</Text>
+            <View style={[styles.guestInputCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>ADD GUEST</Text>
               <TextInput
-                style={styles.guestNameInput}
+                style={[styles.guestNameInput, { backgroundColor: colors.surfaceHigh, borderColor: colors.border, color: colors.text }]}
                 value={guestName}
                 onChangeText={setGuestName}
                 placeholder="Guest's name"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 autoFocus
               />
-              <Text style={[styles.label, { marginTop: 12 }]}>TAGGED TO</Text>
-              <Text style={styles.sublabel}>
+              <Text style={[styles.label, { color: colors.textSecondary, marginTop: 12 }]}>TAGGED TO</Text>
+              <Text style={[styles.sublabel, { color: colors.textSecondary }]}>
                 Their share goes to this member's tab
               </Text>
               <View style={styles.tagOptions}>
@@ -581,14 +591,16 @@ export default function SplitEditorScreen() {
                     key={m.userId}
                     style={[
                       styles.tagChip,
-                      guestTaggedTo === m.userId && styles.tagChipActive,
+                      { backgroundColor: colors.surfaceHigh, borderColor: colors.border },
+                      guestTaggedTo === m.userId && { borderColor: colors.primary, backgroundColor: `${colors.primary}10` },
                     ]}
                     onPress={() => setGuestTaggedTo(m.userId)}
                     activeOpacity={0.7}
                   >
                     <Text style={[
                       styles.tagChipText,
-                      guestTaggedTo === m.userId && styles.tagChipTextActive,
+                      { color: colors.textSecondary },
+                      guestTaggedTo === m.userId && { color: colors.primary },
                     ]}>
                       {m.displayName}
                     </Text>
@@ -597,12 +609,12 @@ export default function SplitEditorScreen() {
               </View>
               <View style={styles.guestBtnRow}>
                 <TouchableOpacity
-                  style={styles.guestCancelBtn}
+                  style={[styles.guestCancelBtn, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}
                   onPress={() => { setShowGuestInput(false); setGuestName(''); setGuestTaggedTo(''); }}
                 >
-                  <Text style={styles.guestCancelText}>Cancel</Text>
+                  <Text style={[styles.guestCancelText, { color: colors.textSecondary }]}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.guestConfirmBtn} onPress={addGuest}>
+                <TouchableOpacity style={[styles.guestConfirmBtn, { backgroundColor: colors.primary }]} onPress={addGuest}>
                   <Text style={styles.guestConfirmText}>Add Guest</Text>
                 </TouchableOpacity>
               </View>
@@ -613,15 +625,15 @@ export default function SplitEditorScreen() {
         </ScrollView>
 
         {/* Bottom save button */}
-        <View style={styles.bottomBar}>
+        <View style={[styles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
           <View style={styles.bottomInfo}>
-            <Text style={styles.bottomTotal}>{formatCurrency(parsedAmount)}</Text>
-            <Text style={styles.bottomSplit}>
+            <Text style={[styles.bottomTotal, { color: colors.primary }]}>{formatCurrency(parsedAmount)}</Text>
+            <Text style={[styles.bottomSplit, { color: colors.textSecondary }]}>
               split {includedMembers.length} ways
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.saveBtn, saving && { opacity: 0.5 }]}
+            style={[styles.saveBtn, { backgroundColor: colors.primary }, saving && { opacity: 0.5 }]}
             onPress={handleSave}
             disabled={saving}
             activeOpacity={0.8}
@@ -637,23 +649,20 @@ export default function SplitEditorScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1 },
   scroll: { padding: 16, paddingBottom: 32 },
 
   groupBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: `${COLORS.groupColor}15`,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: `${COLORS.groupColor}30`,
     marginBottom: 16,
   },
   groupBadgeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.groupColor,
     letterSpacing: 0.3,
   },
 
@@ -661,38 +670,31 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.textSecondary,
     letterSpacing: 1.5,
     marginBottom: 8,
   },
   sublabel: {
     fontSize: 12,
-    color: COLORS.textSecondary,
     marginBottom: 12,
     marginTop: -4,
   },
 
-  /* ── Amount ──────────────────────────────────────────────── */
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
     paddingHorizontal: 16,
   },
   amountPrefix: {
     fontSize: 24,
     fontWeight: '800',
-    color: COLORS.primary,
     marginRight: 4,
   },
   amountInput: {
     flex: 1,
     fontSize: 28,
     fontWeight: '800',
-    color: COLORS.text,
     paddingVertical: 14,
   },
   amountDisplay: {
@@ -702,54 +704,42 @@ const styles = StyleSheet.create({
   },
   amountDisplayLabel: {
     fontSize: 10,
-    color: COLORS.textSecondary,
     letterSpacing: 2,
     marginBottom: 6,
   },
   amountDisplayValue: {
     fontSize: 36,
     fontWeight: '800',
-    color: COLORS.primary,
     letterSpacing: -0.5,
   },
   amountDisplayMerchant: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     marginTop: 4,
   },
 
-  /* ── Note ──────────────────────────────────────────────── */
   noteInput: {
-    backgroundColor: COLORS.surfaceHigh,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
     padding: 14,
     fontSize: 14,
-    color: COLORS.text,
     minHeight: 48,
     textAlignVertical: 'top',
   },
 
-  /* ── Currency Badge ──────────────────────────────────────── */
   currencyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: COLORS.surfaceHigh,
     borderWidth: 1,
-    borderColor: COLORS.border,
     marginBottom: 6,
   },
   currencyBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textSecondary,
   },
 
-  /* ── Category Chips ──────────────────────────────────────── */
   categoryScroll: {
     marginHorizontal: -4,
   },
@@ -759,14 +749,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: COLORS.surfaceHigh,
     borderWidth: 1,
-    borderColor: COLORS.border,
     marginRight: 8,
-  },
-  categoryChipActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: `${COLORS.primary}15`,
   },
   categoryChipIcon: {
     fontSize: 14,
@@ -775,16 +759,10 @@ const styles = StyleSheet.create({
   categoryChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  categoryChipTextActive: {
-    color: COLORS.primary,
   },
 
-  /* ── Split Mode Toggle ──────────────────────────────────── */
   modeRow: {
     flexDirection: 'row',
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 12,
     padding: 3,
   },
@@ -794,42 +772,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 10,
   },
-  modeBtnActive: {
-    backgroundColor: COLORS.primary,
-  },
   modeBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.textSecondary,
-  },
-  modeBtnTextActive: {
-    color: COLORS.background,
   },
 
-  /* ── Member Row ─────────────────────────────────────────── */
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
   checkbox: {
     width: 44,
     height: 44,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: COLORS.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
-  },
-  checkboxActive: {
-    borderColor: COLORS.groupColor,
-    backgroundColor: `${COLORS.groupColor}20`,
   },
   checkmark: {
     fontSize: 14,
@@ -851,55 +814,41 @@ const styles = StyleSheet.create({
   memberName: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text,
-  },
-  memberNameDisabled: {
-    color: COLORS.textSecondary,
-    textDecorationLine: 'line-through',
   },
   guestTag: {
     fontSize: 10,
-    color: COLORS.textSecondary,
     marginTop: 2,
   },
   removeGuestText: {
     fontSize: 10,
-    color: COLORS.danger,
     fontWeight: '700',
     marginTop: 2,
   },
 
-  /* ── Custom Amount ──────────────────────────────────────── */
   customAmountWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 10,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
     width: 100,
   },
   customAmountPrefix: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.primary,
   },
   customAmountInput: {
     flex: 1,
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.text,
     paddingVertical: 8,
     paddingHorizontal: 4,
   },
   equalAmount: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.textSecondary,
   },
 
-  /* ── Validation ─────────────────────────────────────────── */
   validationRow: {
     borderRadius: 10,
     padding: 10,
@@ -912,51 +861,41 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* ── Add Guest ──────────────────────────────────────────── */
   addGuestBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: `${COLORS.primary}40`,
     borderStyle: 'dashed',
     marginBottom: 16,
   },
   addGuestIcon: {
     fontSize: 18,
-    color: COLORS.primary,
     fontWeight: '700',
     marginRight: 10,
   },
   addGuestText: {
     fontSize: 14,
-    color: COLORS.primary,
     fontWeight: '600',
   },
   addGuestHint: {
     fontSize: 11,
-    color: COLORS.textSecondary,
     marginLeft: 8,
   },
 
   guestInputCard: {
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
   guestNameInput: {
-    backgroundColor: COLORS.surface,
     borderRadius: 10,
     padding: 12,
     fontSize: 14,
-    color: COLORS.text,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
   tagOptions: {
     flexDirection: 'row',
@@ -968,21 +907,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  tagChipActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: `${COLORS.primary}15`,
   },
   tagChipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  tagChipTextActive: {
-    color: COLORS.primary,
   },
   guestBtnRow: {
     flexDirection: 'row',
@@ -993,60 +922,50 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: COLORS.surface,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
   guestCancelText: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textSecondary,
   },
   guestConfirmBtn: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: COLORS.primary,
     alignItems: 'center',
   },
   guestConfirmText: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.background,
+    color: '#FFFFFF',
   },
 
-  /* ── Bottom Bar ─────────────────────────────────────────── */
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
   },
   bottomInfo: { flex: 1 },
   bottomTotal: {
     fontSize: 18,
     fontWeight: '800',
-    color: COLORS.primary,
   },
   bottomSplit: {
     fontSize: 12,
-    color: COLORS.textSecondary,
     marginTop: 2,
   },
   saveBtn: {
-    backgroundColor: COLORS.primary,
     paddingHorizontal: 28,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
   },
   saveBtnText: {
     fontSize: 15,
     fontWeight: '800',
-    color: COLORS.background,
+    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
 });

@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, Text } from 'react-native';
+import { Banner } from 'react-native-paper';
 import { useNetwork } from '../store/NetworkContext';
-import { COLORS } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 
 /**
  * Slim banner that slides down when offline, shows "Back online" briefly on reconnect.
@@ -9,6 +10,7 @@ import { COLORS } from '../utils/helpers';
  */
 export default function OfflineBanner() {
   const { isConnected, justReconnected } = useNetwork();
+  const { colors } = useTheme();
   const slideAnim = useRef(new Animated.Value(-50)).current;
   const visible = !isConnected || justReconnected;
 
@@ -22,7 +24,7 @@ export default function OfflineBanner() {
 
   if (!visible) return null;
 
-  const backgroundColor = isConnected ? COLORS.success : COLORS.danger;
+  const backgroundColor = isConnected ? colors.success : colors.danger;
   const label = isConnected ? 'Back online' : 'You are offline';
 
   return (
@@ -45,13 +47,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 9999,
-    paddingTop: 48, // safe area offset
+    paddingTop: 48,
     paddingBottom: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   text: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 0.3,

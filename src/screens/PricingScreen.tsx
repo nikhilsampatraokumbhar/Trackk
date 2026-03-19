@@ -4,8 +4,8 @@ import {
   TextInput, Alert, Animated, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { useTheme } from '../store/ThemeContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { usePremium, PLANS, FOUNDING_PRICES } from '../store/PremiumContext';
@@ -26,6 +26,7 @@ const HERO_LINES = [
 export default function PricingScreen() {
   const nav = useNavigation<Nav>();
   const { subscription, isPremium, activatePromoCode, subscribeToPlan } = usePremium();
+  const { colors } = useTheme();
   const [promoCode, setPromoCode] = useState('');
   const [promoLoading, setPromoLoading] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'individual' | 'family'>('individual');
@@ -153,12 +154,7 @@ export default function PricingScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
         {/* Hero */}
-        <LinearGradient
-          colors={['#1C1708', '#0E0C04', COLORS.background]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroCard}
-        >
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: `${colors.primary}30` }]}>
           <View style={styles.heroAccent} />
           <Text style={styles.heroEmoji}>✨</Text>
           <Text style={styles.heroTitle}>Trackk Premium</Text>
@@ -169,7 +165,7 @@ export default function PricingScreen() {
               <Text style={styles.activeBadgeText}>ACTIVE</Text>
             </View>
           )}
-        </LinearGradient>
+        </View>
 
         {/* Social proof nudge */}
         <View style={styles.socialProof}>

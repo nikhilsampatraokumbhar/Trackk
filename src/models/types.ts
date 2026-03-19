@@ -14,6 +14,7 @@ export interface TrackerState {
   reimbursement: boolean;
   activeGroupIds: string[];
   groupAffectsGoal: boolean; // Whether group expenses deduct from goal daily budget
+  defaultTrackerId: string;  // 'personal' | 'reimbursement' | group ID — last-used tracker
 }
 
 export interface Transaction {
@@ -114,6 +115,7 @@ export interface Debt {
   toUserId: string;
   toName: string;
   amount: number;
+  currency?: string;  // ISO 4217, defaults to INR if not set
 }
 
 export interface ParsedTransaction {

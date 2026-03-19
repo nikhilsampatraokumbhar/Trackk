@@ -154,15 +154,13 @@ describe('StorageService', () => {
       expect(txn.splits[1].settled).toBe(false);
     });
 
-    it('should save user split to personal transactions', async () => {
+    it('should not save group splits to personal transactions', async () => {
       const group = await createGroup('Trip', [{ displayName: 'Bob', phone: '111' }], 'user1');
       await addGroupTransaction(makeParsed({ amount: 1000 }), group.id, 'user1');
 
-      // Should have a personal transaction for the split amount
+      // Personal transactions should be empty — group data stays separate
       const all = await getTransactions();
-      const groupTxn = all.find(t => t.groupId === group.id);
-      expect(groupTxn).toBeTruthy();
-      expect(groupTxn!.amount).toBe(500); // only user's split
+      expect(all.length).toBe(0);
     });
 
     it('should handle 3-way split with rounding', async () => {

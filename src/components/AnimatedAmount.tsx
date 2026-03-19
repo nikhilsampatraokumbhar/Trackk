@@ -10,7 +10,7 @@ interface Props {
 
 /**
  * Animates a currency amount from its previous value to the new value.
- * Creates a smooth counting-up/down effect like CRED.
+ * Creates a smooth counting-up/down effect.
  */
 export default function AnimatedAmount({ value, style, duration = 600 }: Props) {
   const animatedValue = useRef(new Animated.Value(0)).current;

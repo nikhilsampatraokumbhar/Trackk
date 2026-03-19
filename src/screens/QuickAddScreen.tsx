@@ -18,16 +18,16 @@ import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useTracker } from '../store/TrackerContext';
+import { useTheme } from '../store/ThemeContext';
 import { saveTransaction } from '../services/StorageService';
 import { ingestTransaction } from '../services/TransactionSignalEngine';
 import { ParsedTransaction } from '../models/types';
-import { COLORS, formatCurrency } from '../utils/helpers';
+import { formatCurrency } from '../utils/helpers';
 import { hapticLight, hapticMedium } from '../utils/haptics';
 import SuccessOverlay from '../components/SuccessOverlay';
 
@@ -51,6 +51,7 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
   const nav = useNavigation<Nav>();
   const { user } = useAuth();
   const { trackerState } = useTracker();
+  const { colors } = useTheme();
   const amountRef = useRef<TextInput>(null);
 
   const [amount, setAmount] = useState(initialAmount ? String(initialAmount) : '');
@@ -109,26 +110,28 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerIcon}>+</Text>
-          <Text style={styles.headerTitle}>Quick Add</Text>
+          <View style={[styles.headerIconWrap, { backgroundColor: `${colors.primary}15` }]}>
+            <Text style={[styles.headerIcon, { color: colors.primary }]}>+</Text>
+          </View>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Quick Add</Text>
         </View>
 
         {/* Amount Input */}
         <View style={styles.amountContainer}>
-          <Text style={styles.currencySymbol}>₹</Text>
+          <Text style={[styles.currencySymbol, { color: colors.primary }]}>₹</Text>
           <TextInput
             ref={amountRef}
-            style={styles.amountInput}
+            style={[styles.amountInput, { color: colors.text }]}
             value={amount}
             onChangeText={setAmount}
             placeholder="0"
-            placeholderTextColor={COLORS.textLight}
+            placeholderTextColor={colors.textLight}
             keyboardType="decimal-pad"
             returnKeyType="done"
           />
@@ -141,7 +144,8 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
               key={cat.label}
               style={[
                 styles.categoryChip,
-                selectedCategory === cat.label && styles.categoryChipActive,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                selectedCategory === cat.label && { borderColor: colors.primary, backgroundColor: `${colors.primary}10` },
               ]}
               onPress={() => handleCategoryTap(cat.label)}
               activeOpacity={0.7}
@@ -149,7 +153,8 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
               <Text style={styles.categoryIcon}>{cat.icon}</Text>
               <Text style={[
                 styles.categoryLabel,
-                selectedCategory === cat.label && styles.categoryLabelActive,
+                { color: colors.textSecondary },
+                selectedCategory === cat.label && { color: colors.primary },
               ]}>
                 {cat.label}
               </Text>
@@ -159,11 +164,11 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
 
         {/* Description Input */}
         <TextInput
-          style={styles.descInput}
+          style={[styles.descInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
           value={description}
           onChangeText={(t) => { setDescription(t); setSelectedCategory(null); }}
           placeholder="What was this for? (optional)"
-          placeholderTextColor={COLORS.textLight}
+          placeholderTextColor={colors.textLight}
           maxLength={100}
           returnKeyType="done"
           onSubmitEditing={handleSave}
@@ -171,21 +176,14 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
 
         {/* Save Button */}
         <TouchableOpacity
-          style={[styles.saveBtn, saving && { opacity: 0.5 }]}
+          style={[styles.saveBtn, { backgroundColor: colors.primary }, saving && { opacity: 0.5 }]}
           onPress={handleSave}
           disabled={saving}
           activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={[COLORS.primary, COLORS.primaryDark]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.saveBtnGradient}
-          >
-            <Text style={styles.saveBtnText}>
-              {saving ? 'Saving...' : amount ? `Save ${formatCurrency(parseFloat(amount) || 0)}` : 'Save Expense'}
-            </Text>
-          </LinearGradient>
+          <Text style={styles.saveBtnText}>
+            {saving ? 'Saving...' : amount ? `Save ${formatCurrency(parseFloat(amount) || 0)}` : 'Save Expense'}
+          </Text>
         </TouchableOpacity>
 
         {/* Cancel */}
@@ -194,7 +192,7 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
           onPress={() => nav.goBack()}
           activeOpacity={0.7}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
         </TouchableOpacity>
       </View>
 
@@ -203,7 +201,7 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
         message="Expense Saved"
         subMessage={`${formatCurrency(parseFloat(amount) || 0)} added`}
         onDone={() => setShowSuccess(false)}
-        color={COLORS.primary}
+        color={colors.primary}
       />
     </KeyboardAvoidingView>
   );
@@ -212,7 +210,6 @@ export default function QuickAddScreen({ initialAmount, initialDescription }: Qu
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   content: {
     flex: 1,
@@ -227,22 +224,20 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 32,
   },
+  headerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerIcon: {
     fontSize: 24,
     fontWeight: '800',
-    color: COLORS.primary,
-    backgroundColor: `${COLORS.primary}20`,
-    width: 36,
-    height: 36,
-    textAlign: 'center',
-    lineHeight: 36,
-    borderRadius: 10,
-    overflow: 'hidden',
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: COLORS.text,
   },
 
   amountContainer: {
@@ -254,13 +249,11 @@ const styles = StyleSheet.create({
   currencySymbol: {
     fontSize: 36,
     fontWeight: '800',
-    color: COLORS.primary,
     marginRight: 4,
   },
   amountInput: {
     fontSize: 48,
     fontWeight: '800',
-    color: COLORS.text,
     minWidth: 80,
     textAlign: 'center',
   },
@@ -275,50 +268,37 @@ const styles = StyleSheet.create({
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.glass,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
     gap: 6,
-  },
-  categoryChipActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: `${COLORS.primary}15`,
   },
   categoryIcon: { fontSize: 16 },
   categoryLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  categoryLabelActive: {
-    color: COLORS.primary,
   },
 
   descInput: {
-    backgroundColor: COLORS.glass,
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 14,
     fontSize: 14,
-    color: COLORS.text,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
     marginBottom: 24,
     textAlign: 'center',
   },
 
   saveBtn: {
-    borderRadius: 30,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  saveBtnGradient: {
+    borderRadius: 12,
     paddingVertical: 18,
     alignItems: 'center',
-    borderRadius: 30,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   saveBtnText: {
     fontSize: 16,
@@ -333,6 +313,5 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textSecondary,
   },
 });

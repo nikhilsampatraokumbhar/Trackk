@@ -5,7 +5,6 @@ import {
   TextInput, AppState, AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -23,6 +22,7 @@ import { simplifyDebts, calculateDebts } from '../services/DebtCalculator';
 import TrackerToggle from '../components/TrackerToggle';
 import EmptyState from '../components/EmptyState';
 import { COLORS, formatCurrency, formatDate, getColorForId, generateId } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 import { GROUP_CATEGORIES } from '../utils/categories';
 import BottomSheet from '../components/BottomSheet';
 
@@ -75,6 +75,7 @@ export default function GroupDetailScreen() {
     deleteGroupTransaction, updateGroupTransaction,
   } = useGroups();
   const { trackerState, toggleGroup } = useTracker();
+  const { colors } = useTheme();
 
   const [group, setGroup] = useState<Group | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -143,7 +144,7 @@ export default function GroupDetailScreen() {
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   if (!group) {
-    return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
+    return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator size="large" color={colors.primary} /></View>;
   }
 
   const isTracking = trackerState.activeGroupIds.includes(groupId);
@@ -160,13 +161,13 @@ export default function GroupDetailScreen() {
     const totalOwed = owedToUser.reduce((s, d) => s + d.amount, 0);
     const totalOwing = userOwes.reduce((s, d) => s + d.amount, 0);
 
-    if (totalOwed === 0 && totalOwing === 0) return { text: 'All settled up', color: COLORS.success };
+    if (totalOwed === 0 && totalOwing === 0) return { text: 'All settled up', color: colors.success };
     if (totalOwed > totalOwing) {
       const net = totalOwed - totalOwing;
-      return { text: `You are owed ${formatCurrency(net)}`, color: COLORS.success };
+      return { text: `You are owed ${formatCurrency(net)}`, color: colors.success };
     }
     const net = totalOwing - totalOwed;
-    return { text: `You owe ${formatCurrency(net)}`, color: COLORS.danger };
+    return { text: `You owe ${formatCurrency(net)}`, color: colors.danger };
   })();
 
   // ─── Timeline ───────────────────────────────────────────────────────────────
@@ -302,6 +303,30 @@ export default function GroupDetailScreen() {
     const includedMembers = editingTxn.members.filter(m => m.included);
     if (includedMembers.length < 2) { Alert.alert('Need members', 'At least 2 people must be in the split.'); return; }
 
+    // Check if settled splits will be affected by the edit
+    const amountChanged = parsedAmount !== editingTxn.txn.amount;
+    const membersChanged = editingTxn.txn.splits.length !== includedMembers.length ||
+      editingTxn.txn.splits.some(s => !includedMembers.find(m => m.userId === s.userId));
+    const payerChanged = editingTxn.paidBy !== editingTxn.txn.addedBy;
+    const settledSplits = editingTxn.txn.splits.filter(s => s.settled && s.userId !== editingTxn.txn.addedBy);
+
+    if (settledSplits.length > 0 && (amountChanged || membersChanged || payerChanged)) {
+      const settledNames = settledSplits.map(s => s.userId === userId ? 'You' : s.displayName).join(', ');
+      return Alert.alert(
+        'Settled splits will be affected',
+        `${settledNames} already settled their share. Editing the amount, payer, or members will reset their settled status.\n\nDo you want to continue?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Edit Anyway', style: 'destructive', onPress: () => performUpdateExpense(parsedAmount, includedMembers, true) },
+        ],
+      );
+    }
+
+    await performUpdateExpense(parsedAmount, includedMembers, false);
+  };
+
+  const performUpdateExpense = async (parsedAmount: number, includedMembers: EditingTxn['members'], resetSettled: boolean) => {
+    if (!editingTxn) return;
     setEditSaving(true);
     try {
       const perPerson = Math.round((parsedAmount / includedMembers.length) * 100) / 100;
@@ -310,10 +335,11 @@ export default function GroupDetailScreen() {
 
       const newSplits: Split[] = includedMembers.map((m, i) => {
         const existingSplit = editingTxn.txn.splits.find(s => s.userId === m.userId);
+        const isNewPayer = m.userId === editingTxn.paidBy;
         return {
           userId: m.userId, displayName: m.displayName,
           amount: Math.round((perPerson + (i === includedMembers.length - 1 ? diff : 0)) * 100) / 100,
-          settled: existingSplit?.settled ?? (m.userId === editingTxn.paidBy),
+          settled: isNewPayer ? true : (resetSettled ? false : (existingSplit?.settled ?? false)),
         };
       });
 
@@ -331,14 +357,23 @@ export default function GroupDetailScreen() {
 
   const handleDeleteExpense = () => {
     if (!editingTxn) return;
-    Alert.alert('Delete Expense', `Delete "${editingTxn.txn.description}" (${formatCurrency(editingTxn.txn.amount)})?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        await deleteGroupTransaction(groupId, editingTxn!.txn.id);
-        setEditingTxn(null);
-        await load();
-      }},
-    ]);
+    const settledSplits = editingTxn.txn.splits.filter(s => s.settled && s.userId !== editingTxn.txn.addedBy);
+    const hasSettledSplits = settledSplits.length > 0;
+    const warningText = hasSettledSplits
+      ? `\n\nWarning: ${settledSplits.length} member(s) already settled their share. Deleting this expense may cause balance inconsistencies if settlements were already recorded.`
+      : '';
+    Alert.alert(
+      'Delete Expense',
+      `Delete "${editingTxn.txn.description}" (${formatCurrency(editingTxn.txn.amount)})? This will affect ALL members in this split.${warningText}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+          await deleteGroupTransaction(groupId, editingTxn!.txn.id);
+          setEditingTxn(null);
+          await load();
+        }},
+      ],
+    );
   };
 
   // ─── Comments ──────────────────────────────────────────────────────────────
@@ -352,12 +387,7 @@ export default function GroupDetailScreen() {
       timestamp: Date.now(),
     };
     const existing = commentTxn.comments || [];
-    await updateGroupTransaction(groupId, commentTxn.id, {
-      ...({} as any),
-    });
-    // Update via raw Firestore or local storage
     const updatedComments = [...existing, newComment];
-    // We pass comments through the update mechanism
     try {
       if (isAuthenticated) {
         const { db } = require('../services/FirebaseConfig');
@@ -398,7 +428,7 @@ export default function GroupDetailScreen() {
     // Right side: what does this mean for the user?
     let rightLabel = '';
     let rightAmount = '';
-    let rightColor = COLORS.textSecondary;
+    let rightColor = colors.textSecondary;
 
     if (isNotInvolved) {
       rightLabel = 'not involved';
@@ -407,11 +437,11 @@ export default function GroupDetailScreen() {
       const lentAmount = txn.amount - (userSplit?.amount || 0);
       rightLabel = 'you lent';
       rightAmount = formatCurrency(lentAmount);
-      rightColor = COLORS.success;
+      rightColor = colors.success;
     } else {
       rightLabel = 'you borrowed';
       rightAmount = formatCurrency(userSplit?.amount || 0);
-      rightColor = COLORS.danger;
+      rightColor = colors.danger;
     }
 
     return (
@@ -506,14 +536,14 @@ export default function GroupDetailScreen() {
           <Text style={styles.dateMonth}>{monthShort}</Text>
           <Text style={styles.dateDay}>{day}</Text>
         </View>
-        <View style={[styles.rowIcon, { backgroundColor: `${COLORS.success}18` }]}>
+        <View style={[styles.rowIcon, { backgroundColor: `${colors.success}18` }]}>
           <Text style={styles.rowIconText}>{s.method === 'upi' ? '📱' : '💵'}</Text>
         </View>
         <View style={styles.rowInfo}>
           <Text style={styles.rowSub}>
-            <Text style={[styles.rowSubBold, isFrom && { color: COLORS.danger }]}>{isFrom ? 'You' : s.fromName}</Text>
+            <Text style={[styles.rowSubBold, isFrom && { color: colors.danger }]}>{isFrom ? 'You' : s.fromName}</Text>
             {' paid '}
-            <Text style={[styles.rowSubBold, isTo && { color: COLORS.success }]}>{isTo ? 'You' : s.toName}</Text>
+            <Text style={[styles.rowSubBold, isTo && { color: colors.success }]}>{isTo ? 'You' : s.toName}</Text>
             {' '}{formatCurrency(s.amount)}
           </Text>
           {s.note ? <Text style={styles.settlementNote}>{s.note}</Text> : null}
@@ -529,14 +559,14 @@ export default function GroupDetailScreen() {
 
   // ─── Main Render ────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
       <SectionList
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         sections={sections}
         keyExtractor={(item, i) => (item.kind === 'expense' ? item.data.id : item.data.id) + i}
         stickySectionHeadersEnabled={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         renderSectionHeader={({ section: { title } }) => (
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionHeaderText}>{title}</Text>
@@ -595,7 +625,7 @@ export default function GroupDetailScreen() {
                     <Text style={styles.simplifyToggleText}>
                       {simplifyDebtsEnabled ? 'Simplified' : 'Detailed'}
                     </Text>
-                    <View style={[styles.simplifyDot, { backgroundColor: simplifyDebtsEnabled ? COLORS.success : COLORS.warning }]} />
+                    <View style={[styles.simplifyDot, { backgroundColor: simplifyDebtsEnabled ? colors.success : colors.warning }]} />
                   </TouchableOpacity>
                 </View>
                 {simplifiedDebts.map((debt, i) => (
@@ -608,8 +638,11 @@ export default function GroupDetailScreen() {
                       {debt.toUserId === userId ? 'You' : debt.toName}
                     </Text>
                     <Text style={[styles.debtAmount, {
-                      color: debt.fromUserId === userId ? COLORS.danger : debt.toUserId === userId ? COLORS.success : COLORS.text
-                    }]}>{formatCurrency(debt.amount)}</Text>
+                      color: debt.fromUserId === userId ? colors.danger : debt.toUserId === userId ? colors.success : colors.text
+                    }]}>
+                      {formatCurrency(debt.amount, debt.currency)}
+                      {debt.currency && debt.currency !== 'INR' ? ` ${debt.currency}` : ''}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -622,7 +655,7 @@ export default function GroupDetailScreen() {
                 subtitle="Auto-detect payments and split equally"
                 isActive={isTracking}
                 onToggle={() => toggleGroup(groupId)}
-                color={COLORS.groupColor}
+                color={colors.groupColor}
               />
             </View>
 
@@ -631,7 +664,7 @@ export default function GroupDetailScreen() {
                 icon="💸"
                 title="No group expenses yet"
                 subtitle="Enable tracking above or add an expense manually"
-                accent={COLORS.groupColor}
+                accent={colors.groupColor}
               />
             )}
           </>
@@ -700,17 +733,17 @@ export default function GroupDetailScreen() {
                   keyboardType="numeric"
                   selectTextOnFocus
                   placeholder="0"
-                  placeholderTextColor={COLORS.textLight}
+                  placeholderTextColor={colors.textLight}
                 />
               </View>
             </View>
             {getSettleAmountValue() > 0 && (
               <View style={[styles.typeBadge, {
-                backgroundColor: getSettleAmountValue() >= settleTarget.debt.amount ? `${COLORS.success}15` : `${COLORS.warning}15`,
-                borderColor: getSettleAmountValue() >= settleTarget.debt.amount ? `${COLORS.success}30` : `${COLORS.warning}30`,
+                backgroundColor: getSettleAmountValue() >= settleTarget.debt.amount ? `${colors.success}15` : `${colors.warning}15`,
+                borderColor: getSettleAmountValue() >= settleTarget.debt.amount ? `${colors.success}30` : `${colors.warning}30`,
               }]}>
                 <Text style={[styles.typeBadgeText, {
-                  color: getSettleAmountValue() >= settleTarget.debt.amount ? COLORS.success : COLORS.warning,
+                  color: getSettleAmountValue() >= settleTarget.debt.amount ? colors.success : colors.warning,
                 }]}>
                   {getSettleAmountValue() >= settleTarget.debt.amount
                     ? 'Full Settlement'
@@ -732,7 +765,7 @@ export default function GroupDetailScreen() {
 
         <View style={styles.payOptions}>
           <TouchableOpacity style={styles.payOption} onPress={handleUPISettle} activeOpacity={0.7}>
-            <View style={[styles.payOptionIcon, { backgroundColor: `${COLORS.primaryLight}18` }]}>
+            <View style={[styles.payOptionIcon, { backgroundColor: `${colors.primaryLight}18` }]}>
               <Text style={styles.payOptionEmoji}>📱</Text>
             </View>
             <View style={styles.payOptionInfo}>
@@ -742,7 +775,7 @@ export default function GroupDetailScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.payOption} onPress={handleCashSettle} activeOpacity={0.7}>
-            <View style={[styles.payOptionIcon, { backgroundColor: `${COLORS.success}18` }]}>
+            <View style={[styles.payOptionIcon, { backgroundColor: `${colors.success}18` }]}>
               <Text style={styles.payOptionEmoji}>💵</Text>
             </View>
             <View style={styles.payOptionInfo}>
@@ -764,8 +797,8 @@ export default function GroupDetailScreen() {
           <Text style={styles.modalSub}>{formatCurrency(pendingUPISettle.amount)} to {pendingUPISettle.debt.toName}</Text>
         )}
         <View style={styles.payOptions}>
-          <TouchableOpacity style={[styles.payOption, { borderColor: `${COLORS.success}30` }]} onPress={handleUPIConfirmDone} activeOpacity={0.7}>
-            <View style={[styles.payOptionIcon, { backgroundColor: `${COLORS.success}18` }]}>
+          <TouchableOpacity style={[styles.payOption, { borderColor: `${colors.success}30` }]} onPress={handleUPIConfirmDone} activeOpacity={0.7}>
+            <View style={[styles.payOptionIcon, { backgroundColor: `${colors.success}18` }]}>
               <Text style={styles.payOptionEmoji}>✅</Text>
             </View>
             <View style={styles.payOptionInfo}>
@@ -773,8 +806,8 @@ export default function GroupDetailScreen() {
               <Text style={styles.payOptionSub}>Mark as settled</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.payOption, { borderColor: `${COLORS.danger}30` }]} onPress={handleUPIConfirmNotDone} activeOpacity={0.7}>
-            <View style={[styles.payOptionIcon, { backgroundColor: `${COLORS.danger}18` }]}>
+          <TouchableOpacity style={[styles.payOption, { borderColor: `${colors.danger}30` }]} onPress={handleUPIConfirmNotDone} activeOpacity={0.7}>
+            <View style={[styles.payOptionIcon, { backgroundColor: `${colors.danger}18` }]}>
               <Text style={styles.payOptionEmoji}>❌</Text>
             </View>
             <View style={styles.payOptionInfo}>
@@ -803,7 +836,7 @@ export default function GroupDetailScreen() {
                 onChangeText={v => setEditingTxn({ ...editingTxn, amount: v })}
                 keyboardType="decimal-pad"
                 placeholder="0"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
               />
             </View>
 
@@ -822,12 +855,12 @@ export default function GroupDetailScreen() {
               {GROUP_CATEGORIES.map(cat => (
                 <TouchableOpacity
                   key={cat.label}
-                  style={[styles.editChip, editingTxn.category === cat.label && { borderColor: COLORS.primary, backgroundColor: `${COLORS.primary}15` }]}
+                  style={[styles.editChip, editingTxn.category === cat.label && { borderColor: colors.primary, backgroundColor: `${colors.primary}15` }]}
                   onPress={() => setEditingTxn({ ...editingTxn, category: editingTxn.category === cat.label ? '' : cat.label })}
                   activeOpacity={0.7}
                 >
                   <Text style={{ fontSize: 12, marginRight: 4 }}>{cat.icon}</Text>
-                  <Text style={[styles.editChipName, editingTxn.category === cat.label ? { color: COLORS.primary } : { color: COLORS.textSecondary }]}>
+                  <Text style={[styles.editChipName, editingTxn.category === cat.label ? { color: colors.primary } : { color: colors.textSecondary }]}>
                     {cat.label}
                   </Text>
                 </TouchableOpacity>
@@ -858,7 +891,7 @@ export default function GroupDetailScreen() {
                     activeOpacity={0.7}
                   >
                     {isPayer && <Text style={[styles.editCheck, { color: c }]}>✓</Text>}
-                    <Text style={[styles.editChipName, isPayer ? { color: COLORS.text } : { color: COLORS.textSecondary }]}>{m.displayName}</Text>
+                    <Text style={[styles.editChipName, isPayer ? { color: colors.text } : { color: colors.textSecondary }]}>{m.displayName}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -876,7 +909,7 @@ export default function GroupDetailScreen() {
                     activeOpacity={0.7}
                   >
                     {m.included && <Text style={[styles.editCheck, { color: c }]}>✓</Text>}
-                    <Text style={[styles.editChipName, m.included ? { color: COLORS.text } : { color: COLORS.textSecondary }]}>{m.displayName}</Text>
+                    <Text style={[styles.editChipName, m.included ? { color: colors.text } : { color: colors.textSecondary }]}>{m.displayName}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -891,10 +924,8 @@ export default function GroupDetailScreen() {
               return null;
             })()}
 
-            <TouchableOpacity style={[styles.saveBtn, editSaving && { opacity: 0.5 }]} onPress={handleUpdateExpense} disabled={editSaving} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtnGrad}>
-                <Text style={styles.saveBtnText}>{editSaving ? 'Saving...' : 'Save Changes'}</Text>
-              </LinearGradient>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }, editSaving && { opacity: 0.5 }]} onPress={handleUpdateExpense} disabled={editSaving} activeOpacity={0.8}>
+              <Text style={styles.saveBtnText}>{editSaving ? 'Saving...' : 'Save Changes'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.commentOpenBtn} onPress={() => { setCommentTxn(editingTxn.txn); setEditingTxn(null); }} activeOpacity={0.7}>
@@ -949,7 +980,7 @@ export default function GroupDetailScreen() {
                 value={commentText}
                 onChangeText={setCommentText}
                 placeholder="Add a comment..."
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 multiline
                 maxLength={500}
               />
@@ -980,8 +1011,8 @@ const styles = StyleSheet.create({
   settingsBtn: { padding: 8, borderRadius: 12, backgroundColor: `${COLORS.surfaceHigh}` },
   settingsIcon: { fontSize: 20 },
   groupIcon: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  groupInitial: { fontSize: 28, fontWeight: '800' },
-  groupName: { fontSize: 24, fontWeight: '800', color: COLORS.text, marginBottom: 4, letterSpacing: -0.3 },
+  groupInitial: { fontSize: 28, fontWeight: '700' },
+  groupName: { fontSize: 24, fontWeight: '700', color: COLORS.text, marginBottom: 4, letterSpacing: -0.3 },
   summaryText: { fontSize: 14, fontWeight: '500', marginBottom: 16 },
   actionRow: { flexDirection: 'row', gap: 10 },
   actionBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
@@ -1000,9 +1031,9 @@ const styles = StyleSheet.create({
   timelineRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   dateCol: { width: 36, alignItems: 'center', marginRight: 12 },
   dateMonth: { fontSize: 10, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'uppercase' },
-  dateDay: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  dateDay: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   rowIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  rowIconText: { fontSize: 16, fontWeight: '800' },
+  rowIconText: { fontSize: 16, fontWeight: '700' },
   rowInfo: { flex: 1 },
   rowDesc: { fontSize: 15, fontWeight: '600', color: COLORS.text, marginBottom: 2 },
   rowSub: { fontSize: 12, color: COLORS.textSecondary },
@@ -1014,20 +1045,20 @@ const styles = StyleSheet.create({
 
   // ─── FAB ──────────────────────────────────────────────────────────────────
   fab: { position: 'absolute', right: 20, bottom: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 30, elevation: 8, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12 },
-  fabIcon: { color: '#0A0A0F', fontSize: 20, fontWeight: '800', marginRight: 6 },
-  fabText: { color: '#0A0A0F', fontWeight: '800', fontSize: 14, letterSpacing: 0.3 },
+  fabIcon: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', marginRight: 6 },
+  fabText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14, letterSpacing: 0.3 },
 
   // ─── Settle List Sheet ────────────────────────────────────────────────────
   settleRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   settleAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  settleAvatarText: { fontSize: 18, fontWeight: '800' },
+  settleAvatarText: { fontSize: 18, fontWeight: '700' },
   settleName: { flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.text },
   settleRightCol: { alignItems: 'flex-end' },
   settleOwedLabel: { fontSize: 11, color: COLORS.danger, fontWeight: '500' },
   settleOwedAmount: { fontSize: 15, fontWeight: '700', color: COLORS.danger },
 
   // ─── Shared Modal Styles ──────────────────────────────────────────────────
-  modalTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginBottom: 6 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 6 },
   modalSub: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 20 },
   cancelBtn: { alignItems: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: COLORS.surfaceHigh, borderWidth: 1, borderColor: COLORS.border, marginTop: 10 },
   cancelBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary },
@@ -1035,12 +1066,12 @@ const styles = StyleSheet.create({
   // ─── Amount Wrap ──────────────────────────────────────────────────────────
   amountWrap: { backgroundColor: COLORS.surfaceHigh, borderRadius: 14, padding: 14, marginBottom: 18, borderWidth: 1, borderColor: COLORS.border },
   totalRow: { marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  totalValue: { fontSize: 16, fontWeight: '800', color: COLORS.textSecondary, marginTop: 4 },
+  totalValue: { fontSize: 16, fontWeight: '700', color: COLORS.textSecondary, marginTop: 4 },
   settleAmtSection: { marginBottom: 4 },
   amountLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1, marginBottom: 6 },
   amountInputRow: { flexDirection: 'row', alignItems: 'center' },
-  amountCurrency: { fontSize: 22, fontWeight: '800', color: COLORS.text, marginRight: 4 },
-  amountInput: { flex: 1, fontSize: 22, fontWeight: '800', color: COLORS.text, padding: 0 },
+  amountCurrency: { fontSize: 22, fontWeight: '700', color: COLORS.text, marginRight: 4 },
+  amountInput: { flex: 1, fontSize: 22, fontWeight: '700', color: COLORS.text, padding: 0 },
   typeBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, marginTop: 10 },
   typeBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
 
@@ -1056,16 +1087,15 @@ const styles = StyleSheet.create({
   // ─── Edit Expense ─────────────────────────────────────────────────────────
   editLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 8, marginTop: 4 },
   editAmountRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surfaceHigh, borderRadius: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 16 },
-  editCurrency: { fontSize: 24, fontWeight: '800', color: COLORS.primary, marginRight: 4 },
-  editAmountInput: { flex: 1, fontSize: 28, fontWeight: '800', color: COLORS.text, paddingVertical: 14 },
+  editCurrency: { fontSize: 24, fontWeight: '700', color: COLORS.primary, marginRight: 4 },
+  editAmountInput: { flex: 1, fontSize: 28, fontWeight: '700', color: COLORS.text, paddingVertical: 14 },
   editDescInput: { backgroundColor: COLORS.surfaceHigh, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, marginBottom: 16 },
   editMembers: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   editChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.surfaceHigh },
-  editCheck: { fontSize: 12, fontWeight: '800', marginRight: 6 },
+  editCheck: { fontSize: 12, fontWeight: '700', marginRight: 6 },
   editChipName: { fontSize: 13, fontWeight: '600' },
   splitPreview: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '600', marginBottom: 20 },
-  saveBtn: { borderRadius: 14, overflow: 'hidden', marginBottom: 10 },
-  saveBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 14 },
+  saveBtn: { borderRadius: 12, marginBottom: 10, paddingVertical: 16, alignItems: 'center' },
   saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   deleteBtn: { paddingVertical: 14, alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: `${COLORS.danger}30`, backgroundColor: `${COLORS.danger}08`, marginBottom: 6 },
   deleteBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.danger },
@@ -1091,7 +1121,7 @@ const styles = StyleSheet.create({
   noCommentsText: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', paddingVertical: 20, fontStyle: 'italic' },
   commentRow: { flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   commentAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  commentAvatarText: { fontSize: 13, fontWeight: '800' },
+  commentAvatarText: { fontSize: 13, fontWeight: '700' },
   commentContent: { flex: 1 },
   commentAuthor: { fontSize: 12, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
   commentTextBody: { fontSize: 13, color: COLORS.text, lineHeight: 18 },

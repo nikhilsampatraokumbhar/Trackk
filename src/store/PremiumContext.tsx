@@ -19,7 +19,7 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     tagline: 'Track smart, spend smarter',
     features: [
       'Unlimited expense entries',
-      'SMS auto-detection',
+      'Auto expense detection',
       'Up to 3 groups',
       'This month\'s insights (top 3 categories)',
       '1 savings goal',
@@ -383,7 +383,7 @@ export function PremiumProvider({ children, userId }: { children: ReactNode; use
   const shareReferralLink = useCallback(async () => {
     try {
       await Share.share({
-        message: `Hey! I use Trackk to track expenses and split with friends. It auto-reads your bank SMS — super handy!\n\nJoin using my code: ${referralCode}\n\nDownload: https://trackk.app/invite/${referralCode}`,
+        message: `Hey! I use Trackk to track expenses and split with friends. It auto-detects every payment — super handy!\n\nJoin using my code: ${referralCode}\n\nDownload: https://trackk.app/invite/${referralCode}`,
         title: 'Join me on Trackk',
       });
     } catch {}

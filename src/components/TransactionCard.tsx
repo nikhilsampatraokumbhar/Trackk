@@ -2,8 +2,10 @@ import React, { memo, useRef } from 'react';
 import {
   TouchableOpacity, Text, StyleSheet, View, Animated, PanResponder, Vibration,
 } from 'react-native';
+import { Chip, Surface } from 'react-native-paper';
 import { Transaction } from '../models/types';
-import { formatCurrency, formatDate, COLORS } from '../utils/helpers';
+import { formatCurrency, formatDate } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 
 interface Props {
   transaction: Transaction;
@@ -19,16 +21,18 @@ const TRACKER_LABELS: Record<string, string> = {
   group: 'Group',
 };
 
-const TRACKER_COLORS: Record<string, string> = {
-  personal: COLORS.personalColor,
-  reimbursement: COLORS.reimbursementColor,
-  group: COLORS.groupColor,
-};
-
 const SWIPE_THRESHOLD = -80;
 
 function TransactionCardInner({ transaction, onPress, onLongPress, onSwipeDelete, showBadge }: Props) {
-  const color = TRACKER_COLORS[transaction.trackerType] || COLORS.textSecondary;
+  const { colors } = useTheme();
+
+  const TRACKER_COLORS: Record<string, string> = {
+    personal: colors.personalColor,
+    reimbursement: colors.reimbursementColor,
+    group: colors.groupColor,
+  };
+
+  const color = TRACKER_COLORS[transaction.trackerType] || colors.textSecondary;
   const translateX = useRef(new Animated.Value(0)).current;
 
   const panResponder = useRef(
@@ -59,7 +63,7 @@ function TransactionCardInner({ transaction, onPress, onLongPress, onSwipeDelete
     <View style={styles.swipeContainer}>
       {/* Delete background */}
       {onSwipeDelete && (
-        <View style={styles.deleteBg}>
+        <View style={[styles.deleteBg, { backgroundColor: colors.danger }]}>
           <Text style={styles.deleteLabel}>Delete</Text>
         </View>
       )}
@@ -69,7 +73,10 @@ function TransactionCardInner({ transaction, onPress, onLongPress, onSwipeDelete
         {...panResponder.panHandlers}
       >
         <TouchableOpacity
-          style={styles.card}
+          style={[styles.card, {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          }]}
           onPress={onPress}
           onLongPress={() => {
             if (onLongPress) {
@@ -80,14 +87,20 @@ function TransactionCardInner({ transaction, onPress, onLongPress, onSwipeDelete
           delayLongPress={400}
           activeOpacity={0.7}
         >
-          {/* Info — no icon, cleaner layout */}
+          {/* Info */}
           <View style={styles.info}>
-            <Text style={styles.desc} numberOfLines={1}>{transaction.description}</Text>
+            <Text style={[styles.desc, { color: colors.text }]} numberOfLines={1}>
+              {transaction.description}
+            </Text>
             <View style={styles.metaRow}>
-              <Text style={styles.date}>{formatDate(transaction.timestamp)}</Text>
+              <Text style={[styles.date, { color: colors.textSecondary }]}>
+                {formatDate(transaction.timestamp)}
+              </Text>
               {transaction.category ? (
-                <View style={styles.categoryChip}>
-                  <Text style={styles.categoryText}>{transaction.category}</Text>
+                <View style={[styles.categoryChip, { backgroundColor: colors.surfaceHigh }]}>
+                  <Text style={[styles.categoryText, { color: colors.textSecondary }]}>
+                    {transaction.category}
+                  </Text>
                 </View>
               ) : null}
               {showBadge && (
@@ -99,12 +112,16 @@ function TransactionCardInner({ transaction, onPress, onLongPress, onSwipeDelete
               )}
             </View>
             {transaction.note ? (
-              <Text style={styles.note} numberOfLines={1}>{transaction.note}</Text>
+              <Text style={[styles.note, { color: colors.textSecondary }]} numberOfLines={1}>
+                {transaction.note}
+              </Text>
             ) : null}
           </View>
 
           {/* Right side — amount */}
-          <Text style={styles.amount}>-{formatCurrency(transaction.amount)}</Text>
+          <Text style={[styles.amount, { color: colors.text }]}>
+            -{formatCurrency(transaction.amount)}
+          </Text>
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -122,33 +139,29 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
     left: 0,
-    backgroundColor: COLORS.danger,
-    borderRadius: 14,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'flex-end',
     paddingRight: 24,
   },
   deleteLabel: {
     color: '#FFFFFF',
-    fontWeight: '800',
+    fontWeight: '600',
     fontSize: 14,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
   info: { flex: 1 },
   desc: {
     fontSize: 15,
     fontWeight: '600',
-    color: COLORS.text,
     marginBottom: 4,
   },
   metaRow: {
@@ -158,10 +171,8 @@ const styles = StyleSheet.create({
   },
   date: {
     fontSize: 12,
-    color: COLORS.textSecondary,
   },
   categoryChip: {
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -169,11 +180,9 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 10,
     fontWeight: '600',
-    color: COLORS.textSecondary,
   },
   note: {
     fontSize: 12,
-    color: COLORS.textSecondary,
     marginTop: 3,
     fontStyle: 'italic',
   },
@@ -191,7 +200,6 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.text,
     marginLeft: 12,
   },
 });

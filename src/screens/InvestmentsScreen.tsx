@@ -5,8 +5,8 @@ import {
   ActivityIndicator, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTheme } from '../store/ThemeContext';
 import { InvestmentItem } from '../models/types';
 import {
   getInvestments, saveInvestment, deleteInvestment,
@@ -42,6 +42,7 @@ function daysUntil(dateStr: string): number {
 export default function InvestmentsScreen() {
   const nav = useNavigation();
   const { isConnected } = useNetwork();
+  const { colors } = useTheme();
   const [items, setItems] = useState<InvestmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -248,7 +249,7 @@ export default function InvestmentsScreen() {
               </View>
             ) : (
               days >= 0 && item.cycle !== 'one-time' ? (
-                <Text style={[styles.cardDays, days <= 3 && { color: COLORS.danger }]}>
+                <Text style={[styles.cardDays, days <= 3 && { color: colors.danger }]}>
                   {days === 0 ? 'Due today' : `${days}d left`}
                 </Text>
               ) : null
@@ -268,8 +269,8 @@ export default function InvestmentsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <LinearGradient colors={['#101A14', '#0A100C', COLORS.background]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={[styles.headerAccent, { backgroundColor: COLORS.success }]} />
+      <View style={[styles.header, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.headerAccent, { backgroundColor: colors.success }]} />
         <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn} activeOpacity={0.7}>
           <Text style={styles.backIcon}>‹</Text>
           <Text style={styles.backText}>Back</Text>
@@ -296,15 +297,15 @@ export default function InvestmentsScreen() {
           <View style={styles.headerStats}>
             <View>
               <Text style={styles.headerStatLabel}>MONTHLY</Text>
-              <Text style={[styles.headerStatValue, { color: COLORS.success }]}>{formatCurrency(totalMonthly)}</Text>
+              <Text style={[styles.headerStatValue, { color: colors.success }]}>{formatCurrency(totalMonthly)}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.headerStatLabel}>ACTIVE</Text>
-              <Text style={[styles.headerStatValue, { color: COLORS.success }]}>{items.length}</Text>
+              <Text style={[styles.headerStatValue, { color: colors.success }]}>{items.length}</Text>
             </View>
           </View>
         )}
-      </LinearGradient>
+      </View>
 
       {scanResultText ? (
         <View style={styles.scanResultBar}>
@@ -358,7 +359,7 @@ export default function InvestmentsScreen() {
         </View>
       )}
 
-      <TouchableOpacity style={[styles.fab, { backgroundColor: COLORS.success }]} onPress={() => setShowAddModal(true)} activeOpacity={0.8}>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: colors.success }]} onPress={() => setShowAddModal(true)} activeOpacity={0.8}>
         <Text style={styles.fabIcon}>+</Text>
       </TouchableOpacity>
 
@@ -369,21 +370,21 @@ export default function InvestmentsScreen() {
             <Text style={styles.onboardingEmoji}>📈</Text>
             <Text style={styles.onboardingTitle}>Let's find your investments</Text>
             <Text style={styles.onboardingSub}>
-              We'll scan your SMS and connected email to find all SIPs, mutual funds, and recurring investments.
+              We'll scan your transaction history to find all SIPs, mutual funds, and recurring investments.
               {'\n\n'}Enter once, we'll track hereafter.
               {'\n\n'}Tip: Connect your email in Profile for best results!
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>
-                <ActivityIndicator size="large" color={COLORS.success} />
+                <ActivityIndicator size="large" color={colors.success} />
                 <Text style={styles.scanningText}>Scanning your messages...</Text>
               </View>
             ) : (
               <>
-                <TouchableOpacity style={styles.onboardingBtn} onPress={handleSyncSMS} activeOpacity={0.8}>
-                  <LinearGradient colors={[COLORS.success, '#2A9A6A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
+                <TouchableOpacity style={[styles.onboardingBtn, { backgroundColor: colors.success }]} onPress={handleSyncSMS} activeOpacity={0.8}>
+                  <View style={styles.onboardingBtnGrad}>
                     <Text style={styles.onboardingBtnText}>Scan & Find Investments</Text>
-                  </LinearGradient>
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleOnboardingDismiss} style={{ padding: 12 }}>
                   <Text style={styles.onboardingSkip}>Add manually instead</Text>
@@ -402,9 +403,9 @@ export default function InvestmentsScreen() {
             <Text style={styles.formTitle}>{editingItem ? 'Edit Investment' : 'Add Investment'}</Text>
 
             <TextInput style={styles.input} value={formName} onChangeText={setFormName}
-              placeholder="Investment name (e.g. Zerodha SIP)" placeholderTextColor={COLORS.textLight} selectionColor={COLORS.primary} />
+              placeholder="Investment name (e.g. Zerodha SIP)" placeholderTextColor={colors.textLight} selectionColor={colors.primary} />
             <TextInput style={styles.input} value={formAmount} onChangeText={setFormAmount}
-              placeholder="Amount" placeholderTextColor={COLORS.textLight} keyboardType="numeric" selectionColor={COLORS.primary} />
+              placeholder="Amount" placeholderTextColor={colors.textLight} keyboardType="numeric" selectionColor={colors.primary} />
 
             <View style={styles.cycleRow}>
               {(['monthly', 'yearly', 'one-time'] as const).map(c => (
@@ -418,13 +419,13 @@ export default function InvestmentsScreen() {
 
             {formCycle !== 'one-time' && (
               <TextInput style={styles.input} value={formDay} onChangeText={setFormDay}
-                placeholder="Debit day of month (1-31)" placeholderTextColor={COLORS.textLight} keyboardType="numeric" selectionColor={COLORS.primary} />
+                placeholder="Debit day of month (1-31)" placeholderTextColor={colors.textLight} keyboardType="numeric" selectionColor={colors.primary} />
             )}
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.success, '#2A9A6A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtnGrad}>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.success }]} onPress={handleSave} activeOpacity={0.8}>
+              <View style={styles.saveBtnGrad}>
                 <Text style={styles.saveBtnText}>{editingItem ? 'Update' : 'Add Investment'}</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelBtn} onPress={resetForm}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -497,7 +498,7 @@ const styles = StyleSheet.create({
   cycleBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center' },
   cycleBtnActive: { backgroundColor: `${COLORS.success}20`, borderColor: COLORS.success },
   cycleBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
-  cycleBtnTextActive: { color: COLORS.success },
+  cycleBtnTextActive: { color: colors.success },
   saveBtn: { borderRadius: 30, overflow: 'hidden', marginTop: 8, marginBottom: 12 },
   saveBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
   saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },

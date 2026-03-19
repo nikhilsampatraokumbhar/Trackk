@@ -4,8 +4,8 @@ import {
   TouchableOpacity, Alert, Modal, TextInput, KeyboardAvoidingView,
   Platform, AppState, ScrollView,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../store/ThemeContext';
 import { hapticLight, hapticMedium, hapticHeavy } from '../utils/haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -32,6 +32,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function ReimbursementScreen() {
   const nav = useNavigation<Nav>();
   const { user } = useAuth();
+  const { colors } = useTheme();
   const { trackerState, toggleReimbursement, transactionVersion } = useTracker();
   const { isPremium } = usePremium();
 
@@ -312,12 +313,7 @@ export default function ReimbursementScreen() {
           ListHeaderComponent={
             <>
               {/* Hero Card */}
-              <LinearGradient
-                colors={['#200E12', '#0A0A0F']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.heroCard}
-              >
+              <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={[styles.heroAccent, { backgroundColor: COLORS.reimbursementColor }]} />
                 <View style={styles.heroBody}>
                   <View>
@@ -331,7 +327,7 @@ export default function ReimbursementScreen() {
                     <Text style={styles.countLabel}>expenses</Text>
                   </View>
                 </View>
-              </LinearGradient>
+              </View>
 
               {/* Action Buttons */}
               <View style={styles.actionRow}>
@@ -499,15 +495,10 @@ export default function ReimbursementScreen() {
               maxLength={100}
             />
 
-            <TouchableOpacity style={styles.createTripBtn} onPress={handleCreateTrip} activeOpacity={0.8}>
-              <LinearGradient
-                colors={[COLORS.reimbursementColor, '#8B2020']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.createTripBtnGradient}
-              >
+            <TouchableOpacity style={[styles.createTripBtn, { backgroundColor: colors.reimbursementColor }]} onPress={handleCreateTrip} activeOpacity={0.8}>
+              <View style={styles.createTripBtnGradient}>
                 <Text style={styles.createTripBtnText}>Create Expense Log</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.addModalCancelBtn} onPress={() => { setShowCreateTrip(false); setTripName(''); }}>
@@ -580,19 +571,14 @@ export default function ReimbursementScreen() {
             />
 
             <TouchableOpacity
-              style={[styles.addModalSaveBtn, saving && { opacity: 0.5 }]}
+              style={[styles.addModalSaveBtn, { backgroundColor: colors.reimbursementColor }, saving && { opacity: 0.5 }]}
               onPress={handleAddExpense}
               disabled={saving}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={[COLORS.reimbursementColor, '#8B2020']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.addModalSaveBtnGradient}
-              >
+              <View style={styles.addModalSaveBtnGradient}>
                 <Text style={styles.addModalSaveBtnText}>{saving ? 'Saving...' : 'Save Expense'}</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.addModalCancelBtn} onPress={() => { setShowAddModal(false); setAddAmount(''); setAddDescription(''); setSelectedCategory(null); }}>
@@ -777,7 +763,7 @@ const styles = StyleSheet.create({
   /* ── Receipt Modal ──────────────────────────────────────────── */
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   modalContent: {
-    backgroundColor: '#131318', borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    backgroundColor: COLORS.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28,
     padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.glassBorder,
   },
   modalTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginBottom: 4 },

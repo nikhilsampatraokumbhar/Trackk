@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
-import { COLORS } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 
 interface Props {
   visible: boolean;
@@ -11,6 +11,7 @@ interface Props {
 }
 
 export default function SuccessOverlay({ visible, message, subMessage, onDone, color }: Props) {
+  const { colors, isDark } = useTheme();
   const scale = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const checkScale = useRef(new Animated.Value(0)).current;
@@ -39,18 +40,27 @@ export default function SuccessOverlay({ visible, message, subMessage, onDone, c
 
   if (!visible) return null;
 
-  const accentColor = color || COLORS.success;
+  const accentColor = color || colors.success;
 
   return (
-    <Animated.View style={[styles.overlay, { opacity }]} pointerEvents="none">
-      <Animated.View style={[styles.circle, { backgroundColor: `${accentColor}18`, borderColor: `${accentColor}40`, transform: [{ scale }] }]}>
+    <Animated.View
+      style={[
+        styles.overlay,
+        {
+          opacity,
+          backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.5)',
+        },
+      ]}
+      pointerEvents="none"
+    >
+      <Animated.View style={[styles.circle, { backgroundColor: `${accentColor}15`, borderColor: `${accentColor}30`, transform: [{ scale }] }]}>
         <Animated.Text style={[styles.check, { color: accentColor, transform: [{ scale: checkScale }] }]}>
           ✓
         </Animated.Text>
       </Animated.View>
-      <Animated.Text style={[styles.message, { transform: [{ scale }] }]}>{message}</Animated.Text>
+      <Animated.Text style={[styles.message, { color: colors.text, transform: [{ scale }] }]}>{message}</Animated.Text>
       {subMessage && (
-        <Animated.Text style={[styles.subMessage, { transform: [{ scale }] }]}>{subMessage}</Animated.Text>
+        <Animated.Text style={[styles.subMessage, { color: colors.textSecondary, transform: [{ scale }] }]}>{subMessage}</Animated.Text>
       )}
     </Animated.View>
   );
@@ -59,7 +69,6 @@ export default function SuccessOverlay({ visible, message, subMessage, onDone, c
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10,10,15,0.85)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 999,
@@ -75,17 +84,15 @@ const styles = StyleSheet.create({
   },
   check: {
     fontSize: 36,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   message: {
     fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text,
+    fontWeight: '700',
     letterSpacing: -0.3,
   },
   subMessage: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     marginTop: 6,
   },
 });

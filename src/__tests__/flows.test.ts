@@ -309,7 +309,7 @@ describe('Auto-Add to Tracker', () => {
     expect(txns[0].trackerType).toBe('reimbursement');
   });
 
-  test('group transaction creates split and saves to personal', async () => {
+  test('group transaction stays in group storage only (not personal)', async () => {
     const group = await createGroup('Test', [
       { displayName: 'Bob', phone: '9876543210' },
     ], 'user1');
@@ -322,10 +322,9 @@ describe('Auto-Add to Tracker', () => {
     expect(gTxns.length).toBe(1);
     expect(gTxns[0].amount).toBe(400);
 
-    // Personal split should be saved
+    // No personal transaction should be created from group splits
     const pTxns = await getTransactions();
-    expect(pTxns.length).toBe(1);
-    expect(pTxns[0].amount).toBe(200); // user1's share of 400/2
+    expect(pTxns.length).toBe(0);
   });
 
   test('dual save: reimbursement + personal saves to both', async () => {

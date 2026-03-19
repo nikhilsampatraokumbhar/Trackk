@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
-import { COLORS } from '../utils/helpers';
+import { Divider, Surface } from 'react-native-paper';
+import { useTheme } from '../store/ThemeContext';
 
 export interface ContextMenuItem {
   label: string;
@@ -17,30 +18,54 @@ interface Props {
 }
 
 export default function ContextMenu({ visible, onClose, items, title }: Props) {
+  const { colors } = useTheme();
+
   if (!visible) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.menuContainer}>
-          <View style={styles.menu}>
-            {title && <Text style={styles.title}>{title}</Text>}
-            {items.map((item, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={[styles.menuItem, idx === items.length - 1 && styles.menuItemLast]}
-                onPress={() => { onClose(); item.onPress(); }}
-                activeOpacity={0.7}
-              >
-                {item.icon && <Text style={styles.menuIcon}>{item.icon}</Text>}
-                <Text style={[styles.menuLabel, item.destructive && styles.menuLabelDestructive]}>
-                  {item.label}
+          <Surface style={[styles.menu, {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          }]} elevation={2}>
+            {title && (
+              <>
+                <Text style={[styles.title, { color: colors.textSecondary }]}>
+                  {title}
                 </Text>
-              </TouchableOpacity>
+                <Divider style={{ backgroundColor: colors.border }} />
+              </>
+            )}
+            {items.map((item, idx) => (
+              <React.Fragment key={idx}>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => { onClose(); item.onPress(); }}
+                  activeOpacity={0.7}
+                >
+                  {item.icon && <Text style={styles.menuIcon}>{item.icon}</Text>}
+                  <Text style={[
+                    styles.menuLabel,
+                    { color: item.destructive ? colors.danger : colors.text },
+                  ]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+                {idx < items.length - 1 && <Divider style={{ backgroundColor: colors.border }} />}
+              </React.Fragment>
             ))}
-          </View>
-          <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.8}>
-            <Text style={styles.cancelText}>Cancel</Text>
+          </Surface>
+          <TouchableOpacity
+            style={[styles.cancelBtn, {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            }]}
+            onPress={onClose}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -51,7 +76,7 @@ export default function ContextMenu({ visible, onClose, items, title }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
     paddingHorizontal: 12,
     paddingBottom: 20,
@@ -60,32 +85,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   menu: {
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
   },
   title: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textSecondary,
     textAlign: 'center',
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  menuItemLast: {
-    borderBottomWidth: 0,
   },
   menuIcon: {
     fontSize: 18,
@@ -94,22 +109,15 @@ const styles = StyleSheet.create({
   menuLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text,
-  },
-  menuLabelDestructive: {
-    color: COLORS.danger,
   },
   cancelBtn: {
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
   },
   cancelText: {
     fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
+    fontWeight: '600',
   },
 });

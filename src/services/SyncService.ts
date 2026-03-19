@@ -325,6 +325,8 @@ export async function addGroupTransactionCloud(
     merchant: parsed.merchant,
     timestamp: parsed.timestamp,
     splits,
+    ...(parsed.category ? { category: parsed.category } : {}),
+    ...(parsed.currency ? { currency: parsed.currency } : {}),
   };
 
   await db.groupTransaction(groupId, txn.id).set(txn);
@@ -425,16 +427,16 @@ export async function removeSplitMemberCloud(
   const nonPayerSplits = newSplits.filter(s => s.userId !== txn.addedBy);
   let updatedSplits: Split[];
   if (nonPayerSplits.length > 0) {
-    const extraPerPerson = Math.round((removedSplit.amount / nonPayerSplits.length) * 100) / 100;
-    const totalExtra = extraPerPerson * nonPayerSplits.length;
-    const roundingDiff = Math.round((removedSplit.amount - totalExtra) * 100) / 100;
+    const extraPerPerson = Math.floor((removedSplit.amount / nonPayerSplits.length) * 100) / 100;
+    const totalDistributed = extraPerPerson * nonPayerSplits.length;
+    const remainder = Math.round((removedSplit.amount - totalDistributed) * 100) / 100;
     let applied = 0;
     updatedSplits = newSplits.map(s => {
       if (s.userId === txn.addedBy) return s;
       applied++;
       return {
         ...s,
-        amount: s.amount + extraPerPerson + (applied === nonPayerSplits.length ? roundingDiff : 0),
+        amount: s.amount + extraPerPerson + (applied === nonPayerSplits.length ? remainder : 0),
       };
     });
   } else {

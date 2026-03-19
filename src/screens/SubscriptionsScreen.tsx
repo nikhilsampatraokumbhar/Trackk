@@ -5,8 +5,8 @@ import {
   ActivityIndicator, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTheme } from '../store/ThemeContext';
 import { UserSubscriptionItem } from '../models/types';
 import {
   getSubscriptions, saveSubscription, deleteSubscription,
@@ -49,6 +49,7 @@ function daysUntil(dateStr: string): number {
 export default function SubscriptionsScreen() {
   const nav = useNavigation();
   const { isConnected } = useNetwork();
+  const { colors } = useTheme();
   const [items, setItems] = useState<UserSubscriptionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -303,7 +304,7 @@ export default function SubscriptionsScreen() {
               </View>
             ) : (
               <>
-                <Text style={[styles.cardDays, isUrgent && { color: COLORS.danger }]}>
+                <Text style={[styles.cardDays, isUrgent && { color: colors.danger }]}>
                   {days === 0 ? 'Due today' : `${days}d left`}
                 </Text>
                 {item.lastPaidDate === new Date().toISOString().slice(0, 10) ? (
@@ -331,11 +332,7 @@ export default function SubscriptionsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <LinearGradient
-        colors={['#1A1210', '#100C0A', COLORS.background]}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
+      <View style={[styles.header, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.headerAccent} />
         <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn} activeOpacity={0.7}>
           <Text style={styles.backIcon}>‹</Text>
@@ -371,7 +368,7 @@ export default function SubscriptionsScreen() {
             </View>
           </View>
         )}
-      </LinearGradient>
+      </View>
 
       {/* Scan result feedback */}
       {scanResultText ? (
@@ -395,7 +392,7 @@ export default function SubscriptionsScreen() {
               icon="🔄"
               title="No subscriptions yet"
               subtitle="Tap + to add your first subscription"
-              accent={COLORS.personalColor}
+              accent={colors.personalColor}
             />
           ) : null
         }
@@ -441,21 +438,21 @@ export default function SubscriptionsScreen() {
             <Text style={styles.onboardingEmoji}>🔄</Text>
             <Text style={styles.onboardingTitle}>Let's find your subscriptions</Text>
             <Text style={styles.onboardingSub}>
-              We'll scan your SMS{Platform.OS === 'android' ? '' : ''} and connected email (Gmail/Outlook) to find all recurring subscriptions automatically.
+              We'll scan your transaction history to find all recurring subscriptions automatically.
               {'\n\n'}Netflix, Spotify, YouTube Premium — we'll catch them all.
               {'\n\n'}Tip: Connect your email in Profile for best results!
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
+                <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={styles.scanningText}>Scanning your messages...</Text>
               </View>
             ) : (
               <>
-                <TouchableOpacity style={styles.onboardingBtn} onPress={handleSyncSMS} activeOpacity={0.8}>
-                  <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
+                <TouchableOpacity style={[styles.onboardingBtn, { backgroundColor: colors.primary }]} onPress={handleSyncSMS} activeOpacity={0.8}>
+                  <View style={styles.onboardingBtnGrad}>
                     <Text style={styles.onboardingBtnText}>Scan & Find Subscriptions</Text>
-                  </LinearGradient>
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleOnboardingDismiss} style={{ padding: 12 }}>
                   <Text style={styles.onboardingSkip}>Add manually instead</Text>
@@ -478,17 +475,17 @@ export default function SubscriptionsScreen() {
               value={formName}
               onChangeText={setFormName}
               placeholder="Subscription name (e.g. Netflix)"
-              placeholderTextColor={COLORS.textLight}
-              selectionColor={COLORS.primary}
+              placeholderTextColor={colors.textLight}
+              selectionColor={colors.primary}
             />
             <TextInput
               style={styles.input}
               value={formAmount}
               onChangeText={setFormAmount}
               placeholder="Amount"
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={colors.textLight}
               keyboardType="numeric"
-              selectionColor={COLORS.primary}
+              selectionColor={colors.primary}
             />
 
             <View style={styles.cycleRow}>
@@ -511,9 +508,9 @@ export default function SubscriptionsScreen() {
               value={formDay}
               onChangeText={setFormDay}
               placeholder="Billing day of month (1-31)"
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={colors.textLight}
               keyboardType="numeric"
-              selectionColor={COLORS.primary}
+              selectionColor={colors.primary}
             />
 
             <TouchableOpacity
@@ -533,16 +530,16 @@ export default function SubscriptionsScreen() {
                 value={formSharedCount}
                 onChangeText={setFormSharedCount}
                 placeholder="How many people share this?"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 keyboardType="numeric"
-                selectionColor={COLORS.primary}
+                selectionColor={colors.primary}
               />
             )}
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtnGrad}>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={handleSave} activeOpacity={0.8}>
+              <View style={styles.saveBtnGrad}>
                 <Text style={styles.saveBtnText}>{editingItem ? 'Update' : 'Add Subscription'}</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.cancelBtn} onPress={resetForm}>

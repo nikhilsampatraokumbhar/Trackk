@@ -32,6 +32,7 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 
 import { COLORS } from '../utils/helpers';
 import { useAuth } from '../store/AuthContext';
+import { useTheme } from '../store/ThemeContext';
 
 const ONBOARDING_KEY = '@et_onboarding_done';
 
@@ -192,6 +193,7 @@ function ProfileWithBackToHome() {
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const LABELS: Record<string, string> = {
     Home: 'Home',
     Personal: 'Personal',
@@ -206,11 +208,11 @@ function MainTabs() {
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused }) => <TabIcon name={route.name} focused={focused} />,
         tabBarLabel: LABELS[route.name] || route.name,
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.textSecondary,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: '#141418',
-          borderTopColor: '#1E1E26',
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
           borderTopWidth: 1,
           paddingBottom: Math.max(insets.bottom, 8),
           paddingTop: 6,
@@ -238,6 +240,7 @@ function MainTabs() {
 
 export function AppNavigator() {
   const { isAuthenticated } = useAuth();
+  const { colors, isDark } = useTheme();
   const [hasOnboarded, setHasOnboarded] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -257,14 +260,14 @@ export function AppNavigator() {
   return (
     <NavigationContainer
       theme={{
-        dark: true,
+        dark: isDark,
         colors: {
-          primary: COLORS.primary,
-          background: COLORS.background,
-          card: COLORS.surface,
-          text: COLORS.text,
-          border: COLORS.border,
-          notification: COLORS.primary,
+          primary: colors.primary,
+          background: colors.background,
+          card: colors.surface,
+          text: colors.text,
+          border: colors.border,
+          notification: colors.primary,
         },
         fonts: {
           regular: { fontFamily: 'System', fontWeight: '400' },
@@ -277,16 +280,16 @@ export function AppNavigator() {
       <Stack.Navigator
         screenOptions={{
           headerStyle: {
-            backgroundColor: COLORS.surface,
+            backgroundColor: colors.surface,
           },
-          headerTintColor: COLORS.text,
+          headerTintColor: colors.text,
           headerTitleStyle: {
             fontWeight: '700',
-            color: COLORS.text,
+            color: colors.text,
             fontSize: 16,
           },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: COLORS.background },
+          contentStyle: { backgroundColor: colors.background },
           gestureEnabled: true,
           animation: 'slide_from_right',
           animationDuration: 250,

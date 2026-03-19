@@ -3,11 +3,12 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
 import TrackerToggle from '../components/TrackerToggle';
-import { COLORS } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 
 export default function TrackerSettingsScreen() {
   const { groups } = useGroups();
   const { trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup } = useTracker();
+  const { colors } = useTheme();
 
   const activeCount =
     (trackerState.personal ? 1 : 0) +
@@ -16,28 +17,30 @@ export default function TrackerSettingsScreen() {
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
       {/* Status card */}
       <View style={[
         styles.statusCard,
-        isListening ? styles.statusActive : styles.statusInactive,
+        isListening
+          ? { backgroundColor: `${colors.success}12`, borderColor: `${colors.success}30` }
+          : { backgroundColor: colors.surfaceHigh, borderColor: colors.border },
       ]}>
         <View style={styles.statusLeft}>
           <View style={[
             styles.statusDot,
-            { backgroundColor: isListening ? COLORS.success : COLORS.textLight },
+            { backgroundColor: isListening ? colors.success : colors.textLight },
           ]} />
           <View>
             <Text style={[
               styles.statusTitle,
-              { color: isListening ? COLORS.success : COLORS.textSecondary },
+              { color: isListening ? colors.success : colors.textSecondary },
             ]}>
-              {isListening ? 'SMS Tracking Active' : 'SMS Tracking Inactive'}
+              {isListening ? 'Expense Tracking Active' : 'Expense Tracking Inactive'}
             </Text>
-            <Text style={styles.statusSub}>
+            <Text style={[styles.statusSub, { color: colors.textSecondary }]}>
               {isListening
                 ? `${activeCount} tracker${activeCount !== 1 ? 's' : ''} running`
                 : 'Enable a tracker below to start'}
@@ -45,56 +48,56 @@ export default function TrackerSettingsScreen() {
           </View>
         </View>
         {isListening && (
-          <View style={styles.activeCount}>
-            <Text style={styles.activeCountText}>{activeCount}</Text>
+          <View style={[styles.activeCount, { backgroundColor: `${colors.success}25` }]}>
+            <Text style={[styles.activeCountText, { color: colors.success }]}>{activeCount}</Text>
           </View>
         )}
       </View>
 
       {/* How it works */}
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>HOW IT WORKS</Text>
+      <View style={[styles.infoCard, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
+        <Text style={[styles.infoTitle, { color: colors.textSecondary }]}>HOW IT WORKS</Text>
         <View style={styles.infoRow}>
           <Text style={styles.infoIcon}>📱</Text>
-          <Text style={styles.infoText}>App reads bank SMS when trackers are on</Text>
+          <Text style={[styles.infoText, { color: colors.textSecondary }]}>Detects expenses automatically when trackers are on</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoIcon}>🔔</Text>
-          <Text style={styles.infoText}>1 tracker → "Add" button in notification</Text>
+          <Text style={[styles.infoText, { color: colors.textSecondary }]}>1 tracker → "Add" button in notification</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoIcon}>📋</Text>
-          <Text style={styles.infoText}>2+ trackers → "Choose Tracker" in-app</Text>
+          <Text style={[styles.infoText, { color: colors.textSecondary }]}>2+ trackers → adds to default, tap to change</Text>
         </View>
-        <View style={[styles.infoRow, styles.infoWarning]}>
+        <View style={[styles.infoWarning, { backgroundColor: `${colors.warning}10` }]}>
           <Text style={styles.infoIcon}>⚠️</Text>
-          <Text style={[styles.infoText, { color: COLORS.warning }]}>
+          <Text style={[styles.infoText, { color: colors.warning }]}>
             Reimbursement + Group trackers cannot be active together
           </Text>
         </View>
       </View>
 
       {/* Personal trackers */}
-      <Text style={styles.sectionTitle}>PERSONAL TRACKERS</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>PERSONAL TRACKERS</Text>
       <TrackerToggle
         label="Personal Expenses"
         subtitle="Daily spending"
         isActive={trackerState.personal}
         onToggle={togglePersonal}
-        color={COLORS.personalColor}
+        color={colors.personalColor}
       />
       <TrackerToggle
         label="Reimbursement"
         subtitle="Office / business expenses"
         isActive={trackerState.reimbursement}
         onToggle={toggleReimbursement}
-        color={COLORS.reimbursementColor}
+        color={colors.reimbursementColor}
       />
 
       {/* Group trackers */}
       {groups.length > 0 && (
         <>
-          <Text style={styles.sectionTitle}>GROUP TRACKERS</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>GROUP TRACKERS</Text>
           {groups.map(group => (
             <TrackerToggle
               key={group.id}
@@ -102,7 +105,7 @@ export default function TrackerSettingsScreen() {
               subtitle={`${group.members.length} members · auto-split`}
               isActive={trackerState.activeGroupIds.includes(group.id)}
               onToggle={() => toggleGroup(group.id)}
-              color={COLORS.groupColor}
+              color={colors.groupColor}
             />
           ))}
         </>
@@ -112,7 +115,7 @@ export default function TrackerSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
 
   statusCard: {
@@ -123,14 +126,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
-  },
-  statusActive: {
-    backgroundColor: `${COLORS.success}12`,
-    borderColor: `${COLORS.success}30`,
-  },
-  statusInactive: {
-    backgroundColor: COLORS.surfaceHigh,
-    borderColor: COLORS.border,
   },
   statusLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   statusDot: {
@@ -144,35 +139,29 @@ const styles = StyleSheet.create({
   },
   statusSub: {
     fontSize: 12,
-    color: COLORS.textSecondary,
     marginTop: 2,
   },
   activeCount: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: `${COLORS.success}25`,
     alignItems: 'center',
     justifyContent: 'center',
   },
   activeCountText: {
     fontSize: 16,
     fontWeight: '800',
-    color: COLORS.success,
   },
 
   infoCard: {
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 16,
     padding: 16,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: COLORS.border,
     gap: 10,
   },
   infoTitle: {
     fontSize: 10,
-    color: COLORS.textSecondary,
     letterSpacing: 1.5,
     fontWeight: '700',
     marginBottom: 4,
@@ -183,7 +172,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   infoWarning: {
-    backgroundColor: `${COLORS.warning}10`,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
     padding: 10,
     borderRadius: 10,
     marginTop: 4,
@@ -191,7 +182,6 @@ const styles = StyleSheet.create({
   infoIcon: { fontSize: 14, width: 20 },
   infoText: {
     fontSize: 13,
-    color: COLORS.textSecondary,
     flex: 1,
     lineHeight: 18,
   },
@@ -199,7 +189,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.textSecondary,
     letterSpacing: 1.5,
     marginBottom: 12,
     marginTop: 4,
