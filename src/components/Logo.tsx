@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 
 interface LogoProps {
   size?: number;
@@ -9,6 +9,7 @@ interface LogoProps {
 }
 
 export default function Logo({ size = 80, showName = false, showSlogan = false }: LogoProps) {
+  const { colors } = useTheme();
   const scale = size / 80;
   const borderRadius = 22 * scale;
   const innerRadius = 16 * scale;
@@ -34,6 +35,7 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
               width: size + 20 * scale,
               height: size + 20 * scale,
               borderRadius: borderRadius + 10 * scale,
+              backgroundColor: `${colors.primary}10`,
             },
           ]}
         />
@@ -46,6 +48,8 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
               width: size,
               height: size,
               borderRadius,
+              backgroundColor: colors.primary,
+              shadowColor: colors.primary,
             },
           ]}
         >
@@ -57,6 +61,7 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
                 width: size - 6 * scale,
                 height: size - 6 * scale,
                 borderRadius: innerRadius,
+                backgroundColor: colors.background,
               },
             ]}
           >
@@ -68,6 +73,7 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
                   fontSize: 38 * scale,
                   lineHeight: 44 * scale,
                   marginTop: -2 * scale,
+                  color: colors.primary,
                 },
               ]}
             >
@@ -90,6 +96,7 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
                   {
                     fontSize: 12 * scale,
                     lineHeight: 14 * scale,
+                    color: `${colors.primary}70`,
                   },
                 ]}
               >
@@ -115,6 +122,7 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
                     height: 6 * scale,
                     borderRadius: 1.5 * scale,
                     marginRight: 2 * scale,
+                    backgroundColor: `${colors.primary}40`,
                   },
                 ]}
               />
@@ -126,6 +134,7 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
                     height: 10 * scale,
                     borderRadius: 1.5 * scale,
                     marginRight: 2 * scale,
+                    backgroundColor: `${colors.primary}40`,
                   },
                 ]}
               />
@@ -136,6 +145,7 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
                     width: 3 * scale,
                     height: 15 * scale,
                     borderRadius: 1.5 * scale,
+                    backgroundColor: colors.primary,
                   },
                 ]}
               />
@@ -146,14 +156,14 @@ export default function Logo({ size = 80, showName = false, showSlogan = false }
 
       {/* App name */}
       {showName && (
-        <Text style={[styles.appName, { fontSize: 28 * scale, marginTop: 14 * scale }]}>
+        <Text style={[styles.appName, { fontSize: 28 * scale, marginTop: 14 * scale, color: colors.text }]}>
           Trackk
         </Text>
       )}
 
       {/* Slogan */}
       {showSlogan && (
-        <Text style={[styles.slogan, { fontSize: 13 * scale, marginTop: 4 * scale }]}>
+        <Text style={[styles.slogan, { fontSize: 13 * scale, marginTop: 4 * scale, color: colors.textSecondary }]}>
           One Tap. Track.
         </Text>
       )}
@@ -171,27 +181,22 @@ const styles = StyleSheet.create({
   },
   glowLayer: {
     position: 'absolute',
-    backgroundColor: `${COLORS.primary}12`,
   },
   borderRing: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   innerSquare: {
-    backgroundColor: '#0E0E14',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   letterT: {
     fontWeight: '900',
-    color: COLORS.primary,
     letterSpacing: -1,
   },
   rupeeWrap: {
@@ -201,26 +206,19 @@ const styles = StyleSheet.create({
   },
   rupeeSymbol: {
     fontWeight: '800',
-    color: `${COLORS.primary}70`,
   },
   chartAccent: {
     position: 'absolute',
     flexDirection: 'row',
     alignItems: 'flex-end',
   },
-  chartBar: {
-    backgroundColor: `${COLORS.primary}40`,
-  },
-  chartBarAccent: {
-    backgroundColor: COLORS.primary,
-  },
+  chartBar: {},
+  chartBarAccent: {},
   appName: {
     fontWeight: '900',
-    color: COLORS.text,
     letterSpacing: 1,
   },
   slogan: {
-    color: COLORS.textSecondary,
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',

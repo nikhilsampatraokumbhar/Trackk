@@ -2,7 +2,7 @@ import React, { memo, useRef } from 'react';
 import {
   TouchableOpacity, Text, StyleSheet, View, Animated, PanResponder, Vibration,
 } from 'react-native';
-import { Chip } from 'react-native-paper';
+import { Chip, Surface } from 'react-native-paper';
 import { Transaction } from '../models/types';
 import { formatCurrency, formatDate } from '../utils/helpers';
 import { useTheme } from '../store/ThemeContext';
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   },
   deleteLabel: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '600',
     fontSize: 14,
     letterSpacing: 0.3,
   },

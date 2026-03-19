@@ -2,12 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, Animated,
 } from 'react-native';
+import { Button, Divider } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { COLORS } from '../utils/helpers';
-import { TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '../utils/theme';
-import { SPRING, DURATION, EASING, fadeIn } from '../utils/motion';
+import { useTheme } from '../store/ThemeContext';
+import { SPACING, RADIUS, SHADOWS } from '../utils/theme';
+import { SPRING, DURATION, fadeIn } from '../utils/motion';
 import { hapticMedium } from '../utils/haptics';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -27,6 +28,7 @@ const CLEVER_NUDGES = [
 ];
 
 export default function PremiumGate({ visible, onClose, feature, description }: PremiumGateProps) {
+  const { colors, isDark } = useTheme();
   const nav = useNavigation<Nav>();
   const nudge = CLEVER_NUDGES[Math.floor(Math.random() * CLEVER_NUDGES.length)];
 
@@ -84,35 +86,47 @@ export default function PremiumGate({ visible, onClose, feature, description }: 
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
-      <Animated.View style={[styles.overlay, { opacity: backdropOpacity }]}>
+      <Animated.View style={[styles.overlay, {
+        opacity: backdropOpacity,
+        backgroundColor: isDark ? 'rgba(0,0,0,0.75)' : 'rgba(0,0,0,0.5)',
+      }]}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={handleClose} />
 
         <Animated.View style={[
           styles.content,
-          { opacity: cardOpacity, transform: [{ scale: cardScale }] },
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            opacity: cardOpacity,
+            transform: [{ scale: cardScale }],
+          },
         ]}>
           {/* Top accent line */}
-          <View style={styles.accentLine} />
+          <View style={[styles.accentLine, { backgroundColor: colors.primary }]} />
 
           {/* Lock icon with ring */}
-          <Animated.View style={[styles.iconRing, { transform: [{ scale: iconScale }] }]}>
+          <Animated.View style={[styles.iconRing, {
+            backgroundColor: `${colors.primary}10`,
+            borderColor: `${colors.primary}25`,
+            transform: [{ scale: iconScale }],
+          }]}>
             <Text style={styles.lockIcon}>🔒</Text>
           </Animated.View>
 
           <Animated.View style={{ opacity: contentOpacity, alignItems: 'center', width: '100%' }}>
-            <Text style={styles.title}>{feature}</Text>
-            <Text style={styles.description}>{description}</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{feature}</Text>
+            <Text style={[styles.description, { color: colors.textSecondary }]}>{description}</Text>
 
-            <View style={styles.divider} />
+            <Divider style={[styles.divider, { backgroundColor: colors.border }]} />
 
             {/* Nudge with sparkle */}
             <View style={styles.nudgeRow}>
               <Text style={styles.nudgeIcon}>✨</Text>
-              <Text style={styles.nudge}>{nudge}</Text>
+              <Text style={[styles.nudge, { color: colors.primary }]}>{nudge}</Text>
             </View>
 
             <TouchableOpacity
-              style={styles.upgradeBtn}
+              style={[styles.upgradeBtn, { backgroundColor: colors.primary }]}
               onPress={() => {
                 handleClose();
                 setTimeout(() => nav.navigate('Pricing' as any), 300);
@@ -123,7 +137,7 @@ export default function PremiumGate({ visible, onClose, feature, description }: 
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.laterBtn} onPress={handleClose}>
-              <Text style={styles.laterBtnText}>Maybe Later</Text>
+              <Text style={[styles.laterBtnText, { color: colors.textSecondary }]}>Maybe Later</Text>
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
@@ -135,19 +149,16 @@ export default function PremiumGate({ visible, onClose, feature, description }: 
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: SPACING._24,
   },
   content: {
-    backgroundColor: COLORS.surface,
     borderRadius: RADIUS.sheet,
     padding: SPACING._28,
     width: '100%',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
     overflow: 'hidden',
     ...SHADOWS.heavy,
   },
@@ -157,33 +168,29 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: COLORS.primary,
   },
   iconRing: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: `${COLORS.primary}12`,
     borderWidth: 2,
-    borderColor: `${COLORS.primary}30`,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.xl,
   },
   lockIcon: { fontSize: 32 },
   title: {
-    ...TYPOGRAPHY.title,
+    fontSize: 20,
+    fontWeight: '600',
     textAlign: 'center',
     marginBottom: SPACING.md,
   },
   description: {
-    ...TYPOGRAPHY.bodySm,
+    fontSize: 13,
     textAlign: 'center',
     lineHeight: 20,
   },
   divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
     width: '100%',
     marginVertical: SPACING.xxl,
   },
@@ -196,13 +203,11 @@ const styles = StyleSheet.create({
   nudgeIcon: { fontSize: 16 },
   nudge: {
     fontSize: 14,
-    color: COLORS.primaryLight,
     fontStyle: 'italic',
     fontWeight: '600',
   },
   upgradeBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.xl,
+    borderRadius: RADIUS.lg,
     paddingVertical: SPACING.xl,
     paddingHorizontal: SPACING._32,
     width: '100%',
@@ -212,14 +217,13 @@ const styles = StyleSheet.create({
   },
   upgradeBtnText: {
     fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.background,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   laterBtn: {
     paddingVertical: SPACING.lg,
   },
   laterBtnText: {
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
+    fontSize: 14,
   },
 });

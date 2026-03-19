@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { COLORS } from '../utils/helpers';
+import { Surface } from 'react-native-paper';
+import { useTheme } from '../store/ThemeContext';
 
 interface Props {
   visible: boolean;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function UndoToast({ visible, message, onUndo, onDismiss, duration = 4000 }: Props) {
+  const { colors } = useTheme();
   const translateY = useRef(new Animated.Value(100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,13 +48,16 @@ export default function UndoToast({ visible, message, onUndo, onDismiss, duratio
 
   return (
     <Animated.View style={[styles.container, { transform: [{ translateY }], opacity }]}>
-      <View style={styles.toast}>
-        <Text style={styles.message} numberOfLines={1}>{message}</Text>
+      <View style={[styles.toast, {
+        backgroundColor: colors.surface,
+        borderColor: colors.border,
+      }]}>
+        <Text style={[styles.message, { color: colors.text }]} numberOfLines={1}>{message}</Text>
         <TouchableOpacity onPress={() => {
           if (timer.current) clearTimeout(timer.current);
           onUndo();
         }} activeOpacity={0.7}>
-          <Text style={styles.undoText}>UNDO</Text>
+          <Text style={[styles.undoText, { color: colors.primary }]}>UNDO</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -71,29 +76,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.surfaceHigher,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
-    elevation: 8,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 8,
   },
   message: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.text,
     flex: 1,
     marginRight: 16,
   },
   undoText: {
     fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.primary,
+    fontWeight: '700',
     letterSpacing: 1,
   },
 });

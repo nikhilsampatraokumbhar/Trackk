@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
-import { Divider } from 'react-native-paper';
+import { Divider, Surface } from 'react-native-paper';
 import { useTheme } from '../store/ThemeContext';
 
 export interface ContextMenuItem {
@@ -26,38 +26,37 @@ export default function ContextMenu({ visible, onClose, items, title }: Props) {
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.menuContainer}>
-          <View style={[styles.menu, {
+          <Surface style={[styles.menu, {
             backgroundColor: colors.surface,
             borderColor: colors.border,
-          }]}>
+          }]} elevation={2}>
             {title && (
-              <Text style={[styles.title, {
-                color: colors.textSecondary,
-                borderBottomColor: colors.border,
-              }]}>
-                {title}
-              </Text>
+              <>
+                <Text style={[styles.title, { color: colors.textSecondary }]}>
+                  {title}
+                </Text>
+                <Divider style={{ backgroundColor: colors.border }} />
+              </>
             )}
             {items.map((item, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={[
-                  styles.menuItem,
-                  idx < items.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
-                ]}
-                onPress={() => { onClose(); item.onPress(); }}
-                activeOpacity={0.7}
-              >
-                {item.icon && <Text style={styles.menuIcon}>{item.icon}</Text>}
-                <Text style={[
-                  styles.menuLabel,
-                  { color: item.destructive ? colors.danger : colors.text },
-                ]}>
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
+              <React.Fragment key={idx}>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => { onClose(); item.onPress(); }}
+                  activeOpacity={0.7}
+                >
+                  {item.icon && <Text style={styles.menuIcon}>{item.icon}</Text>}
+                  <Text style={[
+                    styles.menuLabel,
+                    { color: item.destructive ? colors.danger : colors.text },
+                  ]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+                {idx < items.length - 1 && <Divider style={{ backgroundColor: colors.border }} />}
+              </React.Fragment>
             ))}
-          </View>
+          </Surface>
           <TouchableOpacity
             style={[styles.cancelBtn, {
               backgroundColor: colors.surface,
@@ -96,7 +95,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
   },
   menuItem: {
     flexDirection: 'row',

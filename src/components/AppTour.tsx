@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity, Animated, Dimensions,
 } from 'react-native';
+import { Button, ProgressBar, Surface } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../store/ThemeContext';
 
@@ -136,13 +137,13 @@ export default function AppTour({ visible, onComplete }: AppTourProps) {
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View style={[styles.overlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)' }]}>
+      <View style={[styles.overlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.5)' }]}>
         <Animated.View
           style={[
             styles.card,
             {
               backgroundColor: colors.surface,
-              borderColor: colors.glassBorder,
+              borderColor: colors.border,
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
             },
@@ -233,15 +234,15 @@ const styles = StyleSheet.create({
   },
   card: {
     width: SCREEN_WIDTH - 48,
-    borderRadius: 28,
+    borderRadius: 24,
     padding: 28,
     borderWidth: 1,
     alignItems: 'center',
-    elevation: 20,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.3,
-    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
   },
   skipBtn: {
     position: 'absolute',
@@ -268,7 +269,7 @@ const styles = StyleSheet.create({
   },
   stepIndicator: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: 1,
     marginBottom: 20,
   },
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: -0.3,
     marginBottom: 10,
     textAlign: 'center',
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: 0.3,
   },
   navRow: {
@@ -318,23 +319,23 @@ const styles = StyleSheet.create({
   backBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
   },
   backBtnText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   nextBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 12,
     alignItems: 'center',
   },
   nextBtnText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#FFFFFF',
   },
   dots: {

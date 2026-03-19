@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, ViewStyle, Dimensions } from 'react-native';
-import { COLORS } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 import { pulseLoop } from '../utils/motion';
 import { RADIUS, SPACING } from '../utils/theme';
 
@@ -14,6 +14,7 @@ interface SkeletonProps {
 }
 
 function SkeletonBox({ width = '100%', height = 16, borderRadius = 8, style }: SkeletonProps) {
+  const { colors } = useTheme();
   const pulse = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -29,7 +30,7 @@ function SkeletonBox({ width = '100%', height = 16, borderRadius = 8, style }: S
           width: width as any,
           height,
           borderRadius,
-          backgroundColor: COLORS.surfaceHigh,
+          backgroundColor: colors.surfaceHigh,
           opacity: pulse,
         },
         style,
@@ -41,8 +42,9 @@ function SkeletonBox({ width = '100%', height = 16, borderRadius = 8, style }: S
 // ─── Transaction Card Skeleton ───────────────────────────────────────────────
 
 export function TransactionCardSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.txnCard}>
+    <View style={[styles.txnCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <SkeletonBox width={46} height={46} borderRadius={14} />
       <View style={styles.txnContent}>
         <SkeletonBox width="65%" height={14} />
@@ -56,8 +58,9 @@ export function TransactionCardSkeleton() {
 // ─── Hero Card Skeleton ──────────────────────────────────────────────────────
 
 export function HeroCardSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.heroCard}>
+    <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <SkeletonBox width={80} height={10} style={{ marginBottom: 12 }} />
       <SkeletonBox width={160} height={36} borderRadius={10} />
       <SkeletonBox width={120} height={10} style={{ marginTop: 10 }} />
@@ -81,10 +84,11 @@ export function TransactionListSkeleton({ count = 5 }: { count?: number }) {
 // Mimics: hero stats card + tracker banner + 3 transaction cards
 
 export function HomeScreenSkeleton() {
+  const { colors } = useTheme();
   return (
     <View style={styles.screenContainer}>
       {/* Hero stats */}
-      <View style={styles.homeHero}>
+      <View style={[styles.homeHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <SkeletonBox width={100} height={10} style={{ marginBottom: 14 }} />
         <SkeletonBox width={180} height={40} borderRadius={10} />
         <SkeletonBox width={140} height={10} style={{ marginTop: 12 }} />
@@ -109,9 +113,10 @@ export function HomeScreenSkeleton() {
 // Mimics: goal card with progress ring + daily budget
 
 export function GoalsSkeleton() {
+  const { colors } = useTheme();
   return (
     <View style={styles.screenContainer}>
-      <View style={styles.goalCard}>
+      <View style={[styles.goalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.goalHeader}>
           <SkeletonBox width={50} height={50} borderRadius={25} />
           <View style={{ flex: 1, marginLeft: 14 }}>
@@ -136,10 +141,11 @@ export function GoalsSkeleton() {
 // ─── Group List Skeleton ─────────────────────────────────────────────────────
 
 export function GroupListSkeleton() {
+  const { colors } = useTheme();
   return (
     <View style={styles.screenContainer}>
       {Array.from({ length: 3 }).map((_, i) => (
-        <View key={i} style={styles.groupCard}>
+        <View key={i} style={[styles.groupCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.groupRow}>
             <SkeletonBox width={48} height={48} borderRadius={16} />
             <View style={{ flex: 1, marginLeft: 14 }}>
@@ -163,6 +169,7 @@ export function GroupListSkeleton() {
 // ─── Insights Screen Skeleton ────────────────────────────────────────────────
 
 export function InsightsSkeleton() {
+  const { colors } = useTheme();
   return (
     <View style={styles.screenContainer}>
       {/* Period selector */}
@@ -173,7 +180,7 @@ export function InsightsSkeleton() {
       </View>
 
       {/* Summary card */}
-      <View style={styles.insightsSummary}>
+      <View style={[styles.insightsSummary, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <SkeletonBox width={100} height={10} style={{ marginBottom: 10 }} />
         <SkeletonBox width={160} height={32} borderRadius={8} />
       </View>
@@ -196,10 +203,11 @@ export function InsightsSkeleton() {
 // ─── Subscriptions / EMIs / Investments Skeleton ─────────────────────────────
 
 export function ListItemSkeleton({ count = 4 }: { count?: number }) {
+  const { colors } = useTheme();
   return (
     <View style={styles.screenContainer}>
       {Array.from({ length: count }).map((_, i) => (
-        <View key={i} style={styles.listItem}>
+        <View key={i} style={[styles.listItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <SkeletonBox width={42} height={42} borderRadius={12} />
           <View style={{ flex: 1, marginLeft: 12 }}>
             <SkeletonBox width="55%" height={14} />
@@ -229,12 +237,10 @@ const styles = StyleSheet.create({
   txnCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.glass,
     borderRadius: RADIUS.card,
     padding: SPACING.xl,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
   txnContent: {
     flex: 1,
@@ -244,21 +250,17 @@ const styles = StyleSheet.create({
 
   // Hero card
   heroCard: {
-    backgroundColor: COLORS.glass,
     borderRadius: RADIUS.sheet,
     padding: SPACING._24,
     marginBottom: SPACING.xl,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
   },
 
   // Home screen
   homeHero: {
-    backgroundColor: COLORS.glass,
     borderRadius: RADIUS.card,
     padding: SPACING._24,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
     marginBottom: SPACING.md,
   },
   homeStatRow: {
@@ -270,11 +272,9 @@ const styles = StyleSheet.create({
 
   // Goals
   goalCard: {
-    backgroundColor: COLORS.glass,
     borderRadius: RADIUS.card,
     padding: SPACING.xxl,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
   },
   goalHeader: {
     flexDirection: 'row',
@@ -289,12 +289,10 @@ const styles = StyleSheet.create({
 
   // Group list
   groupCard: {
-    backgroundColor: COLORS.glass,
     borderRadius: RADIUS.card,
     padding: SPACING.xl,
     marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
   groupRow: {
     flexDirection: 'row',
@@ -314,12 +312,10 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   insightsSummary: {
-    backgroundColor: COLORS.glass,
     borderRadius: RADIUS.card,
     padding: SPACING.xxl,
     marginBottom: SPACING.xxl,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
   },
   insightsCatRow: {
     flexDirection: 'row',
@@ -331,11 +327,9 @@ const styles = StyleSheet.create({
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.glass,
     borderRadius: RADIUS.xl,
     padding: SPACING._14,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
   },
 });

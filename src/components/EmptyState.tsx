@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Button } from 'react-native-paper';
 import { useTheme } from '../store/ThemeContext';
 import { SPACING, RADIUS } from '../utils/theme';
@@ -79,13 +79,15 @@ export default function EmptyState({
         )}
 
         {actionLabel && onAction && (
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: accentColor }]}
+          <Button
+            mode="contained"
             onPress={onAction}
-            activeOpacity={0.8}
+            style={[styles.actionBtn, { backgroundColor: accentColor }]}
+            labelStyle={styles.actionText}
+            contentStyle={{ paddingVertical: 4 }}
           >
-            <Text style={styles.actionText}>{actionLabel}</Text>
-          </TouchableOpacity>
+            {actionLabel}
+          </Button>
         )}
       </Animated.View>
     </View>
@@ -124,8 +126,6 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     marginTop: SPACING.xxl,
-    paddingHorizontal: SPACING._24,
-    paddingVertical: SPACING.lg,
     borderRadius: RADIUS.lg,
   },
   actionText: {
