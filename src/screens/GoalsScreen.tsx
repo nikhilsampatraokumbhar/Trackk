@@ -5,8 +5,8 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTheme } from '../store/ThemeContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { SavingsGoal, DailySpend } from '../models/types';
@@ -75,6 +75,7 @@ const FREE_GOAL_LIMIT = 2;
 export default function GoalsScreen() {
   const nav = useNavigation<Nav>();
   const { isPremium } = usePremium();
+  const { colors } = useTheme();
   const { trackerState, togglePersonal, toggleGroupAffectsGoal } = useTracker();
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -472,12 +473,7 @@ export default function GoalsScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <LinearGradient
-        colors={['#1C1708', '#0E0C04', COLORS.background]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.emptyCard}
-      >
+      <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: `${colors.primary}30` }]}>
         <View style={styles.emptyGoldLine} />
         <View style={styles.emptyIconWrap}>
           <Text style={styles.emptyIcon}>{'\uD83C\uDFAF'}</Text>
@@ -491,20 +487,15 @@ export default function GoalsScreen() {
           Your personal expenses auto-sync with goals — zero manual work.
         </Text>
         <TouchableOpacity
-          style={styles.createBtnPrimary}
+          style={[styles.createBtnPrimary, { backgroundColor: colors.primary }]}
           onPress={() => { prefillFinances(); setShowForm(true); }}
           activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={[COLORS.primary, COLORS.primaryDark]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.createBtnGradient}
-          >
+          <View style={styles.createBtnGradient}>
             <Text style={styles.createBtnPrimaryText}>Create Your First Goal</Text>
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
     </View>
   );
 
@@ -694,12 +685,7 @@ export default function GoalsScreen() {
             {/* Live Budget Preview */}
             {preview.hasSalary && (
               <View style={styles.previewCard}>
-                <LinearGradient
-                  colors={['#1C1708', '#0E0C04']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.previewGradient}
-                >
+                <View style={[styles.previewGradient, { backgroundColor: colors.surface }]}>
                   <Text style={styles.previewTitle}>BUDGET PREVIEW</Text>
                   <View style={styles.previewRow}>
                     <View style={styles.previewItem}>
@@ -738,24 +724,19 @@ export default function GoalsScreen() {
                       </Text>
                     </View>
                   )}
-                </LinearGradient>
+                </View>
               </View>
             )}
 
             {/* Submit Button */}
             <TouchableOpacity
-              style={styles.submitBtn}
+              style={[styles.submitBtn, { backgroundColor: colors.primary }]}
               onPress={handleCreateGoal}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={[COLORS.primary, COLORS.primaryDark]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.submitBtnGradient}
-              >
+              <View style={styles.submitBtnGradient}>
                 <Text style={styles.submitBtnText}>{editingGoal ? 'Update Goal' : 'Calculate & Save Goal'}</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
             <View style={{ height: 40 }} />
@@ -829,14 +810,14 @@ export default function GoalsScreen() {
             <Text style={styles.sheetAmount}>{formatCurrency(yesterdayLeftover.amount)}</Text>
             <Text style={styles.sheetSubtitle}>You spent under budget yesterday! What would you like to do?</Text>
 
-            <TouchableOpacity style={styles.sheetBtnPrimary} onPress={() => handleSaveToJar(goal.id)} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.success, '#2DA070']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.sheetBtnGradient}>
+            <TouchableOpacity style={[styles.sheetBtnPrimary, { backgroundColor: colors.success }]} onPress={() => handleSaveToJar(goal.id)} activeOpacity={0.8}>
+              <View style={styles.sheetBtnGradient}>
                 <Text style={styles.sheetBtnIcon}>{'\uD83C\uDFFA'}</Text>
                 <View>
                   <Text style={styles.sheetBtnPrimaryText}>Add to Savings Jar</Text>
                   <Text style={styles.sheetBtnSub}>Save it for something meaningful</Text>
                 </View>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.sheetBtnSecondary} onPress={handleCarryForward} activeOpacity={0.8}>
@@ -910,12 +891,7 @@ export default function GoalsScreen() {
     return (
       <View key={goal.id} style={styles.goalCard}>
         {/* ── Hero Header ── */}
-        <LinearGradient
-          colors={['#1C1708', '#12100A', COLORS.surface]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.goalHeader}
-        >
+        <View style={[styles.goalHeader, { backgroundColor: colors.surface, borderColor: `${colors.primary}25` }]}>
           <View style={styles.goalHeaderGoldLine} />
 
           <View style={styles.goalHeaderContent}>
@@ -967,13 +943,10 @@ export default function GoalsScreen() {
               </Text>
             </View>
             <View style={styles.progressBarBg}>
-              <LinearGradient
-                colors={[COLORS.primary, COLORS.primaryLight]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <View
                 style={[
                   styles.progressBarFill,
-                  { width: `${Math.max(savingsProgress * 100, 2)}%` },
+                  { width: `${Math.max(savingsProgress * 100, 2)}%`, backgroundColor: colors.primary },
                 ]}
               />
             </View>
@@ -998,7 +971,7 @@ export default function GoalsScreen() {
               />
             </View>
           </View>
-        </LinearGradient>
+        </View>
 
         {/* ── Today's Budget (the hero number) ── */}
         <View style={styles.dailyBudgetCard}>
@@ -1192,7 +1165,7 @@ export default function GoalsScreen() {
           )}
           {goals.length > 0 && (
             <TouchableOpacity
-              style={styles.addBtn}
+              style={[styles.addBtn, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}30` }]}
               onPress={() => {
                 if (!isPremium && goals.length >= FREE_GOAL_LIMIT) {
                   Alert.alert(
@@ -1210,14 +1183,9 @@ export default function GoalsScreen() {
               }}
               activeOpacity={0.7}
             >
-              <LinearGradient
-                colors={[`${COLORS.primary}25`, `${COLORS.primary}10`]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.addBtnGradient}
-              >
-                <Text style={styles.addBtnText}>+ Add Goal</Text>
-              </LinearGradient>
+              <View style={styles.addBtnGradient}>
+                <Text style={[styles.addBtnText, { color: colors.primary }]}>+ Add Goal</Text>
+              </View>
             </TouchableOpacity>
           )}
           </View>

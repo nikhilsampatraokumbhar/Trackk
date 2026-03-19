@@ -5,8 +5,8 @@ import {
   ActivityIndicator, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTheme } from '../store/ThemeContext';
 import { EMIItem } from '../models/types';
 import {
   getEMIs, saveEMI, deleteEMI,
@@ -38,6 +38,7 @@ function daysUntil(dateStr: string): number {
 export default function EMIsScreen() {
   const nav = useNavigation();
   const { isConnected } = useNetwork();
+  const { colors } = useTheme();
   const [items, setItems] = useState<EMIItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -281,7 +282,7 @@ export default function EMIsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <LinearGradient colors={['#1A1018', '#100A0E', COLORS.background]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={[styles.headerAccent, { backgroundColor: COLORS.warning }]} />
         <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn} activeOpacity={0.7}>
           <Text style={styles.backIcon}>‹</Text>
@@ -317,7 +318,7 @@ export default function EMIsScreen() {
             </View>
           </View>
         )}
-      </LinearGradient>
+      </View>
 
       {scanResultText ? (
         <View style={styles.scanResultBar}>
@@ -385,10 +386,10 @@ export default function EMIsScreen() {
               Your {celebrationEMI} EMI is fully paid!{'\n'}One less thing to worry about.
             </Text>
             <Text style={styles.celebrationBadge}>EMI CLOSED</Text>
-            <TouchableOpacity style={styles.celebrationBtn} onPress={() => setShowCelebration(false)} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.success, '#2A9A6A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.celebrationBtnGrad}>
+            <TouchableOpacity style={[styles.celebrationBtn, { backgroundColor: colors.success }]} onPress={() => setShowCelebration(false)} activeOpacity={0.8}>
+              <View style={styles.celebrationBtnGrad}>
                 <Text style={styles.celebrationBtnText}>Amazing!</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -412,10 +413,10 @@ export default function EMIsScreen() {
               </View>
             ) : (
               <>
-                <TouchableOpacity style={styles.onboardingBtn} onPress={handleSyncSMS} activeOpacity={0.8}>
-                  <LinearGradient colors={[COLORS.warning, '#C8A052']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
-                    <Text style={[styles.onboardingBtnText, { color: '#1A1018' }]}>Scan & Find EMIs</Text>
-                  </LinearGradient>
+                <TouchableOpacity style={[styles.onboardingBtn, { backgroundColor: colors.warning }]} onPress={handleSyncSMS} activeOpacity={0.8}>
+                  <View style={styles.onboardingBtnGrad}>
+                    <Text style={[styles.onboardingBtnText, { color: '#FFFFFF' }]}>Scan & Find EMIs</Text>
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleOnboardingDismiss} style={{ padding: 12 }}>
                   <Text style={styles.onboardingSkip}>Add manually instead</Text>
@@ -444,10 +445,10 @@ export default function EMIsScreen() {
             <TextInput style={styles.input} value={formDay} onChangeText={setFormDay}
               placeholder="EMI debit day of month (1-31)" placeholderTextColor={COLORS.textLight} keyboardType="numeric" selectionColor={COLORS.primary} />
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.warning, '#C8A052']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtnGrad}>
-                <Text style={[styles.saveBtnText, { color: '#1A1018' }]}>{editingItem ? 'Update' : 'Add EMI'}</Text>
-              </LinearGradient>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.warning }]} onPress={handleSave} activeOpacity={0.8}>
+              <View style={styles.saveBtnGrad}>
+                <Text style={[styles.saveBtnText, { color: '#FFFFFF' }]}>{editingItem ? 'Update' : 'Add EMI'}</Text>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelBtn} onPress={resetForm}>
               <Text style={styles.cancelBtnText}>Cancel</Text>

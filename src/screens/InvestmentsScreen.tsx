@@ -5,8 +5,8 @@ import {
   ActivityIndicator, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTheme } from '../store/ThemeContext';
 import { InvestmentItem } from '../models/types';
 import {
   getInvestments, saveInvestment, deleteInvestment,
@@ -42,6 +42,7 @@ function daysUntil(dateStr: string): number {
 export default function InvestmentsScreen() {
   const nav = useNavigation();
   const { isConnected } = useNetwork();
+  const { colors } = useTheme();
   const [items, setItems] = useState<InvestmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -268,7 +269,7 @@ export default function InvestmentsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <LinearGradient colors={['#101A14', '#0A100C', COLORS.background]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={[styles.headerAccent, { backgroundColor: COLORS.success }]} />
         <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn} activeOpacity={0.7}>
           <Text style={styles.backIcon}>‹</Text>
@@ -304,7 +305,7 @@ export default function InvestmentsScreen() {
             </View>
           </View>
         )}
-      </LinearGradient>
+      </View>
 
       {scanResultText ? (
         <View style={styles.scanResultBar}>
@@ -380,10 +381,10 @@ export default function InvestmentsScreen() {
               </View>
             ) : (
               <>
-                <TouchableOpacity style={styles.onboardingBtn} onPress={handleSyncSMS} activeOpacity={0.8}>
-                  <LinearGradient colors={[COLORS.success, '#2A9A6A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.onboardingBtnGrad}>
+                <TouchableOpacity style={[styles.onboardingBtn, { backgroundColor: colors.success }]} onPress={handleSyncSMS} activeOpacity={0.8}>
+                  <View style={styles.onboardingBtnGrad}>
                     <Text style={styles.onboardingBtnText}>Scan & Find Investments</Text>
-                  </LinearGradient>
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleOnboardingDismiss} style={{ padding: 12 }}>
                   <Text style={styles.onboardingSkip}>Add manually instead</Text>
@@ -421,10 +422,10 @@ export default function InvestmentsScreen() {
                 placeholder="Debit day of month (1-31)" placeholderTextColor={COLORS.textLight} keyboardType="numeric" selectionColor={COLORS.primary} />
             )}
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.success, '#2A9A6A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtnGrad}>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.success }]} onPress={handleSave} activeOpacity={0.8}>
+              <View style={styles.saveBtnGrad}>
                 <Text style={styles.saveBtnText}>{editingItem ? 'Update' : 'Add Investment'}</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelBtn} onPress={resetForm}>
               <Text style={styles.cancelBtnText}>Cancel</Text>
