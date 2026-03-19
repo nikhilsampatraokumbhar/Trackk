@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   cycleBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center' },
   cycleBtnActive: { backgroundColor: `${COLORS.success}20`, borderColor: COLORS.success },
   cycleBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
-  cycleBtnTextActive: { color: colors.success },
+  cycleBtnTextActive: { color: COLORS.success },
   saveBtn: { borderRadius: 30, overflow: 'hidden', marginTop: 8, marginBottom: 12 },
   saveBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },
   saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
