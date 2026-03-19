@@ -5,7 +5,6 @@ import {
   TextInput, AppState, AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -891,10 +890,8 @@ export default function GroupDetailScreen() {
               return null;
             })()}
 
-            <TouchableOpacity style={[styles.saveBtn, editSaving && { opacity: 0.5 }]} onPress={handleUpdateExpense} disabled={editSaving} activeOpacity={0.8}>
-              <LinearGradient colors={[COLORS.primary, COLORS.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.saveBtnGrad}>
-                <Text style={styles.saveBtnText}>{editSaving ? 'Saving...' : 'Save Changes'}</Text>
-              </LinearGradient>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: COLORS.primary }, editSaving && { opacity: 0.5 }]} onPress={handleUpdateExpense} disabled={editSaving} activeOpacity={0.8}>
+              <Text style={styles.saveBtnText}>{editSaving ? 'Saving...' : 'Save Changes'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.commentOpenBtn} onPress={() => { setCommentTxn(editingTxn.txn); setEditingTxn(null); }} activeOpacity={0.7}>
@@ -980,8 +977,8 @@ const styles = StyleSheet.create({
   settingsBtn: { padding: 8, borderRadius: 12, backgroundColor: `${COLORS.surfaceHigh}` },
   settingsIcon: { fontSize: 20 },
   groupIcon: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  groupInitial: { fontSize: 28, fontWeight: '800' },
-  groupName: { fontSize: 24, fontWeight: '800', color: COLORS.text, marginBottom: 4, letterSpacing: -0.3 },
+  groupInitial: { fontSize: 28, fontWeight: '700' },
+  groupName: { fontSize: 24, fontWeight: '700', color: COLORS.text, marginBottom: 4, letterSpacing: -0.3 },
   summaryText: { fontSize: 14, fontWeight: '500', marginBottom: 16 },
   actionRow: { flexDirection: 'row', gap: 10 },
   actionBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
@@ -1000,9 +997,9 @@ const styles = StyleSheet.create({
   timelineRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   dateCol: { width: 36, alignItems: 'center', marginRight: 12 },
   dateMonth: { fontSize: 10, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'uppercase' },
-  dateDay: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  dateDay: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   rowIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  rowIconText: { fontSize: 16, fontWeight: '800' },
+  rowIconText: { fontSize: 16, fontWeight: '700' },
   rowInfo: { flex: 1 },
   rowDesc: { fontSize: 15, fontWeight: '600', color: COLORS.text, marginBottom: 2 },
   rowSub: { fontSize: 12, color: COLORS.textSecondary },
@@ -1014,20 +1011,20 @@ const styles = StyleSheet.create({
 
   // ─── FAB ──────────────────────────────────────────────────────────────────
   fab: { position: 'absolute', right: 20, bottom: 20, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 30, elevation: 8, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12 },
-  fabIcon: { color: '#0A0A0F', fontSize: 20, fontWeight: '800', marginRight: 6 },
-  fabText: { color: '#0A0A0F', fontWeight: '800', fontSize: 14, letterSpacing: 0.3 },
+  fabIcon: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', marginRight: 6 },
+  fabText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14, letterSpacing: 0.3 },
 
   // ─── Settle List Sheet ────────────────────────────────────────────────────
   settleRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   settleAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-  settleAvatarText: { fontSize: 18, fontWeight: '800' },
+  settleAvatarText: { fontSize: 18, fontWeight: '700' },
   settleName: { flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.text },
   settleRightCol: { alignItems: 'flex-end' },
   settleOwedLabel: { fontSize: 11, color: COLORS.danger, fontWeight: '500' },
   settleOwedAmount: { fontSize: 15, fontWeight: '700', color: COLORS.danger },
 
   // ─── Shared Modal Styles ──────────────────────────────────────────────────
-  modalTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginBottom: 6 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 6 },
   modalSub: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 20 },
   cancelBtn: { alignItems: 'center', paddingVertical: 14, borderRadius: 14, backgroundColor: COLORS.surfaceHigh, borderWidth: 1, borderColor: COLORS.border, marginTop: 10 },
   cancelBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary },
@@ -1035,12 +1032,12 @@ const styles = StyleSheet.create({
   // ─── Amount Wrap ──────────────────────────────────────────────────────────
   amountWrap: { backgroundColor: COLORS.surfaceHigh, borderRadius: 14, padding: 14, marginBottom: 18, borderWidth: 1, borderColor: COLORS.border },
   totalRow: { marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  totalValue: { fontSize: 16, fontWeight: '800', color: COLORS.textSecondary, marginTop: 4 },
+  totalValue: { fontSize: 16, fontWeight: '700', color: COLORS.textSecondary, marginTop: 4 },
   settleAmtSection: { marginBottom: 4 },
   amountLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1, marginBottom: 6 },
   amountInputRow: { flexDirection: 'row', alignItems: 'center' },
-  amountCurrency: { fontSize: 22, fontWeight: '800', color: COLORS.text, marginRight: 4 },
-  amountInput: { flex: 1, fontSize: 22, fontWeight: '800', color: COLORS.text, padding: 0 },
+  amountCurrency: { fontSize: 22, fontWeight: '700', color: COLORS.text, marginRight: 4 },
+  amountInput: { flex: 1, fontSize: 22, fontWeight: '700', color: COLORS.text, padding: 0 },
   typeBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, marginTop: 10 },
   typeBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
 
@@ -1056,16 +1053,15 @@ const styles = StyleSheet.create({
   // ─── Edit Expense ─────────────────────────────────────────────────────────
   editLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 1.5, marginBottom: 8, marginTop: 4 },
   editAmountRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surfaceHigh, borderRadius: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 16 },
-  editCurrency: { fontSize: 24, fontWeight: '800', color: COLORS.primary, marginRight: 4 },
-  editAmountInput: { flex: 1, fontSize: 28, fontWeight: '800', color: COLORS.text, paddingVertical: 14 },
+  editCurrency: { fontSize: 24, fontWeight: '700', color: COLORS.primary, marginRight: 4 },
+  editAmountInput: { flex: 1, fontSize: 28, fontWeight: '700', color: COLORS.text, paddingVertical: 14 },
   editDescInput: { backgroundColor: COLORS.surfaceHigh, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, marginBottom: 16 },
   editMembers: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   editChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.surfaceHigh },
-  editCheck: { fontSize: 12, fontWeight: '800', marginRight: 6 },
+  editCheck: { fontSize: 12, fontWeight: '700', marginRight: 6 },
   editChipName: { fontSize: 13, fontWeight: '600' },
   splitPreview: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '600', marginBottom: 20 },
-  saveBtn: { borderRadius: 14, overflow: 'hidden', marginBottom: 10 },
-  saveBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 14 },
+  saveBtn: { borderRadius: 12, marginBottom: 10, paddingVertical: 16, alignItems: 'center' },
   saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   deleteBtn: { paddingVertical: 14, alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: `${COLORS.danger}30`, backgroundColor: `${COLORS.danger}08`, marginBottom: 6 },
   deleteBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.danger },
@@ -1091,7 +1087,7 @@ const styles = StyleSheet.create({
   noCommentsText: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', paddingVertical: 20, fontStyle: 'italic' },
   commentRow: { flexDirection: 'row', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   commentAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  commentAvatarText: { fontSize: 13, fontWeight: '800' },
+  commentAvatarText: { fontSize: 13, fontWeight: '700' },
   commentContent: { flex: 1 },
   commentAuthor: { fontSize: 12, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
   commentTextBody: { fontSize: 13, color: COLORS.text, lineHeight: 18 },
