@@ -84,6 +84,8 @@ function AppContent() {
   const { groups } = useGroups();
   const { isDark } = useTheme();
   const [showTour, setShowTour] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+  const [authReady, setAuthReady] = useState(false);
 
   // Load saved language and currency on app start
   useEffect(() => {
@@ -91,6 +93,13 @@ function AppContent() {
     loadSavedCurrency();
     fetchExchangeRates();
   }, []);
+
+  // Track when auth is done loading
+  useEffect(() => {
+    if (!loading) {
+      setAuthReady(true);
+    }
+  }, [loading]);
 
   // Check if we should show the app tour after auth
   useEffect(() => {
@@ -120,6 +129,26 @@ function AppContent() {
     })();
   }, [isAuthenticated, user?.id, groups.length]);
 
+  // Show splash animation until it completes AND auth is ready
+  if (showSplash) {
+    return (
+      <SplashScreen
+        onAnimationComplete={() => {
+          if (authReady) {
+            setShowSplash(false);
+          } else {
+            // Auth still loading — wait for it, then hide splash
+            const check = setInterval(() => {
+              setShowSplash(false);
+              clearInterval(check);
+            }, 200);
+          }
+        }}
+      />
+    );
+  }
+
+  // Still loading auth after splash (rare — splash is ~3.3s)
   if (loading) {
     return <SplashScreen />;
   }

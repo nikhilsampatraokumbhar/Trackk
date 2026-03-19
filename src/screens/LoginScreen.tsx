@@ -4,7 +4,7 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform,
   Animated, Alert,
 } from 'react-native';
-import { COLORS } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 import { sendOTP, verifyOTP } from '../services/FirebaseConfig';
 import Logo from '../components/Logo';
 
@@ -15,6 +15,7 @@ interface Props {
 }
 
 export default function LoginScreen({ onAuthSuccess }: Props) {
+  const { colors } = useTheme();
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -158,7 +159,7 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.inner}>
@@ -176,20 +177,20 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
           {step === 'phone' ? (
             <>
               {/* Phone Input Step */}
-              <Text style={styles.title}>Enter your mobile number</Text>
-              <Text style={styles.subtitle}>
+              <Text style={[styles.title, { color: colors.text }]}>Enter your mobile number</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 We'll send you a 6-digit verification code
               </Text>
 
               <View style={styles.phoneRow}>
-                <View style={styles.countryCode}>
+                <View style={[styles.countryCode, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
                   <Text style={styles.countryFlag}>🇮🇳</Text>
-                  <Text style={styles.countryCodeText}>+91</Text>
+                  <Text style={[styles.countryCodeText, { color: colors.text }]}>+91</Text>
                 </View>
                 <TextInput
-                  style={styles.phoneInput}
+                  style={[styles.phoneInput, { backgroundColor: colors.surfaceHigh, borderColor: colors.border, color: colors.text }]}
                   placeholder="Mobile number"
-                  placeholderTextColor={COLORS.textLight}
+                  placeholderTextColor={colors.textLight}
                   value={phone}
                   onChangeText={formatPhone}
                   keyboardType="number-pad"
@@ -198,10 +199,10 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
                 />
               </View>
 
-              {error ? <Text style={styles.error}>{error}</Text> : null}
+              {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
               <TouchableOpacity
-                style={[styles.primaryBtn, phone.length < 10 && styles.disabledBtn]}
+                style={[styles.primaryBtn, { backgroundColor: colors.primary, shadowColor: colors.primary }, phone.length < 10 && styles.disabledBtn]}
                 onPress={handleSendOTP}
                 disabled={loading || phone.length < 10}
                 activeOpacity={0.8}
@@ -213,7 +214,7 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
                 )}
               </TouchableOpacity>
 
-              <Text style={styles.disclaimer}>
+              <Text style={[styles.disclaimer, { color: colors.textLight }]}>
                 By continuing, you agree to our Terms of Service and Privacy Policy.
                 Your phone number is used for authentication and group features only.
               </Text>
@@ -222,13 +223,13 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
             <>
               {/* OTP Input Step */}
               <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
-                <Text style={styles.backBtnText}>← Change number</Text>
+                <Text style={[styles.backBtnText, { color: colors.primary }]}>← Change number</Text>
               </TouchableOpacity>
 
-              <Text style={styles.title}>Verify your number</Text>
-              <Text style={styles.subtitle}>
+              <Text style={[styles.title, { color: colors.text }]}>Verify your number</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 Enter the 6-digit code sent to{'\n'}
-                <Text style={styles.phoneHighlight}>+91 {phone}</Text>
+                <Text style={[styles.phoneHighlight, { color: colors.primary }]}>+91 {phone}</Text>
               </Text>
 
               <View style={styles.otpRow}>
@@ -238,7 +239,8 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
                     ref={ref => { otpRefs.current[i] = ref; }}
                     style={[
                       styles.otpInput,
-                      digit && styles.otpInputFilled,
+                      { backgroundColor: colors.surfaceHigh, borderColor: colors.border, color: colors.text },
+                      digit && { borderColor: colors.primary, backgroundColor: `${colors.primary}10` },
                     ]}
                     value={digit}
                     onChangeText={text => handleOtpChange(text, i)}
@@ -251,18 +253,19 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
                 ))}
               </View>
 
-              {error ? <Text style={styles.error}>{error}</Text> : null}
+              {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
               {loading && (
                 <View style={styles.verifyingRow}>
-                  <ActivityIndicator color={COLORS.primary} size="small" />
-                  <Text style={styles.verifyingText}>Verifying...</Text>
+                  <ActivityIndicator color={colors.primary} size="small" />
+                  <Text style={[styles.verifyingText, { color: colors.primary }]}>Verifying...</Text>
                 </View>
               )}
 
               <TouchableOpacity
                 style={[
                   styles.primaryBtn,
+                  { backgroundColor: colors.primary, shadowColor: colors.primary },
                   !otp.every(d => d) && styles.disabledBtn,
                 ]}
                 onPress={() => verifyCode(otp.join(''))}
@@ -280,7 +283,8 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
               >
                 <Text style={[
                   styles.resendText,
-                  resendTimer > 0 && styles.resendDisabled,
+                  { color: colors.primary },
+                  resendTimer > 0 && { color: colors.textSecondary },
                 ]}>
                   {resendTimer > 0
                     ? `Resend OTP in ${resendTimer}s`
@@ -298,7 +302,6 @@ export default function LoginScreen({ onAuthSuccess }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   inner: {
     flex: 1,
@@ -319,18 +322,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: COLORS.text,
     marginBottom: 8,
     letterSpacing: -0.2,
   },
   subtitle: {
     fontSize: 14,
-    color: COLORS.textSecondary,
     lineHeight: 20,
     marginBottom: 28,
   },
   phoneHighlight: {
-    color: COLORS.primary,
     fontWeight: '700',
   },
 
@@ -343,11 +343,9 @@ const styles = StyleSheet.create({
   countryCode: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 14,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: COLORS.border,
     gap: 6,
   },
   countryFlag: {
@@ -356,17 +354,13 @@ const styles = StyleSheet.create({
   countryCodeText: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.text,
   },
   phoneInput: {
     flex: 1,
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: COLORS.border,
     padding: 16,
     fontSize: 18,
-    color: COLORS.text,
     fontWeight: '600',
     letterSpacing: 1,
   },
@@ -382,24 +376,16 @@ const styles = StyleSheet.create({
     flex: 1,
     aspectRatio: 1,
     maxWidth: 52,
-    backgroundColor: COLORS.surfaceHigh,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
     fontSize: 22,
     fontWeight: '700',
-    color: COLORS.text,
     textAlign: 'center',
-  },
-  otpInputFilled: {
-    borderColor: COLORS.primary,
-    backgroundColor: `${COLORS.primary}10`,
   },
 
   // Error
   error: {
     fontSize: 13,
-    color: COLORS.danger,
     fontWeight: '600',
     marginBottom: 16,
     textAlign: 'center',
@@ -407,12 +393,10 @@ const styles = StyleSheet.create({
 
   // Buttons
   primaryBtn: {
-    backgroundColor: COLORS.primary,
     borderRadius: 12,
     padding: 18,
     alignItems: 'center',
     marginBottom: 16,
-    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
@@ -435,7 +419,6 @@ const styles = StyleSheet.create({
   },
   backBtnText: {
     fontSize: 14,
-    color: COLORS.primary,
     fontWeight: '600',
   },
 
@@ -445,11 +428,7 @@ const styles = StyleSheet.create({
   },
   resendText: {
     fontSize: 14,
-    color: COLORS.primary,
     fontWeight: '600',
-  },
-  resendDisabled: {
-    color: COLORS.textSecondary,
   },
 
   verifyingRow: {
@@ -461,13 +440,11 @@ const styles = StyleSheet.create({
   },
   verifyingText: {
     fontSize: 14,
-    color: COLORS.primary,
     fontWeight: '600',
   },
 
   disclaimer: {
     fontSize: 11,
-    color: COLORS.textLight,
     textAlign: 'center',
     lineHeight: 16,
     marginTop: 8,
