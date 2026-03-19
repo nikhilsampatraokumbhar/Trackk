@@ -16,8 +16,8 @@ import {
   View, Text, StyleSheet, SectionList, TouchableOpacity,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../store/ThemeContext';
 import { hapticLight, hapticMedium } from '../utils/haptics';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -81,6 +81,7 @@ const AUTO_CATEGORY_LABELS: Record<string, { label: string; icon: string; color:
 export default function NightlyReviewScreen() {
   const nav = useNavigation<Nav>();
   const { user } = useAuth();
+  const { colors } = useTheme();
   const { groups } = useGroups();
   const { isPremium } = usePremium();
   const { trackerState, addTransactionToTracker, transactionVersion, getActiveTrackers, setDefaultTracker } = useTracker();
@@ -507,17 +508,13 @@ export default function NightlyReviewScreen() {
             {'\n\n'}This is a Premium feature.
           </Text>
           <TouchableOpacity
-            style={styles.premiumBtn}
+            style={[styles.premiumBtn, { backgroundColor: colors.primary }]}
             onPress={() => nav.navigate('Pricing')}
             activeOpacity={0.8}
           >
-            <LinearGradient
-              colors={[COLORS.primary, COLORS.primaryDark]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={styles.premiumBtnGradient}
-            >
+            <View style={styles.premiumBtnGradient}>
               <Text style={styles.premiumBtnText}>Upgrade to Premium</Text>
-            </LinearGradient>
+            </View>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -535,11 +532,7 @@ export default function NightlyReviewScreen() {
         stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          <LinearGradient
-            colors={['#1A0E1E', '#0E0C14', COLORS.background]}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={styles.headerCard}
-          >
+          <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: `rgba(138,120,240,0.15)` }]}>
             <View style={styles.headerAccent} />
             <Text style={styles.headerEmoji}>🌙</Text>
             <Text style={styles.headerTitle}>Review Expenses</Text>
@@ -569,7 +562,7 @@ export default function NightlyReviewScreen() {
                 ))}
               </View>
             )}
-          </LinearGradient>
+          </View>
         }
         ListEmptyComponent={
           !loading ? (

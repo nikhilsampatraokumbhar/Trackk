@@ -4,7 +4,7 @@ import {
   Alert, Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '../store/ThemeContext';
 import { COLORS } from '../utils/helpers';
 import { getTestDeepLink } from '../services/DeepLinkService';
 
@@ -83,6 +83,7 @@ const MANUAL_STEPS = [
 ];
 
 export default function IOSSetupScreen() {
+  const { colors } = useTheme();
   const [showManual, setShowManual] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
@@ -121,19 +122,14 @@ export default function IOSSetupScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <LinearGradient
-          colors={['#1C1708', '#0E0C04', COLORS.background]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerCard}
-        >
+        <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: `${colors.primary}30` }]}>
           <View style={styles.headerGoldLine} />
           <Text style={styles.headerEmoji}>📱</Text>
           <Text style={styles.headerTitle}>iPhone Auto-Tracking</Text>
           <Text style={styles.headerSub}>
             Get near-instant transaction detection using iOS Shortcuts automation
           </Text>
-        </LinearGradient>
+        </View>
 
         {/* How it works */}
         <View style={styles.infoCard}>
@@ -166,18 +162,13 @@ export default function IOSSetupScreen() {
               <Text style={styles.stepDetail}>{step.detail}</Text>
               {step.hasAction && (
                 <TouchableOpacity
-                  style={styles.installBtn}
+                  style={[styles.installBtn, { backgroundColor: colors.primary }]}
                   onPress={() => handleInstallShortcut(step.actionUrl!)}
                   activeOpacity={0.8}
                 >
-                  <LinearGradient
-                    colors={[COLORS.primary, COLORS.primaryDark]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.installBtnGradient}
-                  >
+                  <View style={styles.installBtnGradient}>
                     <Text style={styles.installBtnText}>{step.actionLabel}</Text>
-                  </LinearGradient>
+                  </View>
                 </TouchableOpacity>
               )}
             </View>

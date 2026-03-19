@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useGroups } from '../store/GroupContext';
 import { useTracker } from '../store/TrackerContext';
 import TrackerToggle from '../components/TrackerToggle';
+import { useTheme } from '../store/ThemeContext';
 import { COLORS } from '../utils/helpers';
 
 export default function TrackerSettingsScreen() {
   const { groups } = useGroups();
   const { trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup } = useTracker();
+  const { colors } = useTheme();
 
   const activeCount =
     (trackerState.personal ? 1 : 0) +

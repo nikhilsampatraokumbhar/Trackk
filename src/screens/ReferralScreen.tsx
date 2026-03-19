@@ -4,8 +4,8 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { usePremium } from '../store/PremiumContext';
+import { useTheme } from '../store/ThemeContext';
 import { COLORS } from '../utils/helpers';
 
 const MILESTONES = [
@@ -20,6 +20,7 @@ export default function ReferralScreen() {
     referralCode, referralStats, referrals,
     shareReferralLink, isPremium,
   } = usePremium();
+  const { colors } = useTheme();
 
   const qualifiedCount = referralStats.qualified;
 
@@ -28,19 +29,14 @@ export default function ReferralScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
         {/* Hero */}
-        <LinearGradient
-          colors={['#1C1708', '#0E0C04', COLORS.background]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroCard}
-        >
+        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: `${colors.primary}30` }]}>
           <View style={styles.heroAccent} />
           <Text style={styles.heroEmoji}>🎁</Text>
           <Text style={styles.heroTitle}>Give Premium, Get Premium</Text>
           <Text style={styles.heroSubtitle}>
             Share Trackk with friends. When they start tracking,{'\n'}you both win.
           </Text>
-        </LinearGradient>
+        </View>
 
         {/* How it works */}
         <View style={styles.howItWorks}>

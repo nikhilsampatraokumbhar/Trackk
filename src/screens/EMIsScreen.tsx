@@ -373,7 +373,7 @@ export default function EMIsScreen() {
       )}
 
       <TouchableOpacity style={[styles.fab, { backgroundColor: COLORS.warning }]} onPress={() => setShowAddModal(true)} activeOpacity={0.8}>
-        <Text style={[styles.fabIcon, { color: '#1A1018' }]}>+</Text>
+        <Text style={[styles.fabIcon, { color: '#FFFFFF' }]}>+</Text>
       </TouchableOpacity>
 
       {/* EMI Completion Celebration */}
