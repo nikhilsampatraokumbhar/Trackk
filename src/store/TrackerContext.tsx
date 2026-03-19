@@ -13,7 +13,7 @@ import {
 import { setupFcmHandlers } from '../services/FcmService';
 import {
   setupNotificationChannel, requestNotificationPermission,
-  showTransactionNotification, showAutoSavedNotification,
+  showTransactionNotification,
   registerNotificationCallbacks, handleNotificationEvent,
   clearNotificationCallbacks,
   PENDING_GROUP_SPLIT_KEY,
@@ -62,31 +62,22 @@ const TrackerContext = createContext<TrackerContextType>({} as TrackerContextTyp
 
 /**
  * Smart routing logic for multiple active trackers:
- * - Group + any other → route to group automatically (no "Choose Tracker")
- * - Reimbursement + Personal → auto-save to both
- * - Otherwise → normal flow
+ * - Single tracker → normal flow
+ * - Multiple trackers → use default tracker as primary action
  */
 function resolveTrackerRouting(
   activeTrackers: ActiveTracker[],
-): { action: 'auto_group'; tracker: ActiveTracker } |
-   { action: 'auto_reimbursement_personal'; trackers: ActiveTracker[] } |
+  defaultTrackerId: string,
+): { action: 'default_tracker'; tracker: ActiveTracker; others: ActiveTracker[] } |
    { action: 'normal'; trackers: ActiveTracker[] } {
-  const groupTrackers = activeTrackers.filter(t => t.type === 'group');
-  const hasPersonal = activeTrackers.some(t => t.type === 'personal');
-  const hasReimbursement = activeTrackers.some(t => t.type === 'reimbursement');
-
-  // If any group tracker is active → route to group (first one if multiple)
-  if (groupTrackers.length > 0) {
-    return { action: 'auto_group', tracker: groupTrackers[0] };
+  if (activeTrackers.length <= 1) {
+    return { action: 'normal', trackers: activeTrackers };
   }
 
-  // If both reimbursement and personal → auto-save to both
-  if (hasReimbursement && hasPersonal) {
-    return { action: 'auto_reimbursement_personal', trackers: activeTrackers };
-  }
-
-  // Single tracker or other combinations → normal flow
-  return { action: 'normal', trackers: activeTrackers };
+  // Multiple trackers — use default tracker as primary, rest as alternatives
+  const defaultTracker = activeTrackers.find(t => t.id === defaultTrackerId) || activeTrackers[0];
+  const others = activeTrackers.filter(t => t.id !== defaultTracker.id);
+  return { action: 'default_tracker', tracker: defaultTracker, others };
 }
 
 interface Props {
@@ -336,10 +327,9 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   }, []);
 
   /**
-   * Handle an incoming transaction with smart routing:
-   * - Group active → open SplitEditor (set pending + group tracker)
-   * - Reimbursement + Personal → auto-save to both
-   * - Otherwise → show notification as normal
+   * Handle an incoming transaction:
+   * - Single tracker → show notification with "Add to <Tracker>" button
+   * - Multiple trackers → show notification with "Add to <Default>" + "Choose Other"
    */
   const handleIncomingTransaction = useCallback(async (
     parsed: ParsedTransaction,
@@ -347,24 +337,13 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   ) => {
     if (activeTrackers.length === 0) return;
 
-    const routing = resolveTrackerRouting(activeTrackers);
+    const routing = resolveTrackerRouting(activeTrackers, trackerStateRef.current.defaultTrackerId);
 
-    if (routing.action === 'auto_group') {
-      // Group tracker is active → show notification with single "Add to <Group>" button
-      await showTransactionNotification(parsed, [routing.tracker]);
-    } else if (routing.action === 'auto_reimbursement_personal') {
-      // Reimbursement + Personal → auto-save to both, show confirmation notification
-      const uid = userIdRef.current;
-      await saveTransaction(parsed, 'reimbursement', uid);
-      await saveTransaction(parsed, 'personal', uid);
-      await syncGoalDailyBudget();
-      // Mark as reviewed since it was auto-saved
-      await markMatchingPendingAsReviewed(parsed);
-      setTransactionVersion(v => v + 1);
-      // Show a confirmation notification (no action buttons needed)
-      await showAutoSavedNotification(parsed);
+    if (routing.action === 'default_tracker') {
+      // Multiple trackers — show default tracker as primary action
+      await showTransactionNotification(parsed, activeTrackers, routing.tracker);
     } else {
-      // Normal flow → show notification with appropriate action(s)
+      // Single tracker or normal flow
       await showTransactionNotification(parsed, routing.trackers);
     }
   }, []);
@@ -466,15 +445,6 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   const toggleReimbursement = useCallback(async () => {
     setTrackerState(prev => {
       const turningOn = !prev.reimbursement;
-      // Block if trying to turn ON while group trackers are active
-      if (turningOn && prev.activeGroupIds.length > 0) {
-        Alert.alert(
-          'Tracker Conflict',
-          'Reimbursement and Group tracking cannot be active at the same time.\n\nDisable your group tracker first.',
-          [{ text: 'OK' }],
-        );
-        return prev;
-      }
       // Free users: only 1 active tracker
       if (turningOn && !isPremium && countActiveTrackers(prev) >= 1) {
         Alert.alert(
@@ -493,24 +463,6 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   const toggleGroup = useCallback(async (groupId: string) => {
     setTrackerState(prev => {
       const isCurrentlyActive = prev.activeGroupIds.includes(groupId);
-      // Block if trying to turn ON while reimbursement is active
-      if (!isCurrentlyActive && prev.reimbursement) {
-        Alert.alert(
-          'Tracker Conflict',
-          'Group and Reimbursement tracking cannot be active at the same time.\n\nDisable the Reimbursement tracker first.',
-          [{ text: 'OK' }],
-        );
-        return prev;
-      }
-      // Only 1 group tracker at a time for all users
-      if (!isCurrentlyActive && prev.activeGroupIds.length >= 1) {
-        Alert.alert(
-          'One Group at a Time',
-          'You can only track one group at a time. Disable your current group tracker first.',
-          [{ text: 'OK' }],
-        );
-        return prev;
-      }
       // Free users: only 1 active tracker
       if (!isCurrentlyActive && !isPremium && countActiveTrackers(prev) >= 1) {
         Alert.alert(
@@ -530,6 +482,14 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       return next;
     });
   }, [isPremium]);
+
+  const setDefaultTracker = useCallback((trackerId: string) => {
+    setTrackerState(prev => {
+      const next = { ...prev, defaultTrackerId: trackerId };
+      persistState(next);
+      return next;
+    });
+  }, []);
 
   const toggleGroupAffectsGoal = useCallback(() => {
     setTrackerState(prev => {
@@ -620,6 +580,16 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     // in Review Expenses after being added via notification
     await markMatchingPendingAsReviewed(parsed);
 
+    // Update default tracker to last-used
+    setTrackerState(prev => {
+      if (prev.defaultTrackerId !== trackerId) {
+        const next = { ...prev, defaultTrackerId: trackerId };
+        persistState(next);
+        return next;
+      }
+      return prev;
+    });
+
     // Bump version so screens listening to transactionVersion will re-render/reload
     setTransactionVersion(v => v + 1);
   }, []);
@@ -635,6 +605,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     togglePersonal,
     toggleReimbursement,
     toggleGroup,
+    setDefaultTracker,
     getActiveTrackers,
     pendingTransaction,
     pendingGroupTracker,
@@ -643,7 +614,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     addTransactionToTracker,
     transactionVersion,
     toggleGroupAffectsGoal,
-  }), [trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup, getActiveTrackers, pendingQueue, clearPendingTransaction, addTransactionToTracker, transactionVersion, toggleGroupAffectsGoal]);
+  }), [trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup, setDefaultTracker, getActiveTrackers, pendingQueue, clearPendingTransaction, addTransactionToTracker, transactionVersion, toggleGroupAffectsGoal]);
 
   return (
     <TrackerContext.Provider value={value}>

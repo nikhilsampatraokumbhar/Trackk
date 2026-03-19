@@ -18,7 +18,7 @@ import { getTodayPendingCount } from '../services/TransactionSignalEngine';
 import { Transaction, SavingsGoal, UserSubscriptionItem, InvestmentItem, EMIItem } from '../models/types';
 import AnimatedAmount from '../components/AnimatedAmount';
 import { HeroCardSkeleton } from '../components/SkeletonLoader';
-import ActiveTrackerBanner from '../components/ActiveTrackerBanner';
+// ActiveTrackerBanner removed — trackers now shown inline in scroll view
 import TrackerSelectionDialog from '../components/TrackerSelectionDialog';
 import UndoToast from '../components/UndoToast';
 import { checkOverdueSubscriptions, skipOverdueSubscription, removeOverdueSubscription, checkEMICompletions, OverdueSubscription, EMICompletionResult } from '../services/AutoDetectionService';
@@ -35,7 +35,7 @@ export default function HomeScreen() {
   const {
     trackerState, getActiveTrackers, pendingTransaction, pendingGroupTracker,
     pendingTargetTracker, clearPendingTransaction, addTransactionToTracker,
-    transactionVersion,
+    transactionVersion, setDefaultTracker,
   } = useTracker();
 
   const [totalSpent, setTotalSpent] = useState(0);
@@ -277,11 +277,6 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ActiveTrackerBanner
-        activeTrackers={activeTrackers}
-        onManage={() => nav.navigate('TrackerSettings')}
-      />
-
       <Animated.ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
@@ -300,6 +295,45 @@ export default function HomeScreen() {
           <Text style={styles.name}>{user?.displayName || 'User'}</Text>
           <Text style={styles.contextSub}>{contextualSubtext}</Text>
         </View>
+
+        {/* Active Trackers — inline section */}
+        {activeTrackers.length > 0 && (
+          <View style={styles.trackersCard}>
+            <View style={styles.trackersHeader}>
+              <View style={styles.trackersHeaderLeft}>
+                <View style={styles.trackerPulse} />
+                <Text style={styles.trackersTitle}>Active Trackers</Text>
+              </View>
+              <TouchableOpacity onPress={() => nav.navigate('TrackerSettings')} activeOpacity={0.7}>
+                <Text style={styles.trackersManage}>Manage</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.trackersChips}>
+              {activeTrackers.map(t => {
+                const isDefault = t.id === trackerState.defaultTrackerId;
+                const chipColor = t.type === 'personal' ? COLORS.personalColor
+                  : t.type === 'reimbursement' ? COLORS.reimbursementColor
+                  : COLORS.groupColor;
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[
+                      styles.trackerChip,
+                      { borderColor: `${chipColor}40` },
+                      isDefault && { borderColor: chipColor, backgroundColor: `${chipColor}12` },
+                    ]}
+                    onPress={() => setDefaultTracker(t.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.trackerChipDot, { backgroundColor: chipColor }]} />
+                    <Text style={[styles.trackerChipText, isDefault && { color: chipColor, fontWeight: '700' }]}>{t.label}</Text>
+                    {isDefault && <Text style={[styles.trackerDefaultBadge, { color: chipColor }]}>Default</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         {/* Hero card — Total Spent with streak on top-right */}
         {loading ? (
@@ -653,6 +687,19 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 14, color: COLORS.textSecondary, letterSpacing: 0.3 },
   name: { fontSize: 28, fontWeight: '800', color: COLORS.text, marginTop: 2, letterSpacing: -0.5 },
   contextSub: { fontSize: 12, color: COLORS.textLight, marginTop: 4, letterSpacing: 0.2 },
+
+  /* Active Trackers inline card */
+  trackersCard: { backgroundColor: COLORS.surface, borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: `${COLORS.success}20` },
+  trackersHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  trackersHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trackerPulse: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success },
+  trackersTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text, letterSpacing: 0.2 },
+  trackersManage: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  trackersChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  trackerChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1, backgroundColor: COLORS.glass },
+  trackerChipDot: { width: 8, height: 8, borderRadius: 4 },
+  trackerChipText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
+  trackerDefaultBadge: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5, marginLeft: 2 },
 
   /* Privacy Shield — subtle single-line */
   privacyCard: { backgroundColor: COLORS.glass, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 16, borderWidth: 1, borderColor: `${COLORS.success}12` },

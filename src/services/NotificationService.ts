@@ -48,6 +48,7 @@ function makeNotificationId(parsed: ParsedTransaction): string {
 export async function showTransactionNotification(
   parsed: ParsedTransaction,
   activeTrackers: ActiveTracker[],
+  defaultTracker?: ActiveTracker,
 ): Promise<void> {
   pendingTransaction = parsed;
 
@@ -59,8 +60,30 @@ export async function showTransactionNotification(
     ? `From ${parsed.bank}`
     : 'Bank transaction detected';
 
-  if (activeTrackers.length === 1) {
-    const tracker = activeTrackers[0];
+  // Use default tracker as primary when provided (multi-tracker case),
+  // otherwise fall back to single tracker or choose-tracker flow
+  const primaryTracker = defaultTracker || (activeTrackers.length === 1 ? activeTrackers[0] : null);
+
+  if (primaryTracker) {
+    const actions: any[] = [
+      {
+        title: `✅ Add to ${primaryTracker.label}`,
+        pressAction: { id: 'add_to_tracker', launchActivity: 'default' },
+      },
+    ];
+    // If multiple trackers, add "Choose Other" action
+    if (activeTrackers.length > 1) {
+      actions.push({
+        title: `📋 Other (${activeTrackers.length - 1})`,
+        pressAction: { id: 'choose_tracker', launchActivity: 'default' },
+      });
+    } else {
+      actions.push({
+        title: '❌ Ignore',
+        pressAction: { id: 'ignore' },
+      });
+    }
+
     await notifee.displayNotification({
       id: notificationId,
       title,
@@ -70,21 +93,12 @@ export async function showTransactionNotification(
         category: AndroidCategory.MESSAGE,
         importance: AndroidImportance.HIGH,
         pressAction: { id: 'default', launchActivity: 'default' },
-        actions: [
-          {
-            title: `✅ Add to ${tracker.label}`,
-            pressAction: { id: 'add_to_tracker', launchActivity: 'default' },
-          },
-          {
-            title: '❌ Ignore',
-            pressAction: { id: 'ignore' },
-          },
-        ],
+        actions,
       },
       data: {
-        trackerId: tracker.id,
-        trackerType: tracker.type,
-        trackerLabel: tracker.label,
+        trackerId: primaryTracker.id,
+        trackerType: primaryTracker.type,
+        trackerLabel: primaryTracker.label,
         amount: String(parsed.amount),
         merchant: parsed.merchant || '',
         bank: parsed.bank || '',
@@ -93,6 +107,7 @@ export async function showTransactionNotification(
       },
     });
   } else {
+    // No default, multiple trackers — show choose tracker
     await notifee.displayNotification({
       id: notificationId,
       title,

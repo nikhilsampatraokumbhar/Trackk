@@ -83,7 +83,7 @@ export default function NightlyReviewScreen() {
   const { user } = useAuth();
   const { groups } = useGroups();
   const { isPremium } = usePremium();
-  const { trackerState, addTransactionToTracker, transactionVersion, getActiveTrackers } = useTracker();
+  const { trackerState, addTransactionToTracker, transactionVersion, getActiveTrackers, setDefaultTracker } = useTracker();
 
   const [allItems, setAllItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,6 +92,9 @@ export default function NightlyReviewScreen() {
   // Tracker selection modal for unassigned items
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ReviewItem | null>(null);
+
+  // Per-item tracker selection (keyed by item id, defaults to defaultTrackerId)
+  const [itemTrackerMap, setItemTrackerMap] = useState<Record<string, string>>({});
 
   const activeTrackers = useMemo(() => getActiveTrackers(groups), [getActiveTrackers, groups]);
 
@@ -174,21 +177,16 @@ export default function NightlyReviewScreen() {
         });
       }
     } else {
-      // Multiple trackers active - show one section per tracker, items duplicated
-      // User chooses which tracker to add each expense to
-      for (const tracker of activeTrackers) {
-        if (regular.length > 0) {
-          result.push({
-            title: tracker.label,
-            trackerId: tracker.id,
-            trackerType: tracker.type,
-            color: tracker.type === 'personal' ? COLORS.personalColor
-              : tracker.type === 'reimbursement' ? COLORS.reimbursementColor
-              : getColorForId(tracker.id),
-            icon: tracker.type === 'personal' ? '💳' : tracker.type === 'reimbursement' ? '🧾' : '👥',
-            data: regular,
-          });
-        }
+      // Multiple trackers active — single section, each item has a per-item tracker picker
+      if (regular.length > 0) {
+        result.push({
+          title: 'Expenses',
+          trackerId: 'multi',
+          trackerType: 'personal', // placeholder — actual tracker chosen per-item
+          color: COLORS.primary,
+          icon: '📋',
+          data: regular,
+        });
       }
     }
 
@@ -305,13 +303,38 @@ export default function NightlyReviewScreen() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
+  /** Get the tracker selected for a specific item (defaults to defaultTrackerId) */
+  const getItemTracker = (itemId: string): ActiveTracker | null => {
+    const selectedId = itemTrackerMap[itemId] || trackerState.defaultTrackerId;
+    return activeTrackers.find(t => t.id === selectedId) || activeTrackers[0] || null;
+  };
+
+  /** Cycle to next tracker for a specific item */
+  const cycleItemTracker = (itemId: string) => {
+    const currentId = itemTrackerMap[itemId] || trackerState.defaultTrackerId;
+    const currentIdx = activeTrackers.findIndex(t => t.id === currentId);
+    const nextIdx = (currentIdx + 1) % activeTrackers.length;
+    setItemTrackerMap(prev => ({ ...prev, [itemId]: activeTrackers[nextIdx].id }));
+  };
+
+  const isMultiTracker = activeTrackers.length > 1;
+
   const renderItem = ({ item, section }: { item: ReviewItem; section: ReviewSection }) => {
     if (reviewedIds.has(item.id)) return null;
 
     const isAutoDetected = section.trackerType === 'auto_detected';
     const isUnassigned = section.trackerType === 'unassigned';
+    const isMulti = section.trackerId === 'multi';
     const isGroup = section.trackerType === 'group';
     const catInfo = item.autoCategory ? AUTO_CATEGORY_LABELS[item.autoCategory] : null;
+
+    // For multi-tracker mode, resolve which tracker this item is assigned to
+    const itemTracker = isMulti ? getItemTracker(item.id) : null;
+    const itemTrackerColor = itemTracker
+      ? (itemTracker.type === 'personal' ? COLORS.personalColor
+        : itemTracker.type === 'reimbursement' ? COLORS.reimbursementColor
+        : COLORS.groupColor)
+      : section.color;
 
     return (
       <View style={styles.card}>
@@ -333,6 +356,19 @@ export default function NightlyReviewScreen() {
           </View>
           <Text style={styles.cardTime}>{formatTime(item.receivedAt)}</Text>
         </View>
+
+        {/* Per-item tracker picker (multi-tracker mode) */}
+        {isMulti && itemTracker && (
+          <TouchableOpacity
+            style={[styles.itemTrackerPicker, { borderColor: `${itemTrackerColor}30` }]}
+            onPress={() => cycleItemTracker(item.id)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.itemTrackerDot, { backgroundColor: itemTrackerColor }]} />
+            <Text style={[styles.itemTrackerLabel, { color: itemTrackerColor }]}>{itemTracker.label}</Text>
+            <Text style={styles.itemTrackerArrow}>▾</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Body: amount + merchant */}
         <View style={styles.cardBody}>
@@ -364,6 +400,25 @@ export default function NightlyReviewScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={styles.addBtnText}>Add</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.skipBtn} onPress={() => handleSkip(item)} activeOpacity={0.7}>
+                  <Text style={styles.skipBtnText}>Skip</Text>
+                </TouchableOpacity>
+              </>
+            ) : isMulti && itemTracker ? (
+              // Multi-tracker: Add to selected tracker
+              <>
+                <TouchableOpacity
+                  style={[styles.addBtn, { backgroundColor: `${itemTrackerColor}20` }]}
+                  onPress={() => {
+                    handleAddToTracker(item, itemTracker.type, itemTracker.id);
+                    setDefaultTracker(itemTracker.id);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.addBtnText, { color: itemTrackerColor }]}>
+                    {itemTracker.type === 'group' ? 'Split' : 'Add'}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.skipBtn} onPress={() => handleSkip(item)} activeOpacity={0.7}>
                   <Text style={styles.skipBtnText}>Skip</Text>
@@ -401,11 +456,11 @@ export default function NightlyReviewScreen() {
           </View>
         </View>
 
-        {/* Auto-detected warning for group sections */}
+        {/* Auto-detected warning */}
         {!isAutoDetected && item.autoCategory && item.autoConfidence >= 0.5 && catInfo && (
           <View style={[styles.warningBanner, { borderColor: `${catInfo.color}30` }]}>
             <Text style={[styles.warningText, { color: catInfo.color }]}>
-              {catInfo.icon} Looks like {catInfo.label.toLowerCase()} — might not be a {section.trackerType} expense
+              {catInfo.icon} Looks like {catInfo.label.toLowerCase()}
             </Text>
           </View>
         )}
@@ -658,6 +713,17 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: `${COLORS.success}25`,
   },
   autoTrackedText: { fontSize: 11, fontWeight: '700', color: COLORS.success },
+
+  // Per-item tracker picker (multi-tracker mode)
+  itemTrackerPicker: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 8, borderWidth: 1, marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  itemTrackerDot: { width: 7, height: 7, borderRadius: 4 },
+  itemTrackerLabel: { fontSize: 11, fontWeight: '700' },
+  itemTrackerArrow: { fontSize: 10, color: COLORS.textSecondary, marginLeft: 2 },
 
   warningBanner: {
     marginTop: 10, paddingHorizontal: 10, paddingVertical: 8,
