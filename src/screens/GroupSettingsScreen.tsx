@@ -245,10 +245,18 @@ export default function GroupSettingsScreen() {
       Alert.alert('Not allowed', 'Only the group creator can delete this group.');
       return;
     }
-    Alert.alert('Delete group', `Permanently delete "${group.name}" and all its expenses? This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteGroup(groupId); nav.navigate('MainTabs'); } },
-    ]);
+    const hasOutstandingDebts = activeGroupDebts.length > 0;
+    const debtWarning = hasOutstandingDebts
+      ? '\n\nThis group has outstanding debts that haven\'t been settled. Deleting will remove all expense and settlement history.'
+      : '';
+    Alert.alert(
+      'Delete group',
+      `Permanently delete "${group.name}" and all its expenses? This cannot be undone.${debtWarning}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => { await deleteGroup(groupId); nav.navigate('MainTabs'); } },
+      ],
+    );
   };
 
   if (!group) {

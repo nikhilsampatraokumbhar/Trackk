@@ -10,7 +10,7 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
 import { useGroups } from '../store/GroupContext';
 import { useTheme } from '../store/ThemeContext';
-import { GroupMember, Split } from '../models/types';
+import { Group, GroupMember, Split } from '../models/types';
 import { getGroup as getGroupLocal } from '../services/StorageService';
 import { getGroupCloud, addGroupTransactionCloud } from '../services/SyncService';
 import { addGroupTransaction } from '../services/StorageService';
@@ -35,7 +35,7 @@ export default function SplitEditorScreen() {
   const route = useRoute<Route>();
   const nav = useNavigation<Nav>();
   const { user, isAuthenticated } = useAuth();
-  const { loadGroupTransactions, activeGroupId } = useGroups();
+  const { loadGroupTransactions, activeGroupId, updateGroup } = useGroups();
   const { colors } = useTheme();
 
   const { groupId, amount: paramAmount, description: paramDesc, merchant: paramMerchant, isManual } = route.params;
@@ -51,6 +51,7 @@ export default function SplitEditorScreen() {
   const [splitMode, setSplitMode] = useState<'equal' | 'amount'>('equal');
   const [saving, setSaving] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [groupRef, setGroupRef] = useState<Group | null>(null);
 
   const savingRef = useRef(false); // ref guard against double-tap race
 
@@ -74,6 +75,7 @@ export default function SplitEditorScreen() {
         return;
       }
       setGroupName(group.name);
+      setGroupRef(group);
       setMembers(group.members.map(m => ({
         userId: m.userId,
         displayName: m.userId === userId ? 'You' : m.displayName,
@@ -160,6 +162,19 @@ export default function SplitEditorScreen() {
       Alert.alert(
         'Amounts don\'t match',
         `Individual amounts must add up to ${formatCurrency(parsedAmount)}. Currently off by ${formatCurrency(Math.abs(customDiff))}.`,
+      );
+      return;
+    }
+
+    // Validate that guests' tagged members are included in the split
+    const guestsWithExcludedTags = includedMembers.filter(m =>
+      m.isGuest && m.taggedTo && !members.find(mem => mem.userId === m.taggedTo && mem.included)
+    );
+    if (guestsWithExcludedTags.length > 0) {
+      const names = guestsWithExcludedTags.map(g => g.displayName).join(', ');
+      Alert.alert(
+        'Guest tag issue',
+        `${names} ${guestsWithExcludedTags.length > 1 ? 'are' : 'is'} tagged to a member who is not included in the split. Please include the tagged member or remove the guest.`,
       );
       return;
     }
@@ -272,6 +287,11 @@ export default function SplitEditorScreen() {
         const all = raw ? JSON.parse(raw) : [];
         all.unshift(txn);
         await AsyncStorage.setItem(key, JSON.stringify(all));
+      }
+
+      // Auto-unarchive if the group was archived
+      if (groupRef?.archived) {
+        await updateGroup(groupId, { archived: false });
       }
 
       // Refresh group transactions in context

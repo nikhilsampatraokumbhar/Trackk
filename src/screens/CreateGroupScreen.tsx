@@ -63,9 +63,15 @@ export default function CreateGroupScreen() {
       }
       seen.add(normalizedPhones[i]);
     }
+    const parsedBudget = parseFloat(budgetInput);
+    if (budgetInput.trim() && (isNaN(parsedBudget) || parsedBudget <= 0)) {
+      Alert.alert('Invalid budget', 'Budget must be a positive amount.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const budgetAmount = parseFloat(budgetInput) || undefined;
+      const budgetAmount = parsedBudget > 0 ? parsedBudget : undefined;
       await createGroup(
         groupName.trim(),
         validMembers.map(m => ({ displayName: m.name.trim(), phone: m.phone.trim() })),

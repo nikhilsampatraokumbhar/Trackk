@@ -303,6 +303,30 @@ export default function GroupDetailScreen() {
     const includedMembers = editingTxn.members.filter(m => m.included);
     if (includedMembers.length < 2) { Alert.alert('Need members', 'At least 2 people must be in the split.'); return; }
 
+    // Check if settled splits will be affected by the edit
+    const amountChanged = parsedAmount !== editingTxn.txn.amount;
+    const membersChanged = editingTxn.txn.splits.length !== includedMembers.length ||
+      editingTxn.txn.splits.some(s => !includedMembers.find(m => m.userId === s.userId));
+    const payerChanged = editingTxn.paidBy !== editingTxn.txn.addedBy;
+    const settledSplits = editingTxn.txn.splits.filter(s => s.settled && s.userId !== editingTxn.txn.addedBy);
+
+    if (settledSplits.length > 0 && (amountChanged || membersChanged || payerChanged)) {
+      const settledNames = settledSplits.map(s => s.userId === userId ? 'You' : s.displayName).join(', ');
+      return Alert.alert(
+        'Settled splits will be affected',
+        `${settledNames} already settled their share. Editing the amount, payer, or members will reset their settled status.\n\nDo you want to continue?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Edit Anyway', style: 'destructive', onPress: () => performUpdateExpense(parsedAmount, includedMembers, true) },
+        ],
+      );
+    }
+
+    await performUpdateExpense(parsedAmount, includedMembers, false);
+  };
+
+  const performUpdateExpense = async (parsedAmount: number, includedMembers: EditingTxn['members'], resetSettled: boolean) => {
+    if (!editingTxn) return;
     setEditSaving(true);
     try {
       const perPerson = Math.round((parsedAmount / includedMembers.length) * 100) / 100;
@@ -311,10 +335,11 @@ export default function GroupDetailScreen() {
 
       const newSplits: Split[] = includedMembers.map((m, i) => {
         const existingSplit = editingTxn.txn.splits.find(s => s.userId === m.userId);
+        const isNewPayer = m.userId === editingTxn.paidBy;
         return {
           userId: m.userId, displayName: m.displayName,
           amount: Math.round((perPerson + (i === includedMembers.length - 1 ? diff : 0)) * 100) / 100,
-          settled: existingSplit?.settled ?? (m.userId === editingTxn.paidBy),
+          settled: isNewPayer ? true : (resetSettled ? false : (existingSplit?.settled ?? false)),
         };
       });
 
@@ -332,14 +357,23 @@ export default function GroupDetailScreen() {
 
   const handleDeleteExpense = () => {
     if (!editingTxn) return;
-    Alert.alert('Delete Expense', `Delete "${editingTxn.txn.description}" (${formatCurrency(editingTxn.txn.amount)})?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        await deleteGroupTransaction(groupId, editingTxn!.txn.id);
-        setEditingTxn(null);
-        await load();
-      }},
-    ]);
+    const settledSplits = editingTxn.txn.splits.filter(s => s.settled && s.userId !== editingTxn.txn.addedBy);
+    const hasSettledSplits = settledSplits.length > 0;
+    const warningText = hasSettledSplits
+      ? `\n\nWarning: ${settledSplits.length} member(s) already settled their share. Deleting this expense may cause balance inconsistencies if settlements were already recorded.`
+      : '';
+    Alert.alert(
+      'Delete Expense',
+      `Delete "${editingTxn.txn.description}" (${formatCurrency(editingTxn.txn.amount)})? This will affect ALL members in this split.${warningText}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+          await deleteGroupTransaction(groupId, editingTxn!.txn.id);
+          setEditingTxn(null);
+          await load();
+        }},
+      ],
+    );
   };
 
   // ─── Comments ──────────────────────────────────────────────────────────────
@@ -605,7 +639,10 @@ export default function GroupDetailScreen() {
                     </Text>
                     <Text style={[styles.debtAmount, {
                       color: debt.fromUserId === userId ? colors.danger : debt.toUserId === userId ? colors.success : colors.text
-                    }]}>{formatCurrency(debt.amount)}</Text>
+                    }]}>
+                      {formatCurrency(debt.amount, debt.currency)}
+                      {debt.currency && debt.currency !== 'INR' ? ` ${debt.currency}` : ''}
+                    </Text>
                   </View>
                 ))}
               </View>

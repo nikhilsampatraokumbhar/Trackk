@@ -115,6 +115,7 @@ export interface Debt {
   toUserId: string;
   toName: string;
   amount: number;
+  currency?: string;  // ISO 4217, defaults to INR if not set
 }
 
 export interface ParsedTransaction {

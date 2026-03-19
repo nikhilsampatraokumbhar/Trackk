@@ -44,7 +44,7 @@ interface GroupContextType {
   settleSplit: (groupId: string, transactionId: string, userId: string) => Promise<void>;
   unsettleSplit: (groupId: string, transactionId: string, userId: string) => Promise<void>;
   deleteGroupTransaction: (groupId: string, transactionId: string) => Promise<void>;
-  updateGroupTransaction: (groupId: string, transactionId: string, updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits' | 'note' | 'category' | 'currency'>>) => Promise<void>;
+  updateGroupTransaction: (groupId: string, transactionId: string, updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits' | 'note' | 'category' | 'currency' | 'addedBy'>>) => Promise<void>;
   updateGroup: (groupId: string, updates: Partial<Group>) => Promise<void>;
   deleteGroup: (groupId: string) => Promise<void>;
   addGroupMember: (groupId: string, member: GroupMember) => Promise<void>;
@@ -227,7 +227,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
 
   const updateGroupTransaction = useCallback(async (
     groupId: string, transactionId: string,
-    updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits' | 'note' | 'category' | 'currency'>>,
+    updates: Partial<Pick<GroupTransaction, 'amount' | 'description' | 'merchant' | 'splits' | 'note' | 'category' | 'currency' | 'addedBy'>>,
   ) => {
     if (isAuthenticated) {
       await updateGroupTransactionCloud(groupId, transactionId, updates);
