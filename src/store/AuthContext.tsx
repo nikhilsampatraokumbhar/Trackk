@@ -7,6 +7,7 @@ import {
   requestNotificationPermission as requestFcmPermission,
   registerDeviceToken, unregisterDeviceToken, onTokenRefresh,
 } from '../services/FcmService';
+import { clearReminderState } from '../services/DebtReminderService';
 
 interface AuthContextType {
   user: User | null;
@@ -152,7 +153,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore sign out errors
     }
+
+    // Clean up persisted state so next user starts fresh
     await AsyncStorage.removeItem(STORAGE_KEY);
+    await AsyncStorage.removeItem('@et_tracker_state');
+    await clearReminderState();
+
     setUser(null);
     setIsAuthenticated(false);
   }, [user?.id]);

@@ -15,6 +15,7 @@ import {
   setupNotificationChannel, requestNotificationPermission,
   showTransactionNotification, showAutoSavedNotification,
   registerNotificationCallbacks, handleNotificationEvent,
+  clearNotificationCallbacks,
   PENDING_GROUP_SPLIT_KEY,
 } from '../services/NotificationService';
 import { saveTransaction, addGroupTransaction, getGroup, getGoals, getOrCreateTodaySpend, getOrCreateUser } from '../services/StorageService';
@@ -385,6 +386,17 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       setIsListening(false);
     }
   }, [trackerState]);
+
+  // Clean up all listeners on unmount (triggered by sign-out since
+  // TrackerProvider is conditionally rendered only when authenticated)
+  useEffect(() => {
+    return () => {
+      stopSmsListener();
+      clearNotificationCallbacks();
+      notifee.cancelAllNotifications();
+      isListeningRef.current = false;
+    };
+  }, []);
 
   const startListening = async () => {
     const granted = await requestSmsPermission();

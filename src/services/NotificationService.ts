@@ -280,6 +280,12 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return settings.authorizationStatus >= 1;
 }
 
+export function clearNotificationCallbacks(): void {
+  addToTrackerCallback = null;
+  chooseTrackerCallback = null;
+  pendingTransaction = null;
+}
+
 export function getPendingTransaction(): ParsedTransaction | null {
   return pendingTransaction;
 }
