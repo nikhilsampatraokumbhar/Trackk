@@ -304,7 +304,7 @@ export default function SubscriptionsScreen() {
               </View>
             ) : (
               <>
-                <Text style={[styles.cardDays, isUrgent && { color: COLORS.danger }]}>
+                <Text style={[styles.cardDays, isUrgent && { color: colors.danger }]}>
                   {days === 0 ? 'Due today' : `${days}d left`}
                 </Text>
                 {item.lastPaidDate === new Date().toISOString().slice(0, 10) ? (
@@ -392,7 +392,7 @@ export default function SubscriptionsScreen() {
               icon="🔄"
               title="No subscriptions yet"
               subtitle="Tap + to add your first subscription"
-              accent={COLORS.personalColor}
+              accent={colors.personalColor}
             />
           ) : null
         }
@@ -444,7 +444,7 @@ export default function SubscriptionsScreen() {
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
+                <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={styles.scanningText}>Scanning your messages...</Text>
               </View>
             ) : (
@@ -475,17 +475,17 @@ export default function SubscriptionsScreen() {
               value={formName}
               onChangeText={setFormName}
               placeholder="Subscription name (e.g. Netflix)"
-              placeholderTextColor={COLORS.textLight}
-              selectionColor={COLORS.primary}
+              placeholderTextColor={colors.textLight}
+              selectionColor={colors.primary}
             />
             <TextInput
               style={styles.input}
               value={formAmount}
               onChangeText={setFormAmount}
               placeholder="Amount"
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={colors.textLight}
               keyboardType="numeric"
-              selectionColor={COLORS.primary}
+              selectionColor={colors.primary}
             />
 
             <View style={styles.cycleRow}>
@@ -508,9 +508,9 @@ export default function SubscriptionsScreen() {
               value={formDay}
               onChangeText={setFormDay}
               placeholder="Billing day of month (1-31)"
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={colors.textLight}
               keyboardType="numeric"
-              selectionColor={COLORS.primary}
+              selectionColor={colors.primary}
             />
 
             <TouchableOpacity
@@ -530,9 +530,9 @@ export default function SubscriptionsScreen() {
                 value={formSharedCount}
                 onChangeText={setFormSharedCount}
                 placeholder="How many people share this?"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 keyboardType="numeric"
-                selectionColor={COLORS.primary}
+                selectionColor={colors.primary}
               />
             )}
 

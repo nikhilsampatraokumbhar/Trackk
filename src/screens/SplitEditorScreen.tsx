@@ -497,7 +497,7 @@ export default function SplitEditorScreen() {
                   {/* Custom amount input (By Amount mode) */}
                   {splitMode === 'amount' && m.included && (
                     <View style={[styles.customAmountWrap, { backgroundColor: colors.surfaceHigh, borderColor: colors.border }]}>
-                      <Text style={[styles.customAmountPrefix, { color: colors.primary }]}>₹</Text>
+                      <Text style={[styles.customAmountPrefix, { color: colors.primary }]}>{getCurrencyInfo(expenseCurrency).symbol}</Text>
                       <TextInput
                         style={[styles.customAmountInput, { color: colors.text }]}
                         value={m.customAmount}

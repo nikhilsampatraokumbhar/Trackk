@@ -313,16 +313,16 @@ export async function removeSplitMember(
   // Redistribute the removed member's share among non-payer members only
   const nonPayerSplits = newSplits.filter(s => s.userId !== txn.addedBy);
   if (nonPayerSplits.length > 0) {
-    const extraPerPerson = Math.round((removedSplit.amount / nonPayerSplits.length) * 100) / 100;
-    const totalExtra = extraPerPerson * nonPayerSplits.length;
-    const roundingDiff = Math.round((removedSplit.amount - totalExtra) * 100) / 100;
+    const extraPerPerson = Math.floor((removedSplit.amount / nonPayerSplits.length) * 100) / 100;
+    const totalDistributed = extraPerPerson * nonPayerSplits.length;
+    const remainder = Math.round((removedSplit.amount - totalDistributed) * 100) / 100;
     let applied = 0;
     txn.splits = newSplits.map(s => {
       if (s.userId === txn.addedBy) return s; // payer keeps same amount
       applied++;
       return {
         ...s,
-        amount: s.amount + extraPerPerson + (applied === nonPayerSplits.length ? roundingDiff : 0),
+        amount: s.amount + extraPerPerson + (applied === nonPayerSplits.length ? remainder : 0),
       };
     });
   } else {

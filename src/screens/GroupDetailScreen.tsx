@@ -22,6 +22,7 @@ import { simplifyDebts, calculateDebts } from '../services/DebtCalculator';
 import TrackerToggle from '../components/TrackerToggle';
 import EmptyState from '../components/EmptyState';
 import { COLORS, formatCurrency, formatDate, getColorForId, generateId } from '../utils/helpers';
+import { useTheme } from '../store/ThemeContext';
 import { GROUP_CATEGORIES } from '../utils/categories';
 import BottomSheet from '../components/BottomSheet';
 
@@ -74,6 +75,7 @@ export default function GroupDetailScreen() {
     deleteGroupTransaction, updateGroupTransaction,
   } = useGroups();
   const { trackerState, toggleGroup } = useTracker();
+  const { colors } = useTheme();
 
   const [group, setGroup] = useState<Group | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -142,7 +144,7 @@ export default function GroupDetailScreen() {
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   if (!group) {
-    return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
+    return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator size="large" color={colors.primary} /></View>;
   }
 
   const isTracking = trackerState.activeGroupIds.includes(groupId);
@@ -159,13 +161,13 @@ export default function GroupDetailScreen() {
     const totalOwed = owedToUser.reduce((s, d) => s + d.amount, 0);
     const totalOwing = userOwes.reduce((s, d) => s + d.amount, 0);
 
-    if (totalOwed === 0 && totalOwing === 0) return { text: 'All settled up', color: COLORS.success };
+    if (totalOwed === 0 && totalOwing === 0) return { text: 'All settled up', color: colors.success };
     if (totalOwed > totalOwing) {
       const net = totalOwed - totalOwing;
-      return { text: `You are owed ${formatCurrency(net)}`, color: COLORS.success };
+      return { text: `You are owed ${formatCurrency(net)}`, color: colors.success };
     }
     const net = totalOwing - totalOwed;
-    return { text: `You owe ${formatCurrency(net)}`, color: COLORS.danger };
+    return { text: `You owe ${formatCurrency(net)}`, color: colors.danger };
   })();
 
   // ─── Timeline ───────────────────────────────────────────────────────────────
@@ -351,12 +353,7 @@ export default function GroupDetailScreen() {
       timestamp: Date.now(),
     };
     const existing = commentTxn.comments || [];
-    await updateGroupTransaction(groupId, commentTxn.id, {
-      ...({} as any),
-    });
-    // Update via raw Firestore or local storage
     const updatedComments = [...existing, newComment];
-    // We pass comments through the update mechanism
     try {
       if (isAuthenticated) {
         const { db } = require('../services/FirebaseConfig');
@@ -397,7 +394,7 @@ export default function GroupDetailScreen() {
     // Right side: what does this mean for the user?
     let rightLabel = '';
     let rightAmount = '';
-    let rightColor = COLORS.textSecondary;
+    let rightColor = colors.textSecondary;
 
     if (isNotInvolved) {
       rightLabel = 'not involved';
@@ -406,11 +403,11 @@ export default function GroupDetailScreen() {
       const lentAmount = txn.amount - (userSplit?.amount || 0);
       rightLabel = 'you lent';
       rightAmount = formatCurrency(lentAmount);
-      rightColor = COLORS.success;
+      rightColor = colors.success;
     } else {
       rightLabel = 'you borrowed';
       rightAmount = formatCurrency(userSplit?.amount || 0);
-      rightColor = COLORS.danger;
+      rightColor = colors.danger;
     }
 
     return (
@@ -505,14 +502,14 @@ export default function GroupDetailScreen() {
           <Text style={styles.dateMonth}>{monthShort}</Text>
           <Text style={styles.dateDay}>{day}</Text>
         </View>
-        <View style={[styles.rowIcon, { backgroundColor: `${COLORS.success}18` }]}>
+        <View style={[styles.rowIcon, { backgroundColor: `${colors.success}18` }]}>
           <Text style={styles.rowIconText}>{s.method === 'upi' ? '📱' : '💵'}</Text>
         </View>
         <View style={styles.rowInfo}>
           <Text style={styles.rowSub}>
-            <Text style={[styles.rowSubBold, isFrom && { color: COLORS.danger }]}>{isFrom ? 'You' : s.fromName}</Text>
+            <Text style={[styles.rowSubBold, isFrom && { color: colors.danger }]}>{isFrom ? 'You' : s.fromName}</Text>
             {' paid '}
-            <Text style={[styles.rowSubBold, isTo && { color: COLORS.success }]}>{isTo ? 'You' : s.toName}</Text>
+            <Text style={[styles.rowSubBold, isTo && { color: colors.success }]}>{isTo ? 'You' : s.toName}</Text>
             {' '}{formatCurrency(s.amount)}
           </Text>
           {s.note ? <Text style={styles.settlementNote}>{s.note}</Text> : null}
@@ -528,14 +525,14 @@ export default function GroupDetailScreen() {
 
   // ─── Main Render ────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
       <SectionList
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         sections={sections}
         keyExtractor={(item, i) => (item.kind === 'expense' ? item.data.id : item.data.id) + i}
         stickySectionHeadersEnabled={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         renderSectionHeader={({ section: { title } }) => (
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionHeaderText}>{title}</Text>
@@ -594,7 +591,7 @@ export default function GroupDetailScreen() {
                     <Text style={styles.simplifyToggleText}>
                       {simplifyDebtsEnabled ? 'Simplified' : 'Detailed'}
                     </Text>
-                    <View style={[styles.simplifyDot, { backgroundColor: simplifyDebtsEnabled ? COLORS.success : COLORS.warning }]} />
+                    <View style={[styles.simplifyDot, { backgroundColor: simplifyDebtsEnabled ? colors.success : colors.warning }]} />
                   </TouchableOpacity>
                 </View>
                 {simplifiedDebts.map((debt, i) => (
@@ -607,7 +604,7 @@ export default function GroupDetailScreen() {
                       {debt.toUserId === userId ? 'You' : debt.toName}
                     </Text>
                     <Text style={[styles.debtAmount, {
-                      color: debt.fromUserId === userId ? COLORS.danger : debt.toUserId === userId ? COLORS.success : COLORS.text
+                      color: debt.fromUserId === userId ? colors.danger : debt.toUserId === userId ? colors.success : colors.text
                     }]}>{formatCurrency(debt.amount)}</Text>
                   </View>
                 ))}
@@ -621,7 +618,7 @@ export default function GroupDetailScreen() {
                 subtitle="Auto-detect payments and split equally"
                 isActive={isTracking}
                 onToggle={() => toggleGroup(groupId)}
-                color={COLORS.groupColor}
+                color={colors.groupColor}
               />
             </View>
 
@@ -630,7 +627,7 @@ export default function GroupDetailScreen() {
                 icon="💸"
                 title="No group expenses yet"
                 subtitle="Enable tracking above or add an expense manually"
-                accent={COLORS.groupColor}
+                accent={colors.groupColor}
               />
             )}
           </>
@@ -699,17 +696,17 @@ export default function GroupDetailScreen() {
                   keyboardType="numeric"
                   selectTextOnFocus
                   placeholder="0"
-                  placeholderTextColor={COLORS.textLight}
+                  placeholderTextColor={colors.textLight}
                 />
               </View>
             </View>
             {getSettleAmountValue() > 0 && (
               <View style={[styles.typeBadge, {
-                backgroundColor: getSettleAmountValue() >= settleTarget.debt.amount ? `${COLORS.success}15` : `${COLORS.warning}15`,
-                borderColor: getSettleAmountValue() >= settleTarget.debt.amount ? `${COLORS.success}30` : `${COLORS.warning}30`,
+                backgroundColor: getSettleAmountValue() >= settleTarget.debt.amount ? `${colors.success}15` : `${colors.warning}15`,
+                borderColor: getSettleAmountValue() >= settleTarget.debt.amount ? `${colors.success}30` : `${colors.warning}30`,
               }]}>
                 <Text style={[styles.typeBadgeText, {
-                  color: getSettleAmountValue() >= settleTarget.debt.amount ? COLORS.success : COLORS.warning,
+                  color: getSettleAmountValue() >= settleTarget.debt.amount ? colors.success : colors.warning,
                 }]}>
                   {getSettleAmountValue() >= settleTarget.debt.amount
                     ? 'Full Settlement'
@@ -731,7 +728,7 @@ export default function GroupDetailScreen() {
 
         <View style={styles.payOptions}>
           <TouchableOpacity style={styles.payOption} onPress={handleUPISettle} activeOpacity={0.7}>
-            <View style={[styles.payOptionIcon, { backgroundColor: `${COLORS.primaryLight}18` }]}>
+            <View style={[styles.payOptionIcon, { backgroundColor: `${colors.primaryLight}18` }]}>
               <Text style={styles.payOptionEmoji}>📱</Text>
             </View>
             <View style={styles.payOptionInfo}>
@@ -741,7 +738,7 @@ export default function GroupDetailScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.payOption} onPress={handleCashSettle} activeOpacity={0.7}>
-            <View style={[styles.payOptionIcon, { backgroundColor: `${COLORS.success}18` }]}>
+            <View style={[styles.payOptionIcon, { backgroundColor: `${colors.success}18` }]}>
               <Text style={styles.payOptionEmoji}>💵</Text>
             </View>
             <View style={styles.payOptionInfo}>
@@ -763,8 +760,8 @@ export default function GroupDetailScreen() {
           <Text style={styles.modalSub}>{formatCurrency(pendingUPISettle.amount)} to {pendingUPISettle.debt.toName}</Text>
         )}
         <View style={styles.payOptions}>
-          <TouchableOpacity style={[styles.payOption, { borderColor: `${COLORS.success}30` }]} onPress={handleUPIConfirmDone} activeOpacity={0.7}>
-            <View style={[styles.payOptionIcon, { backgroundColor: `${COLORS.success}18` }]}>
+          <TouchableOpacity style={[styles.payOption, { borderColor: `${colors.success}30` }]} onPress={handleUPIConfirmDone} activeOpacity={0.7}>
+            <View style={[styles.payOptionIcon, { backgroundColor: `${colors.success}18` }]}>
               <Text style={styles.payOptionEmoji}>✅</Text>
             </View>
             <View style={styles.payOptionInfo}>
@@ -772,8 +769,8 @@ export default function GroupDetailScreen() {
               <Text style={styles.payOptionSub}>Mark as settled</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.payOption, { borderColor: `${COLORS.danger}30` }]} onPress={handleUPIConfirmNotDone} activeOpacity={0.7}>
-            <View style={[styles.payOptionIcon, { backgroundColor: `${COLORS.danger}18` }]}>
+          <TouchableOpacity style={[styles.payOption, { borderColor: `${colors.danger}30` }]} onPress={handleUPIConfirmNotDone} activeOpacity={0.7}>
+            <View style={[styles.payOptionIcon, { backgroundColor: `${colors.danger}18` }]}>
               <Text style={styles.payOptionEmoji}>❌</Text>
             </View>
             <View style={styles.payOptionInfo}>
@@ -802,7 +799,7 @@ export default function GroupDetailScreen() {
                 onChangeText={v => setEditingTxn({ ...editingTxn, amount: v })}
                 keyboardType="decimal-pad"
                 placeholder="0"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
               />
             </View>
 
@@ -821,12 +818,12 @@ export default function GroupDetailScreen() {
               {GROUP_CATEGORIES.map(cat => (
                 <TouchableOpacity
                   key={cat.label}
-                  style={[styles.editChip, editingTxn.category === cat.label && { borderColor: COLORS.primary, backgroundColor: `${COLORS.primary}15` }]}
+                  style={[styles.editChip, editingTxn.category === cat.label && { borderColor: colors.primary, backgroundColor: `${colors.primary}15` }]}
                   onPress={() => setEditingTxn({ ...editingTxn, category: editingTxn.category === cat.label ? '' : cat.label })}
                   activeOpacity={0.7}
                 >
                   <Text style={{ fontSize: 12, marginRight: 4 }}>{cat.icon}</Text>
-                  <Text style={[styles.editChipName, editingTxn.category === cat.label ? { color: COLORS.primary } : { color: COLORS.textSecondary }]}>
+                  <Text style={[styles.editChipName, editingTxn.category === cat.label ? { color: colors.primary } : { color: colors.textSecondary }]}>
                     {cat.label}
                   </Text>
                 </TouchableOpacity>
@@ -857,7 +854,7 @@ export default function GroupDetailScreen() {
                     activeOpacity={0.7}
                   >
                     {isPayer && <Text style={[styles.editCheck, { color: c }]}>✓</Text>}
-                    <Text style={[styles.editChipName, isPayer ? { color: COLORS.text } : { color: COLORS.textSecondary }]}>{m.displayName}</Text>
+                    <Text style={[styles.editChipName, isPayer ? { color: colors.text } : { color: colors.textSecondary }]}>{m.displayName}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -875,7 +872,7 @@ export default function GroupDetailScreen() {
                     activeOpacity={0.7}
                   >
                     {m.included && <Text style={[styles.editCheck, { color: c }]}>✓</Text>}
-                    <Text style={[styles.editChipName, m.included ? { color: COLORS.text } : { color: COLORS.textSecondary }]}>{m.displayName}</Text>
+                    <Text style={[styles.editChipName, m.included ? { color: colors.text } : { color: colors.textSecondary }]}>{m.displayName}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -890,7 +887,7 @@ export default function GroupDetailScreen() {
               return null;
             })()}
 
-            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: COLORS.primary }, editSaving && { opacity: 0.5 }]} onPress={handleUpdateExpense} disabled={editSaving} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }, editSaving && { opacity: 0.5 }]} onPress={handleUpdateExpense} disabled={editSaving} activeOpacity={0.8}>
               <Text style={styles.saveBtnText}>{editSaving ? 'Saving...' : 'Save Changes'}</Text>
             </TouchableOpacity>
 
@@ -946,7 +943,7 @@ export default function GroupDetailScreen() {
                 value={commentText}
                 onChangeText={setCommentText}
                 placeholder="Add a comment..."
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 multiline
                 maxLength={500}
               />

@@ -312,9 +312,11 @@ export default function NightlyReviewScreen() {
 
   /** Cycle to next tracker for a specific item */
   const cycleItemTracker = (itemId: string) => {
+    if (activeTrackers.length === 0) return;
     const currentId = itemTrackerMap[itemId] || trackerState.defaultTrackerId;
     const currentIdx = activeTrackers.findIndex(t => t.id === currentId);
-    const nextIdx = (currentIdx + 1) % activeTrackers.length;
+    // If current tracker not found, start from first; otherwise advance to next
+    const nextIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % activeTrackers.length;
     setItemTrackerMap(prev => ({ ...prev, [itemId]: activeTrackers[nextIdx].id }));
   };
 

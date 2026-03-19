@@ -258,7 +258,7 @@ export default function EMIsScreen() {
                   </TouchableOpacity>
                 </View>
               ) : (
-                <Text style={[styles.cardDays, days <= 3 && { color: COLORS.danger }]}>
+                <Text style={[styles.cardDays, days <= 3 && { color: colors.danger }]}>
                   {days === 0 ? 'Due today' : `${days}d left`}
                 </Text>
               )}
@@ -283,7 +283,7 @@ export default function EMIsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[styles.headerAccent, { backgroundColor: COLORS.warning }]} />
+        <View style={[styles.headerAccent, { backgroundColor: colors.warning }]} />
         <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn} activeOpacity={0.7}>
           <Text style={styles.backIcon}>‹</Text>
           <Text style={styles.backText}>Back</Text>
@@ -310,11 +310,11 @@ export default function EMIsScreen() {
           <View style={styles.headerStats}>
             <View>
               <Text style={styles.headerStatLabel}>MONTHLY</Text>
-              <Text style={[styles.headerStatValue, { color: COLORS.warning }]}>{formatCurrency(totalMonthly)}</Text>
+              <Text style={[styles.headerStatValue, { color: colors.warning }]}>{formatCurrency(totalMonthly)}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.headerStatLabel}>ACTIVE</Text>
-              <Text style={[styles.headerStatValue, { color: COLORS.warning }]}>{items.length}</Text>
+              <Text style={[styles.headerStatValue, { color: colors.warning }]}>{items.length}</Text>
             </View>
           </View>
         )}
@@ -372,7 +372,7 @@ export default function EMIsScreen() {
         </View>
       )}
 
-      <TouchableOpacity style={[styles.fab, { backgroundColor: COLORS.warning }]} onPress={() => setShowAddModal(true)} activeOpacity={0.8}>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: colors.warning }]} onPress={() => setShowAddModal(true)} activeOpacity={0.8}>
         <Text style={[styles.fabIcon, { color: '#FFFFFF' }]}>+</Text>
       </TouchableOpacity>
 
@@ -408,7 +408,7 @@ export default function EMIsScreen() {
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>
-                <ActivityIndicator size="large" color={COLORS.warning} />
+                <ActivityIndicator size="large" color={colors.warning} />
                 <Text style={styles.scanningText}>Scanning your messages...</Text>
               </View>
             ) : (
@@ -435,15 +435,15 @@ export default function EMIsScreen() {
             <Text style={styles.formTitle}>{editingItem ? 'Edit EMI' : 'Add EMI'}</Text>
 
             <TextInput style={styles.input} value={formName} onChangeText={setFormName}
-              placeholder="EMI name (e.g. Car Loan)" placeholderTextColor={COLORS.textLight} selectionColor={COLORS.primary} />
+              placeholder="EMI name (e.g. Car Loan)" placeholderTextColor={colors.textLight} selectionColor={colors.primary} />
             <TextInput style={styles.input} value={formAmount} onChangeText={setFormAmount}
-              placeholder="Monthly amount" placeholderTextColor={COLORS.textLight} keyboardType="numeric" selectionColor={COLORS.primary} />
+              placeholder="Monthly amount" placeholderTextColor={colors.textLight} keyboardType="numeric" selectionColor={colors.primary} />
             <TextInput style={styles.input} value={formTotalMonths} onChangeText={setFormTotalMonths}
-              placeholder="Total months (e.g. 36)" placeholderTextColor={COLORS.textLight} keyboardType="numeric" selectionColor={COLORS.primary} />
+              placeholder="Total months (e.g. 36)" placeholderTextColor={colors.textLight} keyboardType="numeric" selectionColor={colors.primary} />
             <TextInput style={styles.input} value={formMonthsPaid} onChangeText={setFormMonthsPaid}
-              placeholder="Months already paid (e.g. 12)" placeholderTextColor={COLORS.textLight} keyboardType="numeric" selectionColor={COLORS.primary} />
+              placeholder="Months already paid (e.g. 12)" placeholderTextColor={colors.textLight} keyboardType="numeric" selectionColor={colors.primary} />
             <TextInput style={styles.input} value={formDay} onChangeText={setFormDay}
-              placeholder="EMI debit day of month (1-31)" placeholderTextColor={COLORS.textLight} keyboardType="numeric" selectionColor={COLORS.primary} />
+              placeholder="EMI debit day of month (1-31)" placeholderTextColor={colors.textLight} keyboardType="numeric" selectionColor={colors.primary} />
 
             <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.warning }]} onPress={handleSave} activeOpacity={0.8}>
               <View style={styles.saveBtnGrad}>

@@ -541,8 +541,8 @@ export default function GoalsScreen() {
                 value={goalName}
                 onChangeText={setGoalName}
                 placeholder="e.g. Trip to Spain, Buy a Bike"
-                placeholderTextColor={COLORS.textLight}
-                selectionColor={COLORS.primary}
+                placeholderTextColor={colors.textLight}
+                selectionColor={colors.primary}
                 maxLength={50}
                 returnKeyType="next"
                 onSubmitEditing={() => targetAmountRef.current?.focus()}
@@ -555,9 +555,9 @@ export default function GoalsScreen() {
                 value={targetAmount}
                 onChangeText={setTargetAmount}
                 placeholder="150000"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 keyboardType="numeric"
-                selectionColor={COLORS.primary}
+                selectionColor={colors.primary}
                 returnKeyType="next"
                 onSubmitEditing={() => targetMonthsRef.current?.focus()}
               />
@@ -569,9 +569,9 @@ export default function GoalsScreen() {
                 value={targetMonths}
                 onChangeText={setTargetMonths}
                 placeholder="12"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 keyboardType="numeric"
-                selectionColor={COLORS.primary}
+                selectionColor={colors.primary}
                 maxLength={2}
                 returnKeyType="next"
                 onSubmitEditing={() => salaryRef.current?.focus()}
@@ -589,9 +589,9 @@ export default function GoalsScreen() {
                 value={salary}
                 onChangeText={setSalary}
                 placeholder="80000"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 keyboardType="numeric"
-                selectionColor={COLORS.primary}
+                selectionColor={colors.primary}
                 returnKeyType="next"
                 onSubmitEditing={() => emisRef.current?.focus()}
               />
@@ -603,9 +603,9 @@ export default function GoalsScreen() {
                 value={emis}
                 onChangeText={setEmis}
                 placeholder="0"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 keyboardType="numeric"
-                selectionColor={COLORS.primary}
+                selectionColor={colors.primary}
                 returnKeyType="next"
                 onSubmitEditing={() => expensesRef.current?.focus()}
               />
@@ -617,9 +617,9 @@ export default function GoalsScreen() {
                 value={expenses}
                 onChangeText={setExpenses}
                 placeholder="0"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 keyboardType="numeric"
-                selectionColor={COLORS.primary}
+                selectionColor={colors.primary}
                 returnKeyType="next"
                 onSubmitEditing={() => maintenanceRef.current?.focus()}
               />
@@ -631,9 +631,9 @@ export default function GoalsScreen() {
                 value={maintenance}
                 onChangeText={setMaintenance}
                 placeholder="0"
-                placeholderTextColor={COLORS.textLight}
+                placeholderTextColor={colors.textLight}
                 keyboardType="numeric"
-                selectionColor={COLORS.primary}
+                selectionColor={colors.primary}
                 returnKeyType="done"
               />
 
@@ -649,8 +649,8 @@ export default function GoalsScreen() {
                       setCustomFinances(updated);
                     }}
                     placeholder="Label"
-                    placeholderTextColor={COLORS.textLight}
-                    selectionColor={COLORS.primary}
+                    placeholderTextColor={colors.textLight}
+                    selectionColor={colors.primary}
                   />
                   <TextInput
                     style={[styles.input, { width: 100, marginBottom: 0, marginRight: 8 }]}
@@ -661,9 +661,9 @@ export default function GoalsScreen() {
                       setCustomFinances(updated);
                     }}
                     placeholder="0"
-                    placeholderTextColor={COLORS.textLight}
+                    placeholderTextColor={colors.textLight}
                     keyboardType="numeric"
-                    selectionColor={COLORS.primary}
+                    selectionColor={colors.primary}
                   />
                   <TouchableOpacity
                     onPress={() => setCustomFinances(customFinances.filter((_, i) => i !== idx))}
@@ -1225,8 +1225,8 @@ export default function GoalsScreen() {
                 </View>
                 <View style={styles.summaryStatItem}>
                   <Text style={styles.summaryStatLabel}>Streak</Text>
-                  <Text style={[styles.summaryStatValue, { color: COLORS.warning }]}>
-                    {Math.max(...goals.map(g => g.streak), 0)}d
+                  <Text style={[styles.summaryStatValue, { color: colors.warning }]}>
+                    {goals.length > 0 ? Math.max(...goals.map(g => g.streak), 0) : 0}d
                   </Text>
                 </View>
               </View>
