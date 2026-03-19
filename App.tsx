@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { PaperProvider, MD3LightTheme, MD3DarkTheme } from 'react-native-paper';
 
@@ -194,18 +195,20 @@ function PaperWrapper({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <PaperWrapper>
-        <NetworkProvider>
-          <AuthProvider>
-            <GroupProvider>
-              <StatusBarWrapper />
-              <AppContent />
-            </GroupProvider>
-          </AuthProvider>
-        </NetworkProvider>
-      </PaperWrapper>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <PaperWrapper>
+          <NetworkProvider>
+            <AuthProvider>
+              <GroupProvider>
+                <StatusBarWrapper />
+                <AppContent />
+              </GroupProvider>
+            </AuthProvider>
+          </NetworkProvider>
+        </PaperWrapper>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
 
