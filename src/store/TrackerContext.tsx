@@ -38,6 +38,7 @@ const DEFAULT_STATE: TrackerState = {
   reimbursement: false,
   activeGroupIds: [],
   groupAffectsGoal: true,
+  defaultTrackerId: 'personal',
 };
 
 interface TrackerContextType {
@@ -46,6 +47,7 @@ interface TrackerContextType {
   togglePersonal: () => Promise<void>;
   toggleReimbursement: () => Promise<void>;
   toggleGroup: (groupId: string) => Promise<void>;
+  setDefaultTracker: (trackerId: string) => void;
   getActiveTrackers: (groups: Group[]) => ActiveTracker[];
   pendingTransaction: ParsedTransaction | null;
   pendingGroupTracker: ActiveTracker | null; // auto-routed group tracker for SplitEditor
