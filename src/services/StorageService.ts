@@ -257,10 +257,6 @@ export async function addGroupTransaction(
   all.unshift(txn);
   await saveGroupTransactions(groupId, all);
 
-  // Save only user's split to personal transactions
-  const splitParsed = { ...parsed, amount: splitAmount };
-  await saveTransaction(splitParsed, 'group', userId, groupId);
-
   return txn;
 }
 
@@ -475,46 +471,41 @@ async function saveDailySpends(spends: DailySpend[]): Promise<void> {
   await AsyncStorage.setItem(KEYS.DAILY_SPENDS, JSON.stringify(spends));
 }
 
-/** Compute today's spend directly from personal + group-split transactions
- * @param excludeGroup If true, excludes group-split transactions (for goal budget when groupAffectsGoal is off) */
-export async function computeTodaySpendFromTransactions(excludeGroup = false): Promise<number> {
+/** Compute today's spend from personal transactions only (group data lives separately) */
+export async function computeTodaySpendFromTransactions(): Promise<number> {
   const today = new Date().toISOString().slice(0, 10);
   const all = await getAllTransactions();
   return all
     .filter(t => {
-      if (t.trackerType === 'reimbursement') return false; // reimbursements don't count
-      if (excludeGroup && t.trackerType === 'group') return false;
+      if (t.trackerType === 'reimbursement') return false;
       const txDate = new Date(t.timestamp).toISOString().slice(0, 10);
       return txDate === today;
     })
     .reduce((s, t) => s + t.amount, 0);
 }
 
-/** Compute month's spend directly from personal + group-split transactions
- * @param excludeGroup If true, excludes group-split transactions */
-export async function computeMonthSpendFromTransactions(excludeGroup = false): Promise<number> {
+/** Compute month's spend from personal transactions only (group data lives separately) */
+export async function computeMonthSpendFromTransactions(): Promise<number> {
   const now = new Date();
   const all = await getAllTransactions();
   return all
     .filter(t => {
       if (t.trackerType === 'reimbursement') return false;
-      if (excludeGroup && t.trackerType === 'group') return false;
       const d = new Date(t.timestamp);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     })
     .reduce((s, t) => s + t.amount, 0);
 }
 
-/** Get or create today's DailySpend entry with carryover from previous day
- * @param excludeGroup If true, excludes group-split transactions from spend */
-export async function getOrCreateTodaySpend(dailyBudget: number, excludeGroup = false): Promise<DailySpend> {
+/** Get or create today's DailySpend entry with carryover from previous day */
+export async function getOrCreateTodaySpend(dailyBudget: number): Promise<DailySpend> {
   const today = new Date().toISOString().slice(0, 10);
   const all = await getDailySpends();
   const existing = all.find(d => d.date === today);
 
   if (existing) {
     // Update spent from real transactions
-    const spent = await computeTodaySpendFromTransactions(excludeGroup);
+    const spent = await computeTodaySpendFromTransactions();
     existing.spent = spent;
     existing.leftover = existing.effectiveBudget - spent;
     await saveDailySpends(all);
@@ -537,7 +528,7 @@ export async function getOrCreateTodaySpend(dailyBudget: number, excludeGroup = 
     // If 'save', carryover stays 0 (jar was already credited)
   }
 
-  const spent = await computeTodaySpendFromTransactions(excludeGroup);
+  const spent = await computeTodaySpendFromTransactions();
   const effectiveBudget = dailyBudget + carryover;
 
   const entry: DailySpend = {

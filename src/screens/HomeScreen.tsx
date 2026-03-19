@@ -113,8 +113,7 @@ export default function HomeScreen() {
   }, [pendingTransaction, pendingTargetTracker, pendingGroupTracker]);
 
   const loadTransactions = useCallback(async () => {
-    const all = await getTransactions();
-    const personalOnly = all.filter(t => !t.groupId);
+    const personalOnly = await getTransactions('personal');
     setTotalSpent(personalOnly.reduce((s, t) => s + t.amount, 0));
 
     const now = new Date();

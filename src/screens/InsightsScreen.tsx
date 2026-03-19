@@ -8,8 +8,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { getTransactions } from '../services/StorageService';
-import { Transaction } from '../models/types';
+import { getTransactions, getGroups, getGroupTransactions } from '../services/StorageService';
+import { Transaction, GroupTransaction } from '../models/types';
+import { useAuth } from '../store/AuthContext';
 import { usePremium } from '../store/PremiumContext';
 import { COLORS, formatCurrency, formatDate } from '../utils/helpers';
 import EmptyState from '../components/EmptyState';
@@ -41,7 +42,10 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function InsightsScreen() {
   const nav = useNavigation<Nav>();
   const { isPremium } = usePremium();
+  const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [groupShareTxns, setGroupShareTxns] = useState<Transaction[]>([]);
+  const [includeGroupShares, setIncludeGroupShares] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<'month' | 'all' | 'custom'>('month');
@@ -53,31 +57,70 @@ export default function InsightsScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const load = useCallback(async () => {
-    const all = await getTransactions();
-    const personal = all.filter(t => !t.groupId);
+    const personal = await getTransactions('personal');
     setTransactions(personal);
     setRecurring(detectRecurringExpenses(personal));
     setLoading(false);
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Load group share transactions when toggle is enabled
+  const loadGroupShares = useCallback(async () => {
+    if (!includeGroupShares) {
+      setGroupShareTxns([]);
+      return;
+    }
+    const userId = user?.id || '';
+    const groups = await getGroups();
+    const shares: Transaction[] = [];
+    for (const group of groups) {
+      const txns = await getGroupTransactions(group.id);
+      for (const gt of txns) {
+        const mySplit = gt.splits.find(s => s.userId === userId);
+        if (mySplit) {
+          shares.push({
+            id: `group_${gt.id}`,
+            userId,
+            amount: mySplit.amount,
+            description: `${gt.description} (${group.name})`,
+            merchant: gt.merchant,
+            source: 'Group',
+            rawMessage: '',
+            trackerType: 'group',
+            groupId: group.id,
+            timestamp: gt.timestamp,
+            createdAt: gt.timestamp,
+          });
+        }
+      }
+    }
+    setGroupShareTxns(shares);
+  }, [includeGroupShares, user?.id]);
 
-  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { loadGroupShares(); }, [loadGroupShares]));
+
+  const onRefresh = async () => { setRefreshing(true); await load(); await loadGroupShares(); setRefreshing(false); };
+
+  // Merge personal + group shares when toggle is on
+  const allTransactions = useMemo(() => {
+    if (!includeGroupShares || groupShareTxns.length === 0) return transactions;
+    return [...transactions, ...groupShareTxns].sort((a, b) => b.timestamp - a.timestamp);
+  }, [transactions, groupShareTxns, includeGroupShares]);
 
   const now = new Date();
-  const thisMonthTxns = getMonthTransactions(transactions, 0);
-  const lastMonthTxns = getMonthTransactions(transactions, 1);
+  const thisMonthTxns = getMonthTransactions(allTransactions, 0);
+  const lastMonthTxns = getMonthTransactions(allTransactions, 1);
 
   const customTxns = useMemo(() => {
     if (selectedPeriod !== 'custom' || !customStartDate || !customEndDate) return [];
     const start = new Date(customStartDate).getTime();
     const end = new Date(customEndDate + 'T23:59:59').getTime();
-    return transactions.filter(t => t.timestamp >= start && t.timestamp <= end);
-  }, [transactions, selectedPeriod, customStartDate, customEndDate]);
+    return allTransactions.filter(t => t.timestamp >= start && t.timestamp <= end);
+  }, [allTransactions, selectedPeriod, customStartDate, customEndDate]);
 
   const displayTxns = selectedPeriod === 'month' ? thisMonthTxns
     : selectedPeriod === 'custom' ? customTxns
-    : transactions;
+    : allTransactions;
   const totalSpent = displayTxns.reduce((s, t) => s + t.amount, 0);
 
   // Category breakdown using CategoryService
@@ -205,6 +248,21 @@ export default function InsightsScreen() {
             <Text style={styles.exportBtnText}>Export</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Include group shares toggle */}
+        <TouchableOpacity
+          style={styles.groupToggleRow}
+          onPress={() => setIncludeGroupShares(prev => !prev)}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.groupToggleTrack, includeGroupShares && styles.groupToggleTrackOn]}>
+            <View style={[styles.groupToggleThumb, includeGroupShares && styles.groupToggleThumbOn]} />
+          </View>
+          <Text style={styles.groupToggleLabel}>Include group shares</Text>
+          {includeGroupShares && groupShareTxns.length > 0 && (
+            <Text style={styles.groupToggleCount}>{groupShareTxns.length} expenses</Text>
+          )}
+        </TouchableOpacity>
 
         {/* Custom Date Range Picker */}
         {selectedPeriod === 'custom' && (
@@ -468,6 +526,14 @@ const styles = StyleSheet.create({
   periodTextActive: { color: COLORS.primary },
   exportBtn: { backgroundColor: COLORS.surfaceHigh, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, borderWidth: 1, borderColor: COLORS.border },
   exportBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+
+  groupToggleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 },
+  groupToggleTrack: { width: 36, height: 20, borderRadius: 10, backgroundColor: COLORS.border, justifyContent: 'center', paddingHorizontal: 2 },
+  groupToggleTrackOn: { backgroundColor: `${COLORS.primary}40` },
+  groupToggleThumb: { width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.textSecondary },
+  groupToggleThumbOn: { backgroundColor: COLORS.primary, alignSelf: 'flex-end' },
+  groupToggleLabel: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
+  groupToggleCount: { fontSize: 11, color: COLORS.primary, fontWeight: '600' },
 
   heroCard: { borderRadius: 18, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
   heroAccent: { height: 2 },

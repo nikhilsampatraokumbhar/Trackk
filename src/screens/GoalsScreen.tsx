@@ -106,11 +106,10 @@ export default function GoalsScreen() {
   /* ── Data Loading ─────────────────────────────────────────────────── */
 
   const loadData = useCallback(async () => {
-    const excludeGroup = !trackerState.groupAffectsGoal;
     const [g, ts, ms] = await Promise.all([
       getGoals(),
-      computeTodaySpendFromTransactions(excludeGroup),
-      computeMonthSpendFromTransactions(excludeGroup),
+      computeTodaySpendFromTransactions(),
+      computeMonthSpendFromTransactions(),
     ]);
     setGoals(g);
     setTodaySpend(ts);
@@ -124,7 +123,7 @@ export default function GoalsScreen() {
       const monthlySavings = ref.salary - ref.emis - ref.expenses - ref.maintenance - customTotal;
       const totalSetAside = g.reduce((s, goal) => s + goal.monthlyBudget, 0);
       const combinedDailyBudget = Math.max((monthlySavings - totalSetAside) / 30, 0);
-      const dailyEntry = await getOrCreateTodaySpend(combinedDailyBudget, excludeGroup);
+      const dailyEntry = await getOrCreateTodaySpend(combinedDailyBudget);
       setTodayDailySpend(dailyEntry);
 
       // Check for yesterday's pending leftover
@@ -137,7 +136,7 @@ export default function GoalsScreen() {
         setShowLeftoverSheet(false);
       }
     }
-  }, [trackerState.groupAffectsGoal]);
+  }, []);
 
   useFocusEffect(useCallback(() => {
     loadData();
@@ -1068,24 +1067,7 @@ export default function GoalsScreen() {
             <Text style={styles.autoSyncBadgeText}>{'\u26A1'} Auto-synced from expenses</Text>
           </View>
 
-          {/* Group affects goal toggle — only show when group trackers are active */}
-          {trackerState.activeGroupIds.length > 0 && (
-            <TouchableOpacity
-              style={styles.groupGoalToggle}
-              onPress={toggleGroupAffectsGoal}
-              activeOpacity={0.7}
-            >
-              <View style={[
-                styles.groupGoalToggleIndicator,
-                trackerState.groupAffectsGoal && styles.groupGoalToggleOn,
-              ]} />
-              <Text style={styles.groupGoalToggleText}>
-                {trackerState.groupAffectsGoal
-                  ? 'Group expenses count toward goal'
-                  : 'Group expenses excluded from goal'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          {/* Group expenses are tracked separately — no toggle needed */}
         </View>
 
         {/* ── Streak ── */}

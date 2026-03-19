@@ -554,8 +554,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       // Use the first active goal for daily budget tracking
       const goal = goals[0];
       if (goal.dailyBudget > 0) {
-        const excludeGroup = !trackerStateRef.current.groupAffectsGoal;
-        await getOrCreateTodaySpend(goal.dailyBudget, excludeGroup);
+        await getOrCreateTodaySpend(goal.dailyBudget);
       }
     } catch {
       // Silent fail — goal sync is best-effort
@@ -593,8 +592,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
         loadGroupTransactionsRef.current(trackerId);
       }
 
-      // Group split saved to personal → sync goal budget
-      await syncGoalDailyBudget();
+      // Group data stays in group storage — no personal sync needed
     } else if (trackerType === 'reimbursement') {
       await saveTransaction(parsed, trackerType, uid);
       // Reimbursements do NOT affect goal budget
