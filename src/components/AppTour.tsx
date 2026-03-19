@@ -49,13 +49,13 @@ const TOUR_STEPS: TourStep[] = [
   {
     emoji: '🔄',
     title: 'Subscriptions, Investments & EMIs',
-    description: 'Track renewals, SIPs, and loan payments — never miss a due date.',
+    description: 'Track renewals, SIPs, and loan payments — everything in one place.',
     highlight: 'Home screen',
   },
   {
     emoji: '🧾',
     title: 'Reimbursements',
-    description: 'Log work expenses by trip, attach receipts, and get reimbursed faster.',
+    description: 'Log work expenses by trip, attach receipts, download everything once done.',
     highlight: 'Reimbursement screen',
   },
 ];
