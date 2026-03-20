@@ -45,7 +45,7 @@ export async function exchangeOutlookCode(
       client_id: clientId,
       client_secret: clientSecret,
       code: authCode,
-      redirect_uri: "trackk://oauth/outlook",
+      redirect_uri: `https://us-central1-${process.env.GCLOUD_PROJECT || ""}.cloudfunctions.net/oauthRedirect`,
       grant_type: "authorization_code",
       scope: SCOPES,
     }),

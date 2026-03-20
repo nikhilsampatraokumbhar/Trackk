@@ -9,7 +9,6 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useGroups } from '../store/GroupContext';
-import { useTracker } from '../store/TrackerContext';
 import { useAuth } from '../store/AuthContext';
 import { getGroup as getGroupLocal } from '../services/StorageService';
 import {
@@ -19,7 +18,6 @@ import {
 } from '../services/SyncService';
 import { Group, GroupTransaction, Split, Settlement, Debt, ExpenseComment } from '../models/types';
 import { simplifyDebts, calculateDebts } from '../services/DebtCalculator';
-import TrackerToggle from '../components/TrackerToggle';
 import EmptyState from '../components/EmptyState';
 import { COLORS, formatCurrency, formatDate, getColorForId, generateId } from '../utils/helpers';
 import { useTheme } from '../store/ThemeContext';
@@ -74,7 +72,6 @@ export default function GroupDetailScreen() {
     settleSplit, unsettleSplit, groups,
     deleteGroupTransaction, updateGroupTransaction,
   } = useGroups();
-  const { trackerState, toggleGroup } = useTracker();
   const { colors } = useTheme();
 
   const [group, setGroup] = useState<Group | null>(null);
@@ -147,7 +144,6 @@ export default function GroupDetailScreen() {
     return <View style={[styles.center, { backgroundColor: colors.background }]}><ActivityIndicator size="large" color={colors.primary} /></View>;
   }
 
-  const isTracking = trackerState.activeGroupIds.includes(groupId);
   const groupColor = getColorForId(group.id);
   const userId = user?.id || '';
   const rawDebts = activeGroupDebts;
@@ -648,22 +644,11 @@ export default function GroupDetailScreen() {
               </View>
             )}
 
-            {/* Tracker toggle */}
-            <View style={styles.trackerWrap}>
-              <TrackerToggle
-                label="Track for this group"
-                subtitle="Auto-detect payments and split equally"
-                isActive={isTracking}
-                onToggle={() => toggleGroup(groupId)}
-                color={colors.groupColor}
-              />
-            </View>
-
             {timelineItems.length === 0 && (
               <EmptyState
                 icon="💸"
                 title="No group expenses yet"
-                subtitle="Enable tracking above or add an expense manually"
+                subtitle="Add an expense manually or enable tracking from Home"
                 accent={colors.groupColor}
               />
             )}
@@ -1021,7 +1006,6 @@ const styles = StyleSheet.create({
   actionBtnOutline: { borderWidth: 1, borderColor: `${COLORS.success}40`, backgroundColor: `${COLORS.success}10` },
   actionBtnOutlineText: { fontSize: 14, fontWeight: '600', color: COLORS.success },
 
-  trackerWrap: { paddingHorizontal: 0 },
 
   // ─── Section Headers ──────────────────────────────────────────────────────
   sectionHeader: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 },

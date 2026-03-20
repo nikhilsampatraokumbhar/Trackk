@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch,
   RefreshControl, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, AppState, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,6 +37,7 @@ export default function HomeScreen() {
     trackerState, getActiveTrackers, pendingTransaction, pendingGroupTracker,
     pendingTargetTracker, clearPendingTransaction, addTransactionToTracker,
     transactionVersion, setDefaultTracker,
+    togglePersonal, toggleReimbursement, toggleGroup,
   } = useTracker();
 
   const [totalSpent, setTotalSpent] = useState(0);
@@ -297,44 +298,74 @@ export default function HomeScreen() {
           <Text style={[styles.contextSub, { color: colors.textLight }]}>{contextualSubtext}</Text>
         </View>
 
-        {/* Active Trackers — inline section */}
-        {activeTrackers.length > 0 && (
-          <View style={[styles.trackersCard, { backgroundColor: colors.surface, borderColor: `${colors.success}20` }]}>
-            <View style={styles.trackersHeader}>
-              <View style={styles.trackersHeaderLeft}>
-                <View style={[styles.trackerPulse, { backgroundColor: colors.success }]} />
-                <Text style={[styles.trackersTitle, { color: colors.text }]}>Active Trackers</Text>
-              </View>
-              <TouchableOpacity onPress={() => nav.navigate('TrackerSettings')} activeOpacity={0.7}>
-                <Text style={[styles.trackersManage, { color: colors.primary }]}>Manage</Text>
-              </TouchableOpacity>
+        {/* Active Trackers — always visible with mini toggles */}
+        <View style={[styles.trackersCard, { backgroundColor: colors.surface, borderColor: activeTrackers.length > 0 ? `${colors.success}20` : colors.border }]}>
+          <View style={styles.trackersHeader}>
+            <View style={styles.trackersHeaderLeft}>
+              <View style={[styles.trackerPulse, { backgroundColor: activeTrackers.length > 0 ? colors.success : colors.textLight }]} />
+              <Text style={[styles.trackersTitle, { color: colors.text }]}>Active Trackers</Text>
             </View>
-            <View style={styles.trackersChips}>
-              {activeTrackers.map(t => {
-                const isDefault = t.id === trackerState.defaultTrackerId;
-                const chipColor = t.type === 'personal' ? colors.personalColor
-                  : t.type === 'reimbursement' ? colors.reimbursementColor
-                  : colors.groupColor;
-                return (
-                  <TouchableOpacity
-                    key={t.id}
-                    style={[
-                      styles.trackerChip,
-                      { borderColor: `${chipColor}40`, backgroundColor: colors.glass },
-                      isDefault && { borderColor: chipColor, backgroundColor: `${chipColor}12` },
-                    ]}
-                    onPress={() => setDefaultTracker(t.id)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.trackerChipDot, { backgroundColor: chipColor }]} />
-                    <Text style={[styles.trackerChipText, { color: colors.textSecondary }, isDefault && { color: chipColor, fontWeight: '700' }]}>{t.label}</Text>
-                    {isDefault && <Text style={[styles.trackerDefaultBadge, { color: chipColor }]}>Default</Text>}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            {activeTrackers.length > 0 && (
+              <Text style={[styles.trackersCount, { color: colors.success }]}>{activeTrackers.length} on</Text>
+            )}
           </View>
-        )}
+
+          {/* Personal tracker row */}
+          <View style={[styles.trackerRow, { borderBottomColor: colors.border }]}>
+            <View style={styles.trackerRowLeft}>
+              <Text style={styles.trackerRowEmoji}>💳</Text>
+              <View>
+                <Text style={[styles.trackerRowLabel, { color: colors.text }]}>Personal</Text>
+                <Text style={[styles.trackerRowSub, { color: colors.textLight }]}>Daily spending</Text>
+              </View>
+            </View>
+            <Switch
+              value={trackerState.personal}
+              onValueChange={() => togglePersonal()}
+              trackColor={{ false: colors.surfaceHigher, true: `${colors.personalColor}50` }}
+              thumbColor={trackerState.personal ? colors.personalColor : colors.textLight}
+            />
+          </View>
+
+          {/* Group tracker rows */}
+          {groups.map(g => {
+            const isActive = trackerState.activeGroupIds.includes(g.id);
+            return (
+              <View key={g.id} style={[styles.trackerRow, { borderBottomColor: colors.border }]}>
+                <View style={styles.trackerRowLeft}>
+                  <Text style={styles.trackerRowEmoji}>👥</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.trackerRowLabel, { color: colors.text }]} numberOfLines={1}>{g.name}</Text>
+                    <Text style={[styles.trackerRowSub, { color: colors.textLight }]}>{g.members.length} members</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={isActive}
+                  onValueChange={() => toggleGroup(g.id)}
+                  trackColor={{ false: colors.surfaceHigher, true: `${colors.groupColor}50` }}
+                  thumbColor={isActive ? colors.groupColor : colors.textLight}
+                />
+              </View>
+            );
+          })}
+
+          {/* Reimbursement tracker row */}
+          <View style={[styles.trackerRow, { borderBottomWidth: 0 }]}>
+            <View style={styles.trackerRowLeft}>
+              <Text style={styles.trackerRowEmoji}>🧾</Text>
+              <View>
+                <Text style={[styles.trackerRowLabel, { color: colors.text }]}>Reimbursement</Text>
+                <Text style={[styles.trackerRowSub, { color: colors.textLight }]}>Office expenses</Text>
+              </View>
+            </View>
+            <Switch
+              value={trackerState.reimbursement}
+              onValueChange={() => toggleReimbursement()}
+              trackColor={{ false: colors.surfaceHigher, true: `${colors.reimbursementColor}50` }}
+              thumbColor={trackerState.reimbursement ? colors.reimbursementColor : colors.textLight}
+            />
+          </View>
+        </View>
 
         {/* Hero card — Total Spent with streak on top-right */}
         {loading ? (
@@ -415,32 +446,64 @@ export default function HomeScreen() {
         </View>
 
         {/* Review Expenses — always visible, premium-gated */}
-        <PressableScale
-          style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: `${colors.personalColor}15` }]}
-          onPress={() => nav.navigate('NightlyReview')}
-        >
-          <View style={styles.reviewLeft}>
-            <View style={styles.reviewIconRow}>
-              <Text style={styles.reviewEmoji}>🌙</Text>
-              {!isPremium && (
-                <View style={[styles.premiumBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.premiumBadgeText}>PRO</Text>
-                </View>
-              )}
+        <View style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: `${colors.personalColor}15` }]}>
+          <PressableScale
+            style={styles.reviewPressable}
+            onPress={() => nav.navigate('NightlyReview')}
+          >
+            <View style={styles.reviewLeft}>
+              <View style={styles.reviewIconRow}>
+                <Text style={styles.reviewEmoji}>🌙</Text>
+                {!isPremium && (
+                  <View style={[styles.premiumBadge, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.premiumBadgeText}>PRO</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.reviewTitle, { color: colors.text }]}>Review Expenses</Text>
+              <Text style={[styles.reviewSub, { color: colors.textSecondary }]}>
+                {pendingReviewCount > 0
+                  ? `${pendingReviewCount} transaction${pendingReviewCount > 1 ? 's' : ''} to review`
+                  : 'All caught up'}
+              </Text>
             </View>
-            <Text style={[styles.reviewTitle, { color: colors.text }]}>Review Expenses</Text>
-            <Text style={[styles.reviewSub, { color: colors.textSecondary }]}>
-              {pendingReviewCount > 0
-                ? `${pendingReviewCount} transaction${pendingReviewCount > 1 ? 's' : ''} to review`
-                : 'All caught up'}
-            </Text>
-          </View>
-          {pendingReviewCount > 0 && (
-            <View style={styles.reviewBadge}>
-              <Text style={styles.reviewBadgeText}>{pendingReviewCount}</Text>
+            {pendingReviewCount > 0 && (
+              <View style={styles.reviewBadge}>
+                <Text style={styles.reviewBadgeText}>{pendingReviewCount}</Text>
+              </View>
+            )}
+          </PressableScale>
+          {activeTrackers.length > 0 && (
+            <View style={[styles.reviewTrackerRow, { borderTopColor: colors.border }]}>
+              <Text style={[styles.reviewTrackerLabel, { color: colors.textLight }]}>Routing to</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reviewTrackerChips}>
+                {activeTrackers.map(t => {
+                  const isDefault = t.id === trackerState.defaultTrackerId;
+                  const chipColor = t.type === 'personal' ? colors.personalColor
+                    : t.type === 'reimbursement' ? colors.reimbursementColor
+                    : colors.groupColor;
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      style={[
+                        styles.reviewTrackerChip,
+                        { backgroundColor: `${chipColor}10`, borderColor: `${chipColor}30` },
+                        isDefault && { backgroundColor: `${chipColor}18`, borderColor: chipColor },
+                      ]}
+                      onPress={() => setDefaultTracker(t.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.reviewTrackerDot, { backgroundColor: chipColor }]} />
+                      <Text style={[styles.reviewTrackerChipText, { color: isDefault ? chipColor : colors.textSecondary }]}>
+                        {t.label}{isDefault ? ' (Default)' : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
           )}
-        </PressableScale>
+        </View>
 
         {/* Goal Budget Card */}
         {activeGoal && (
@@ -680,18 +743,18 @@ const styles = StyleSheet.create({
   name: { fontSize: 28, fontWeight: '700', marginTop: 2, letterSpacing: -0.3 },
   contextSub: { fontSize: 12, marginTop: 4, letterSpacing: 0.2 },
 
-  /* Active Trackers inline card */
+  /* Active Trackers card with mini toggles */
   trackersCard: { borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1 },
-  trackersHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  trackersHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   trackersHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   trackerPulse: { width: 8, height: 8, borderRadius: 4 },
   trackersTitle: { fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
-  trackersManage: { fontSize: 12, fontWeight: '600' },
-  trackersChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  trackerChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
-  trackerChipDot: { width: 8, height: 8, borderRadius: 4 },
-  trackerChipText: { fontSize: 12, fontWeight: '500' },
-  trackerDefaultBadge: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5, marginLeft: 2 },
+  trackersCount: { fontSize: 11, fontWeight: '600' },
+  trackerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  trackerRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  trackerRowEmoji: { fontSize: 18, width: 28, textAlign: 'center' },
+  trackerRowLabel: { fontSize: 14, fontWeight: '500' },
+  trackerRowSub: { fontSize: 11, marginTop: 1 },
 
   /* Privacy Shield */
   privacyCard: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 16, borderWidth: 1 },
@@ -727,7 +790,8 @@ const styles = StyleSheet.create({
   metricSub: { fontSize: 10, marginTop: 3 },
 
   /* Review Expenses Card */
-  reviewCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1 },
+  reviewCard: { borderRadius: 12, marginBottom: 12, borderWidth: 1, overflow: 'hidden' },
+  reviewPressable: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   reviewLeft: { flex: 1 },
   reviewIconRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   reviewEmoji: { fontSize: 22 },
@@ -737,6 +801,12 @@ const styles = StyleSheet.create({
   reviewSub: { fontSize: 12 },
   reviewBadge: { borderRadius: 12, minWidth: 24, height: 24, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   reviewBadgeText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  reviewTrackerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  reviewTrackerLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 0.5, marginRight: 8 },
+  reviewTrackerChips: { flexDirection: 'row', gap: 6 },
+  reviewTrackerChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
+  reviewTrackerDot: { width: 6, height: 6, borderRadius: 3 },
+  reviewTrackerChipText: { fontSize: 11, fontWeight: '500' },
 
   /* Goal Budget Card */
   goalBudgetCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, padding: 18, marginBottom: 12, borderWidth: 1 },

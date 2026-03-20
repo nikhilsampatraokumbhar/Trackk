@@ -29,8 +29,10 @@ import { sendTransactionNotification } from "./notifier";
 /**
  * Create an OAuth2 client with stored credentials.
  */
-function createOAuth2Client(clientId: string, clientSecret: string) {
-  return new google.auth.OAuth2(clientId, clientSecret, "trackk://oauth/gmail");
+function createOAuth2Client(clientId: string, clientSecret: string, redirectUri?: string) {
+  const projectId = process.env.GCLOUD_PROJECT || "";
+  const defaultRedirect = `https://us-central1-${projectId}.cloudfunctions.net/oauthRedirect`;
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri || defaultRedirect);
 }
 
 /**

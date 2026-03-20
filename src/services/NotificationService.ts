@@ -10,6 +10,7 @@ import { saveTransaction, addGroupTransaction, getOrCreateUser } from './Storage
 import { processTransactionForTracking } from './AutoDetectionService';
 
 export const PENDING_GROUP_SPLIT_KEY = '@et_pending_group_split';
+export const PENDING_CHOOSE_TRACKER_KEY = '@et_pending_choose_tracker';
 
 const CHANNEL_ID = 'trackk-transactions';
 
@@ -184,6 +185,7 @@ export async function handleNotificationEvent(
     await notifee.cancelAllNotifications();
   } else if (type === EventType.PRESS && detail.notification?.data) {
     // User tapped the notification body (not an action button)
+    // Always show the selection dialog so the user can choose where to route
     const data = detail.notification.data;
     const amt = Number(data.amount);
     if (!amt || amt <= 0 || !isFinite(amt)) return;
@@ -197,18 +199,7 @@ export async function handleNotificationEvent(
       timestamp: Number(data.timestamp) || Date.now(),
     };
 
-    // If notification has a specific tracker (single tracker case), route to it
-    if (data.trackerType && data.trackerId) {
-      const tracker: ActiveTracker = {
-        type: data.trackerType as any,
-        id: data.trackerId,
-        label: data.trackerLabel,
-      };
-      if (addToTrackerCallback) addToTrackerCallback(parsed, tracker);
-    } else {
-      // Multiple trackers — show selection dialog
-      if (chooseTrackerCallback) chooseTrackerCallback(parsed);
-    }
+    if (chooseTrackerCallback) chooseTrackerCallback(parsed);
 
     await notifee.cancelAllNotifications();
   }
@@ -223,23 +214,38 @@ export function registerBackgroundHandler(): void {
       const actionId = detail.pressAction?.id;
       const data = detail.notification.data as Record<string, string>;
 
-      // For action button "add_to_tracker" or notification body tap with tracker data
-      const shouldAddToTracker =
-        (isActionPress && actionId === 'add_to_tracker') ||
-        (isBodyPress && data.trackerType && data.trackerId);
+      const parsedAmount = Number(data.amount);
+      if (!parsedAmount || parsedAmount <= 0 || !isFinite(parsedAmount)) {
+        await notifee.cancelAllNotifications();
+        return;
+      }
+
+      const parsed: ParsedTransaction = {
+        amount: parsedAmount,
+        type: 'debit',
+        merchant: data.merchant || undefined,
+        bank: data.bank || undefined,
+        rawMessage: data.rawMessage,
+        timestamp: Number(data.timestamp) || Date.now(),
+      };
+
+      // "Other" button or body tap → stash for selection dialog
+      const isChooseTracker =
+        (isActionPress && actionId === 'choose_tracker') ||
+        isBodyPress;
+
+      if (isChooseTracker) {
+        await AsyncStorage.setItem(PENDING_CHOOSE_TRACKER_KEY, JSON.stringify({
+          transaction: parsed,
+        }));
+        await notifee.cancelAllNotifications();
+        return;
+      }
+
+      // "Add to tracker" button only
+      const shouldAddToTracker = isActionPress && actionId === 'add_to_tracker';
 
       if (shouldAddToTracker) {
-        const parsedAmount = Number(data.amount);
-        if (!parsedAmount || parsedAmount <= 0 || !isFinite(parsedAmount)) return;
-
-        const parsed: ParsedTransaction = {
-          amount: parsedAmount,
-          type: 'debit',
-          merchant: data.merchant || undefined,
-          bank: data.bank || undefined,
-          rawMessage: data.rawMessage,
-          timestamp: Number(data.timestamp) || Date.now(),
-        };
         const trackerType = data.trackerType as TrackerType;
         const trackerId = data.trackerId;
 
@@ -260,6 +266,7 @@ export function registerBackgroundHandler(): void {
         }
       }
 
+      // Ignore action — just dismiss
       await notifee.cancelAllNotifications();
     }
   });
