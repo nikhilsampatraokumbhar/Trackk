@@ -33,6 +33,8 @@ export default function ProfileScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
   // Premium UI hidden during free launch — set to true to re-enable
   const SHOW_PREMIUM_UI = false;
+  // Email connection hidden until Cloud Functions are deployed — set to true to re-enable
+  const SHOW_EMAIL_CONNECT = false;
   const { isPremium, isFamily, currentPlan, subscription, referralStats } = usePremium();
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(user?.displayName || '');
@@ -339,76 +341,80 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* ── Connect Email ─────────────────────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>EMAIL TRANSACTION DETECTION</Text>
-        </View>
+        {/* ── Connect Email — hidden until Cloud Functions are deployed ── */}
+        {SHOW_EMAIL_CONNECT && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>EMAIL TRANSACTION DETECTION</Text>
+            </View>
 
-        <View style={[styles.emailCard, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
-          <Text style={[styles.emailCardDesc, { color: colors.textSecondary }]}>
-            We only connect your email if you allow us to — and only for detecting transaction alerts. Your data stays private, is never shared, and you can disconnect and delete it anytime.
-          </Text>
+            <View style={[styles.emailCard, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+              <Text style={[styles.emailCardDesc, { color: colors.textSecondary }]}>
+                We only connect your email if you allow us to — and only for detecting transaction alerts. Your data stays private, is never shared, and you can disconnect and delete it anytime.
+              </Text>
 
-          {(['gmail', 'outlook', 'yahoo'] as EmailProvider[]).map((provider) => {
-            const email = connectedEmails[provider];
-            const isConnecting = connectingProvider === provider;
-            const color = getProviderColor(provider);
+              {(['gmail', 'outlook', 'yahoo'] as EmailProvider[]).map((provider) => {
+                const email = connectedEmails[provider];
+                const isConnecting = connectingProvider === provider;
+                const color = getProviderColor(provider);
 
-            return (
-              <View key={provider} style={[styles.emailProviderRow, { borderTopColor: colors.border }]}>
-                <View style={[styles.emailProviderIcon, { backgroundColor: `${color}18`, borderColor: `${color}30` }]}>
-                  <Text style={[styles.emailProviderLetter, { color }]}>
-                    {provider === 'gmail' ? 'G' : provider === 'outlook' ? 'O' : 'Y'}
-                  </Text>
-                </View>
-                <View style={styles.emailProviderInfo}>
-                  <Text style={[styles.emailProviderName, { color: colors.text }]}>{getProviderDisplayName(provider)}</Text>
-                  {email ? (
-                    <Text style={[styles.emailProviderEmail, { color: colors.success }]} numberOfLines={1}>{email}</Text>
-                  ) : (
-                    <Text style={[styles.emailProviderStatus, { color: colors.textSecondary }]}>Not connected</Text>
-                  )}
-                </View>
-                {isConnecting ? (
-                  <ActivityIndicator size="small" color={color} />
-                ) : email ? (
-                  <TouchableOpacity
-                    style={styles.emailDisconnectBtn}
-                    onPress={() => handleDisconnectEmail(provider)}
-                  >
-                    <Text style={styles.emailDisconnectText}>Disconnect</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.emailConnectBtn, { borderColor: `${color}40` }]}
-                    onPress={() => {
-                      const clientIds: Record<EmailProvider, string> = {
-                        gmail: '978145898230-etq6tvk214kqd2jq2t26c8rs6an6eqkl.apps.googleusercontent.com',
-                        outlook: '', // TODO: configure
-                        yahoo: '',   // TODO: configure
-                      };
-                      const clientId = clientIds[provider];
-                      if (!clientId) {
-                        Alert.alert('Not Available', `${getProviderDisplayName(provider)} connection is not yet configured.`);
-                        return;
-                      }
-                      setConnectingProvider(provider);
-                      startOAuthFlow(provider, clientId).catch((err: any) => {
-                        setConnectingProvider(null);
-                        Alert.alert(
-                          'Cannot Open Browser',
-                          err?.message || 'Could not open sign-in page. Please make sure you have a browser installed.',
-                        );
-                      });
-                    }}
-                  >
-                    <Text style={[styles.emailConnectText, { color }]}>Connect</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          })}
-        </View>
+                return (
+                  <View key={provider} style={[styles.emailProviderRow, { borderTopColor: colors.border }]}>
+                    <View style={[styles.emailProviderIcon, { backgroundColor: `${color}18`, borderColor: `${color}30` }]}>
+                      <Text style={[styles.emailProviderLetter, { color }]}>
+                        {provider === 'gmail' ? 'G' : provider === 'outlook' ? 'O' : 'Y'}
+                      </Text>
+                    </View>
+                    <View style={styles.emailProviderInfo}>
+                      <Text style={[styles.emailProviderName, { color: colors.text }]}>{getProviderDisplayName(provider)}</Text>
+                      {email ? (
+                        <Text style={[styles.emailProviderEmail, { color: colors.success }]} numberOfLines={1}>{email}</Text>
+                      ) : (
+                        <Text style={[styles.emailProviderStatus, { color: colors.textSecondary }]}>Not connected</Text>
+                      )}
+                    </View>
+                    {isConnecting ? (
+                      <ActivityIndicator size="small" color={color} />
+                    ) : email ? (
+                      <TouchableOpacity
+                        style={styles.emailDisconnectBtn}
+                        onPress={() => handleDisconnectEmail(provider)}
+                      >
+                        <Text style={styles.emailDisconnectText}>Disconnect</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.emailConnectBtn, { borderColor: `${color}40` }]}
+                        onPress={() => {
+                          const clientIds: Record<EmailProvider, string> = {
+                            gmail: '978145898230-etq6tvk214kqd2jq2t26c8rs6an6eqkl.apps.googleusercontent.com',
+                            outlook: '', // TODO: configure
+                            yahoo: '',   // TODO: configure
+                          };
+                          const clientId = clientIds[provider];
+                          if (!clientId) {
+                            Alert.alert('Not Available', `${getProviderDisplayName(provider)} connection is not yet configured.`);
+                            return;
+                          }
+                          setConnectingProvider(provider);
+                          startOAuthFlow(provider, clientId).catch((err: any) => {
+                            setConnectingProvider(null);
+                            Alert.alert(
+                              'Cannot Open Browser',
+                              err?.message || 'Could not open sign-in page. Please make sure you have a browser installed.',
+                            );
+                          });
+                        }}
+                      >
+                        <Text style={[styles.emailConnectText, { color }]}>Connect</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         {/* Privacy & Data Section */}
         <View style={styles.sectionHeader}>

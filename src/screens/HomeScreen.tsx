@@ -324,31 +324,29 @@ export default function HomeScreen() {
                 {activeTrackers.length}/3
               </Text>
             </View>
-            {activeTrackers.length > 0 && (
-              <View ref={toggleRef} collapsable={false}>
-                <Switch
-                  value={trackerState.trackingEnabled !== false}
-                  onValueChange={() => {
-                    const isPausing = trackerState.trackingEnabled !== false;
-                    if (isPausing && activeGoal) {
-                      Alert.alert(
-                        'Pause Tracking?',
-                        'You have an active savings goal. Pausing tracking means expenses won\'t be counted against your daily budget.',
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          { text: 'Pause Anyway', style: 'destructive', onPress: toggleTracking },
-                        ],
-                      );
-                    } else {
-                      toggleTracking();
-                    }
-                  }}
-                  trackColor={{ false: colors.surfaceHigher, true: `${colors.success}50` }}
-                  thumbColor={trackerState.trackingEnabled !== false ? colors.success : colors.textLight}
-                  style={styles.masterToggle}
-                />
-              </View>
-            )}
+            <View ref={toggleRef} collapsable={false}>
+              <Switch
+                value={trackerState.trackingEnabled !== false}
+                onValueChange={() => {
+                  const isPausing = trackerState.trackingEnabled !== false;
+                  if (isPausing && activeGoal) {
+                    Alert.alert(
+                      'Pause Tracking?',
+                      'You have an active savings goal. Pausing tracking means expenses won\'t be counted against your daily budget.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Pause Anyway', style: 'destructive', onPress: toggleTracking },
+                      ],
+                    );
+                  } else {
+                    toggleTracking();
+                  }
+                }}
+                trackColor={{ false: colors.surfaceHigher, true: `${colors.success}50` }}
+                thumbColor={trackerState.trackingEnabled !== false ? colors.success : colors.textLight}
+                style={styles.masterToggle}
+              />
+            </View>
           </View>
           {activeTrackers.length > 0 && trackerState.trackingEnabled === false && (
             <Text style={[styles.pausedHint, { color: colors.warning }]}>Tracking paused — slots remembered</Text>
