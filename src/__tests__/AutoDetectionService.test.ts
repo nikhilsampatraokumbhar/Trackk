@@ -58,13 +58,10 @@ describe('classifyTransaction', () => {
       expect(result.matchedMerchant).toBe('YouTube Premium');
     });
 
-    // Known limitation: "premium" contains "emi" substring, causing false EMI classification
-    // when detected via raw message keywords only (no merchant match)
-    it('KNOWN BUG: "premium" in raw message triggers EMI due to "emi" substring', () => {
+    it('should not false-positive "premium" as EMI (emi substring fix)', () => {
       const result = classifyTransaction(makeParsed({ rawMessage: 'Rs.129 debited for youtube premium' }));
-      // This SHOULD be 'subscription' but currently returns 'emi' because
-      // EMI keywords are checked first and "emi" is a substring of "premium"
-      expect(result.category).toBe('emi');
+      // "premium" contains "emi" as substring but word boundary check prevents false match
+      expect(result.category).not.toBe('emi');
     });
 
     it('should detect Amazon Prime', () => {
