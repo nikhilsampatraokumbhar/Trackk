@@ -24,6 +24,7 @@ import { checkOverdueSubscriptions, skipOverdueSubscription, removeOverdueSubscr
 import { COLORS, formatCurrency } from '../utils/helpers';
 import { useTheme } from '../store/ThemeContext';
 import PressableScale from '../components/PressableScale';
+import { useTour } from '../store/TourContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -79,6 +80,18 @@ export default function HomeScreen() {
 
   // Parallax
   const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Tour spotlight refs
+  const { registerElement } = useTour();
+  const trackersRef = useRef<View>(null);
+  const toggleRef = useRef<View>(null);
+  const reviewRef = useRef<View>(null);
+
+  useEffect(() => {
+    registerElement('activeTrackers', trackersRef);
+    registerElement('trackingToggle', toggleRef);
+    registerElement('reviewExpenses', reviewRef);
+  }, [registerElement]);
 
   const activeTrackers = getActiveTrackers(groups);
 
@@ -302,7 +315,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Active Trackers — slot cards (max 3) with master toggle */}
-        <View style={styles.trackersSection}>
+        <View ref={trackersRef} style={styles.trackersSection} collapsable={false}>
           <View style={styles.trackersHeader}>
             <View style={styles.trackersHeaderLeft}>
               <View style={[styles.trackerPulse, { backgroundColor: activeTrackers.length > 0 && trackerState.trackingEnabled !== false ? colors.success : colors.textLight }]} />
@@ -312,13 +325,15 @@ export default function HomeScreen() {
               </Text>
             </View>
             {activeTrackers.length > 0 && (
-              <Switch
-                value={trackerState.trackingEnabled !== false}
-                onValueChange={toggleTracking}
-                trackColor={{ false: colors.surfaceHigher, true: `${colors.success}50` }}
-                thumbColor={trackerState.trackingEnabled !== false ? colors.success : colors.textLight}
-                style={styles.masterToggle}
-              />
+              <View ref={toggleRef} collapsable={false}>
+                <Switch
+                  value={trackerState.trackingEnabled !== false}
+                  onValueChange={toggleTracking}
+                  trackColor={{ false: colors.surfaceHigher, true: `${colors.success}50` }}
+                  thumbColor={trackerState.trackingEnabled !== false ? colors.success : colors.textLight}
+                  style={styles.masterToggle}
+                />
+              </View>
             )}
           </View>
           {activeTrackers.length > 0 && trackerState.trackingEnabled === false && (
@@ -480,7 +495,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Review Expenses — always visible, premium-gated */}
-        <View style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: `${colors.personalColor}15` }]}>
+        <View ref={reviewRef} collapsable={false} style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: `${colors.personalColor}15` }]}>
           <PressableScale
             style={styles.reviewPressable}
             onPress={() => nav.navigate('NightlyReview')}

@@ -10,6 +10,7 @@ import { TrackerProvider } from './src/store/TrackerContext';
 import { PremiumProvider } from './src/store/PremiumContext';
 import { NetworkProvider } from './src/store/NetworkContext';
 import { ThemeProvider, useTheme, LIGHT_COLORS, DARK_COLORS } from './src/store/ThemeContext';
+import { TourProvider } from './src/store/TourContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { registerBackgroundHandler } from './src/services/NotificationService';
 import { setupReminderChannel, checkAndSendReminders } from './src/services/DebtReminderService';
@@ -168,11 +169,13 @@ function AppContent() {
   return (
     <PremiumProvider userId={user.id}>
       <TrackerProvider groups={groups} userId={user.id}>
-        <View style={{ flex: 1 }}>
-          <AppNavigator />
-          <OfflineBanner />
-          <AppTour visible={showTour} onComplete={() => setShowTour(false)} />
-        </View>
+        <TourProvider>
+          <View style={{ flex: 1 }}>
+            <AppNavigator />
+            <OfflineBanner />
+            <AppTour visible={showTour} onComplete={() => setShowTour(false)} />
+          </View>
+        </TourProvider>
       </TrackerProvider>
     </PremiumProvider>
   );
