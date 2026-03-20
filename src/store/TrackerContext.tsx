@@ -167,7 +167,23 @@ export function TrackerProvider({ children, groups, userId }: Props) {
         const state: TrackerState = JSON.parse(raw);
         // Backward compat: existing saved state may not have trackingEnabled
         if (state.trackingEnabled === undefined) state.trackingEnabled = true;
+        // Auto-enable personal tracking if goals exist and personal is off
+        if (!state.personal) {
+          const goals = await getGoals();
+          if (goals.length > 0) {
+            state.personal = true;
+            await AsyncStorage.setItem(TRACKER_STATE_KEY, JSON.stringify(state));
+          }
+        }
         setTrackerState(state);
+      } else {
+        // First launch — check for goals
+        const goals = await getGoals();
+        if (goals.length > 0) {
+          const state = { ...DEFAULT_STATE, personal: true };
+          await AsyncStorage.setItem(TRACKER_STATE_KEY, JSON.stringify(state));
+          setTrackerState(state);
+        }
       }
 
       // Check for completed EMIs on startup

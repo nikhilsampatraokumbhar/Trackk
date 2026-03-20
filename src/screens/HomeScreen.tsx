@@ -328,7 +328,21 @@ export default function HomeScreen() {
               <View ref={toggleRef} collapsable={false}>
                 <Switch
                   value={trackerState.trackingEnabled !== false}
-                  onValueChange={toggleTracking}
+                  onValueChange={() => {
+                    const isPausing = trackerState.trackingEnabled !== false;
+                    if (isPausing && activeGoal) {
+                      Alert.alert(
+                        'Pause Tracking?',
+                        'You have an active savings goal. Pausing tracking means expenses won\'t be counted against your daily budget.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Pause Anyway', style: 'destructive', onPress: toggleTracking },
+                        ],
+                      );
+                    } else {
+                      toggleTracking();
+                    }
+                  }}
                   trackColor={{ false: colors.surfaceHigher, true: `${colors.success}50` }}
                   thumbColor={trackerState.trackingEnabled !== false ? colors.success : colors.textLight}
                   style={styles.masterToggle}
@@ -382,7 +396,16 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       style={styles.slotRemove}
                       onPress={() => {
-                        if (tracker.type === 'personal') togglePersonal();
+                        if (tracker.type === 'personal' && activeGoal) {
+                          Alert.alert(
+                            'Remove Personal Tracker?',
+                            'You have an active savings goal. Removing this tracker means expenses won\'t be counted against your daily budget.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Remove Anyway', style: 'destructive', onPress: () => togglePersonal() },
+                            ],
+                          );
+                        } else if (tracker.type === 'personal') togglePersonal();
                         else if (tracker.type === 'reimbursement') toggleReimbursement();
                         else toggleGroup(tracker.id);
                       }}
