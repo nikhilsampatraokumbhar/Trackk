@@ -161,7 +161,12 @@ export function classifyTransaction(parsed: ParsedTransaction): ClassificationRe
 
   // 1. Check EMI keywords first (highest priority — most specific)
   for (const keyword of EMI_KEYWORDS) {
-    if (message.includes(keyword)) {
+    // Use word boundary regex for short keywords to avoid substring false positives
+    // e.g. "emi" should not match "premium"
+    const pattern = keyword.length <= 4
+      ? new RegExp(`\\b${keyword}\\b`)
+      : null;
+    if (pattern ? pattern.test(message) : message.includes(keyword)) {
       return { category: 'emi', matchedMerchant: parsed.merchant || null, confidence: 0.9 };
     }
   }

@@ -23,5 +23,10 @@ module.exports = {
     '^react-native-get-sms-android$': '<rootDir>/src/__tests__/__mocks__/sms-android.ts',
     '^react-native-permissions$': '<rootDir>/src/__tests__/__mocks__/permissions.ts',
     '^expo-linear-gradient$': '<rootDir>/src/__tests__/__mocks__/expo.ts',
+    '^expo-file-system/legacy$': '<rootDir>/src/__tests__/__mocks__/expo-file-system.ts',
+    '^expo-file-system$': '<rootDir>/src/__tests__/__mocks__/expo-file-system.ts',
+    '^expo-sharing$': '<rootDir>/src/__tests__/__mocks__/expo-sharing.ts',
+    '^expo-print$': '<rootDir>/src/__tests__/__mocks__/expo-print.ts',
+    '^expo-document-picker$': '<rootDir>/src/__tests__/__mocks__/expo-document-picker.ts',
   },
 };

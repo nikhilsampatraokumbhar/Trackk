@@ -158,6 +158,7 @@ describe('Notification Routing', () => {
     const state: TrackerState = {
       personal: true, reimbursement: false,
       activeGroupIds: ['g1'], groupAffectsGoal: false,
+      defaultTrackerId: 'personal', trackingEnabled: true,
     };
     const trackers = getActiveTrackersFromState(state, [group]);
     const routing = resolveTrackerRouting(trackers);
@@ -172,6 +173,7 @@ describe('Notification Routing', () => {
     const state: TrackerState = {
       personal: true, reimbursement: true,
       activeGroupIds: [], groupAffectsGoal: false,
+      defaultTrackerId: 'personal', trackingEnabled: true,
     };
     const trackers = getActiveTrackersFromState(state, []);
     const routing = resolveTrackerRouting(trackers);
@@ -183,6 +185,7 @@ describe('Notification Routing', () => {
     const state: TrackerState = {
       personal: true, reimbursement: false,
       activeGroupIds: [], groupAffectsGoal: false,
+      defaultTrackerId: 'personal', trackingEnabled: true,
     };
     const trackers = getActiveTrackersFromState(state, []);
     const routing = resolveTrackerRouting(trackers);
@@ -198,6 +201,7 @@ describe('Notification Routing', () => {
     const state: TrackerState = {
       personal: false, reimbursement: true,
       activeGroupIds: [], groupAffectsGoal: false,
+      defaultTrackerId: 'reimbursement', trackingEnabled: true,
     };
     const trackers = getActiveTrackersFromState(state, []);
     const routing = resolveTrackerRouting(trackers);
@@ -217,6 +221,7 @@ describe('Notification Routing', () => {
     const state: TrackerState = {
       personal: true, reimbursement: false,
       activeGroupIds: ['trip1'], groupAffectsGoal: false,
+      defaultTrackerId: 'personal', trackingEnabled: true,
     };
     const trackers = getActiveTrackersFromState(state, groups);
     const routing = resolveTrackerRouting(trackers);
@@ -235,6 +240,7 @@ describe('Notification Routing', () => {
     const state: TrackerState = {
       personal: true, reimbursement: false,
       activeGroupIds: ['g1', 'g2'], groupAffectsGoal: false,
+      defaultTrackerId: 'personal', trackingEnabled: true,
     };
     const trackers = getActiveTrackersFromState(state, groups);
     const routing = resolveTrackerRouting(trackers);
