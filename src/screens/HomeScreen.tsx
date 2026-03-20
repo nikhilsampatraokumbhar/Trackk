@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch,
   RefreshControl, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, AppState, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,7 +37,7 @@ export default function HomeScreen() {
     trackerState, getActiveTrackers, pendingTransaction, pendingGroupTracker,
     pendingTargetTracker, clearPendingTransaction, addTransactionToTracker,
     transactionVersion, setDefaultTracker,
-    togglePersonal, toggleReimbursement, toggleGroup,
+    togglePersonal, toggleReimbursement, toggleGroup, toggleTracking,
   } = useTracker();
 
   const [totalSpent, setTotalSpent] = useState(0);
@@ -301,17 +301,29 @@ export default function HomeScreen() {
           <Text style={[styles.contextSub, { color: colors.textLight }]}>{contextualSubtext}</Text>
         </View>
 
-        {/* Active Trackers — slot cards (max 3) */}
+        {/* Active Trackers — slot cards (max 3) with master toggle */}
         <View style={styles.trackersSection}>
           <View style={styles.trackersHeader}>
             <View style={styles.trackersHeaderLeft}>
-              <View style={[styles.trackerPulse, { backgroundColor: activeTrackers.length > 0 ? colors.success : colors.textLight }]} />
+              <View style={[styles.trackerPulse, { backgroundColor: activeTrackers.length > 0 && trackerState.trackingEnabled !== false ? colors.success : colors.textLight }]} />
               <Text style={[styles.trackersTitle, { color: colors.text }]}>Active Trackers</Text>
+              <Text style={[styles.trackersCount, { color: activeTrackers.length > 0 && trackerState.trackingEnabled !== false ? colors.success : colors.textLight }]}>
+                {activeTrackers.length}/3
+              </Text>
             </View>
-            <Text style={[styles.trackersCount, { color: activeTrackers.length > 0 ? colors.success : colors.textLight }]}>
-              {activeTrackers.length}/3
-            </Text>
+            {activeTrackers.length > 0 && (
+              <Switch
+                value={trackerState.trackingEnabled !== false}
+                onValueChange={toggleTracking}
+                trackColor={{ false: colors.surfaceHigher, true: `${colors.success}50` }}
+                thumbColor={trackerState.trackingEnabled !== false ? colors.success : colors.textLight}
+                style={styles.masterToggle}
+              />
+            )}
           </View>
+          {activeTrackers.length > 0 && trackerState.trackingEnabled === false && (
+            <Text style={[styles.pausedHint, { color: colors.warning }]}>Tracking paused — slots remembered</Text>
+          )}
 
           {activeTrackers.length === 0 ? (
             /* Empty state — single full-width add card */
@@ -325,8 +337,8 @@ export default function HomeScreen() {
               <Text style={[styles.slotAddHint, { color: colors.textLight }]}>Tap to start tracking expenses</Text>
             </TouchableOpacity>
           ) : (
-            /* Slot cards row */
-            <View style={styles.slotRow}>
+            /* Slot cards row — dimmed when tracking is paused */
+            <View style={[styles.slotRow, trackerState.trackingEnabled === false && { opacity: 0.45 }]}>
               {activeTrackers.map((tracker) => {
                 const slotColor = tracker.type === 'personal' ? colors.personalColor
                   : tracker.type === 'reimbursement' ? colors.reimbursementColor
@@ -844,6 +856,8 @@ const styles = StyleSheet.create({
   trackerPulse: { width: 8, height: 8, borderRadius: 4 },
   trackersTitle: { fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
   trackersCount: { fontSize: 11, fontWeight: '600' },
+  masterToggle: { transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] },
+  pausedHint: { fontSize: 11, fontWeight: '500', marginBottom: 8 },
 
   /* Slot row */
   slotRow: { flexDirection: 'row', gap: 8 },

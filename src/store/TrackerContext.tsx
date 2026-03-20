@@ -40,6 +40,7 @@ const DEFAULT_STATE: TrackerState = {
   activeGroupIds: [],
   groupAffectsGoal: true,
   defaultTrackerId: 'personal',
+  trackingEnabled: true, // On by default — adding a tracker starts tracking immediately
 };
 
 interface TrackerContextType {
@@ -48,6 +49,7 @@ interface TrackerContextType {
   togglePersonal: () => Promise<void>;
   toggleReimbursement: () => Promise<void>;
   toggleGroup: (groupId: string) => Promise<void>;
+  toggleTracking: () => void;
   setDefaultTracker: (trackerId: string) => void;
   getActiveTrackers: (groups: Group[]) => ActiveTracker[];
   pendingTransaction: ParsedTransaction | null;
@@ -163,6 +165,8 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       const raw = await AsyncStorage.getItem(TRACKER_STATE_KEY);
       if (raw) {
         const state: TrackerState = JSON.parse(raw);
+        // Backward compat: existing saved state may not have trackingEnabled
+        if (state.trackingEnabled === undefined) state.trackingEnabled = true;
         // Auto-enable personal tracking if goals exist and personal is off
         if (!state.personal) {
           const goals = await getGoals();
@@ -334,17 +338,20 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   /**
    * Handle an incoming transaction:
    * Each active tracker (up to 3) gets its own action button in the notification.
+   * Skips notification entirely when tracking is paused via master toggle.
    */
   const handleIncomingTransaction = useCallback(async (
     parsed: ParsedTransaction,
     activeTrackers: ActiveTracker[],
   ) => {
     if (activeTrackers.length === 0) return;
+    // Don't show notification if tracking is paused
+    if (trackerStateRef.current.trackingEnabled === false) return;
     await showTransactionNotification(parsed, activeTrackers);
   }, []);
 
-  // Start/stop SMS listener based on tracker state (Android only)
-  // Only listen when user has explicitly turned on a tracker (consent-based)
+  // Start/stop SMS listener based on tracker state + master toggle (Android only)
+  // Only listen when tracking is enabled AND user has at least one active tracker
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
@@ -353,10 +360,12 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       trackerState.reimbursement ||
       trackerState.activeGroupIds.length > 0;
 
-    if (hasActiveTracker && !isListeningRef.current) {
+    const shouldListen = hasActiveTracker && (trackerState.trackingEnabled !== false);
+
+    if (shouldListen && !isListeningRef.current) {
       isListeningRef.current = true;
       startListening();
-    } else if (!hasActiveTracker && isListeningRef.current) {
+    } else if (!shouldListen && isListeningRef.current) {
       isListeningRef.current = false;
       stopSmsListener();
       setIsListening(false);
@@ -495,6 +504,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     });
   }, []);
 
+  /** Master toggle — pause/resume tracking without losing slot selections */
+  const toggleTracking = useCallback(() => {
+    setTrackerState(prev => {
+      const next = { ...prev, trackingEnabled: !prev.trackingEnabled };
+      persistState(next);
+      return next;
+    });
+  }, []);
+
   function getActiveTrackersFromState(state: TrackerState, gs: Group[]): ActiveTracker[] {
     const trackers: ActiveTracker[] = [];
     if (state.personal) {
@@ -507,6 +525,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       const group = gs.find(g => g.id === gid);
       if (group) {
         trackers.push({ type: 'group', id: gid, label: group.name });
+      }
+    }
+    // Default tracker always comes first (first notification button position)
+    const defaultId = state.defaultTrackerId;
+    if (defaultId && trackers.length > 1) {
+      const idx = trackers.findIndex(t => t.id === defaultId);
+      if (idx > 0) {
+        const [defaultTracker] = trackers.splice(idx, 1);
+        trackers.unshift(defaultTracker);
       }
     }
     return trackers;
@@ -601,6 +628,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     togglePersonal,
     toggleReimbursement,
     toggleGroup,
+    toggleTracking,
     setDefaultTracker,
     getActiveTrackers,
     pendingTransaction,
@@ -610,7 +638,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     addTransactionToTracker,
     transactionVersion,
     toggleGroupAffectsGoal,
-  }), [trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup, setDefaultTracker, getActiveTrackers, pendingQueue, clearPendingTransaction, addTransactionToTracker, transactionVersion, toggleGroupAffectsGoal]);
+  }), [trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup, toggleTracking, setDefaultTracker, getActiveTrackers, pendingQueue, clearPendingTransaction, addTransactionToTracker, transactionVersion, toggleGroupAffectsGoal]);
 
   return (
     <TrackerContext.Provider value={value}>
