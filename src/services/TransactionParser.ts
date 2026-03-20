@@ -1,17 +1,41 @@
 import { ParsedTransaction } from '../models/types';
 
 const BANK_SENDERS = [
-  'SBIINB', 'SBIPSG', 'HDFCBK', 'ICICIB', 'AXISBK', 'KOTAKB',
-  'PNBSMS', 'BOIIND', 'CANBNK', 'UNIONB', 'IABORB', 'YESBNK',
-  'INDBNK', 'FEDBNK', 'SCBANK', 'CITIBK', 'RBLBNK', 'IDBIBNK',
-  'PAYTMB', 'JIOBNK', 'GPAY', 'PHONEPE', 'PAYTM', 'AMAZON',
-  'UPITRN', 'BNKIND', 'IDFCFB', 'AUBANK', 'HDFCBANK', 'ICICIBANK',
+  // Major banks
+  'SBIINB', 'SBIPSG', 'SBIBNK', 'HDFCBK', 'HDFCBANK', 'ICICIB', 'ICICIBANK',
+  'AXISBK', 'KOTAKB', 'PNBSMS', 'BOIIND', 'CANBNK', 'UNIONB', 'IABORB',
+  'YESBNK', 'INDBNK', 'FEDBNK', 'SCBANK', 'CITIBK', 'RBLBNK', 'IDBIBNK',
+  'IDFCFB', 'AUBANK', 'BNKIND', 'BOBANK', 'KARBVB', 'MAHBNK',
+  // Payments / wallets
+  'PAYTMB', 'JIOBNK', 'GPAY', 'PHONEPE', 'PAYTM', 'AMAZON', 'UPITRN',
+  // NBFCs & lenders (EMIs)
+  'BAJFIN', 'BAJAJF', 'BAJFINSERV', 'TATACAP', 'HOMECR', 'LNTTFS',
+  'MABORB', 'LTFIN', 'FULRTN', 'CHOLAR', 'HDBFSL', 'SHRIRAM',
+  // Mutual funds & registrars
+  'CAMSMF', 'KFINTECH', 'KFINTEC', 'SBIMFS', 'HDFCMF', 'ABORLMF',
+  'ABORLSL', 'NIPPON', 'ICICIMF', 'AXISMF', 'KOTAKMF', 'MOTILAL',
+  'FRANKLINTMPTN', 'BSESTARMF', 'MFCENTRAL',
+  // Brokers & fintech (investments)
+  'ZERODHA', 'GROWW', 'UPSTOX', 'ANGELONE', 'ANGEL', 'DHAN',
+  '5PAISA', 'PAYTMMONEY', 'ETMONEY', 'KUVERA', 'COIN',
+  'SMALLCASE', 'FIMONEY', 'JUPITER',
+  // Credit cards
+  'AMEXIN', 'HSBC', 'DBSBNK',
 ];
 
 const DEBIT_KEYWORDS = [
   'debited', 'debit', 'spent', 'paid', 'withdrawn', 'transferred',
   'purchase', 'txn of rs', 'transaction of rs', 'sent rs',
   'payment of rs', 'charged', 'deducted', 'dr',
+  // SIP / mutual fund confirmations
+  'allotted', 'allotment', 'units purchased', 'sip executed',
+  'sip processed', 'nav allotment', 'folio',
+  // EMI confirmations
+  'emi received', 'emi processed', 'emi successful', 'emi due',
+  'installment received', 'instalment received',
+  // Subscription / recurring
+  'auto-debit', 'auto debit', 'autopay', 'mandate executed',
+  'nach debit', 'recurring payment',
 ];
 
 const SELF_TRANSFER_PATTERNS = [
@@ -52,6 +76,35 @@ const BANK_NAME_MAP: Record<string, string> = {
   AMAZON: 'Amazon Pay',
   IDFCFB: 'IDFC First Bank',
   AUBANK: 'AU Small Finance Bank',
+  // NBFCs
+  BAJFIN: 'Bajaj Finserv',
+  BAJAJF: 'Bajaj Finserv',
+  BAJFINSERV: 'Bajaj Finserv',
+  TATACAP: 'Tata Capital',
+  HOMECR: 'Home Credit',
+  HDBFSL: 'HDFC Securities',
+  SHRIRAM: 'Shriram Finance',
+  // MF registrars
+  CAMSMF: 'CAMS Mutual Fund',
+  KFINTECH: 'KFintech',
+  KFINTEC: 'KFintech',
+  MFCENTRAL: 'MFCentral',
+  BSESTARMF: 'BSE StarMF',
+  // MF houses
+  SBIMFS: 'SBI Mutual Fund',
+  HDFCMF: 'HDFC Mutual Fund',
+  ICICIMF: 'ICICI Prudential MF',
+  AXISMF: 'Axis Mutual Fund',
+  KOTAKMF: 'Kotak Mutual Fund',
+  NIPPON: 'Nippon India MF',
+  ABORLMF: 'Aditya Birla Sun Life MF',
+  MOTILAL: 'Motilal Oswal',
+  // Brokers
+  ZERODHA: 'Zerodha',
+  GROWW: 'Groww',
+  UPSTOX: 'Upstox',
+  ANGELONE: 'Angel One',
+  DHAN: 'Dhan',
 };
 
 export function isBankSender(sender: string): boolean {

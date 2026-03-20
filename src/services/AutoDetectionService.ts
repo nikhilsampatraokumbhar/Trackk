@@ -105,6 +105,7 @@ const EMI_KEYWORDS = [
 
 /** Known investment/SIP merchants and keywords */
 const INVESTMENT_MERCHANTS: Record<string, string> = {
+  // Brokers & platforms
   'zerodha': 'Zerodha',
   'groww': 'Groww',
   'kuvera': 'Kuvera',
@@ -112,33 +113,61 @@ const INVESTMENT_MERCHANTS: Record<string, string> = {
   'coin by zerodha': 'Zerodha Coin',
   'paytm money': 'Paytm Money',
   'etmoney': 'ET Money',
+  'et money': 'ET Money',
   'angel one': 'Angel One',
   'angel broking': 'Angel One',
   'upstox': 'Upstox',
-  'nippon': 'Nippon India MF',
-  'sbi mutual': 'SBI Mutual Fund',
-  'hdfc mutual': 'HDFC Mutual Fund',
-  'icici prudential': 'ICICI Prudential MF',
-  'axis mutual': 'Axis Mutual Fund',
-  'kotak mutual': 'Kotak Mutual Fund',
-  'ppf': 'PPF',
-  'nps': 'NPS',
-  'bse star': 'BSE StarMF',
-  'mfcentral': 'MFCentral',
-  'fi money': 'Fi Money',
-  'jupiter': 'Jupiter',
   'dhan': 'Dhan',
   '5paisa': '5paisa',
+  'fi money': 'Fi Money',
+  'jupiter': 'Jupiter',
+  // Mutual fund houses
+  'nippon': 'Nippon India MF',
+  'sbi mutual': 'SBI Mutual Fund',
+  'sbi mf': 'SBI Mutual Fund',
+  'hdfc mutual': 'HDFC Mutual Fund',
+  'hdfc mf': 'HDFC Mutual Fund',
+  'hdfc amc': 'HDFC AMC',
+  'icici prudential': 'ICICI Prudential MF',
+  'icici pru': 'ICICI Prudential MF',
+  'axis mutual': 'Axis Mutual Fund',
+  'axis mf': 'Axis Mutual Fund',
+  'kotak mutual': 'Kotak Mutual Fund',
+  'kotak mf': 'Kotak Mutual Fund',
+  'aditya birla': 'Aditya Birla Sun Life MF',
+  'birla sun life': 'Aditya Birla Sun Life MF',
+  'dsp mutual': 'DSP Mutual Fund',
+  'tata mutual': 'Tata Mutual Fund',
+  'mirae asset': 'Mirae Asset MF',
   'motilal oswal': 'Motilal Oswal',
   'franklin templeton': 'Franklin Templeton',
+  'sundaram mutual': 'Sundaram MF',
+  'canara robeco': 'Canara Robeco MF',
+  'pgim india': 'PGIM India MF',
+  'bandhan mutual': 'Bandhan MF',
+  'edelweiss': 'Edelweiss MF',
+  'quant mutual': 'Quant MF',
+  'parag parikh': 'PPFAS Mutual Fund',
+  'ppfas': 'PPFAS Mutual Fund',
+  // Registrars & platforms
+  'cams': 'CAMS',
+  'kfintech': 'KFintech',
+  'bse star': 'BSE StarMF',
+  'mfcentral': 'MFCentral',
+  'mfu online': 'MFU Online',
+  // Other
+  'ppf': 'PPF',
+  'nps': 'NPS',
 };
 
 const INVESTMENT_KEYWORDS = [
   'sip', 'systematic investment', 'mutual fund', 'mf purchase',
-  'nav allotment', 'units allotted', 'investment', 'invested',
-  'folio', 'bse order', 'nse order', 'stock purchase',
+  'nav allotment', 'units allotted', 'units purchased',
+  'investment', 'invested', 'folio',
+  'bse order', 'nse order', 'stock purchase',
   'ppf contribution', 'nps contribution', 'rd installment',
-  'recurring deposit',
+  'recurring deposit', 'sip executed', 'sip processed',
+  'mf transaction', 'fund purchase', 'scheme name',
 ];
 
 // ─── Transaction Classification ────────────────────────────────────────────
@@ -735,9 +764,6 @@ export async function scanAllSources(
     ? parseInt(lastScanRaw, 10) - (SCAN_OVERLAP_DAYS * 24 * 60 * 60 * 1000)
     : undefined; // undefined = full 365 day scan (first time)
 
-  // Save current timestamp as the new last scan point
-  await AsyncStorage.setItem(LAST_SCAN_KEY, String(Date.now()));
-
   // Run SMS scan and email scan in parallel
   const [smsResult, emailResult] = await Promise.allSettled([
     scanHistoricalSMS(filter, since),
@@ -758,9 +784,17 @@ export async function scanAllSources(
 
   // If both returned nothing, try stored transactions as last resort
   if (merged.subscriptions.length === 0 && merged.investments.length === 0 && merged.emis.length === 0) {
-    return await scanFromStoredTransactions(filter, since);
+    const storedResult = await scanFromStoredTransactions(filter, since);
+    // Only save scan timestamp if we actually scanned SMS (had permission / native module)
+    // This prevents a failed scan from blocking future full scans
+    if ((sms?.totalSmsScanned || 0) > 0 || (email?.totalSmsScanned || 0) > 0) {
+      await AsyncStorage.setItem(LAST_SCAN_KEY, String(Date.now()));
+    }
+    return storedResult;
   }
 
+  // Save scan timestamp only after a successful scan that read messages
+  await AsyncStorage.setItem(LAST_SCAN_KEY, String(Date.now()));
   return merged;
 }
 
