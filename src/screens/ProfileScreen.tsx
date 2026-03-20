@@ -393,9 +393,12 @@ export default function ProfileScreen() {
                         return;
                       }
                       setConnectingProvider(provider);
-                      startOAuthFlow(provider, clientId).catch(() => {
+                      startOAuthFlow(provider, clientId).catch((err: any) => {
                         setConnectingProvider(null);
-                        Alert.alert('Error', 'Could not open sign-in page.');
+                        Alert.alert(
+                          'Cannot Open Browser',
+                          err?.message || 'Could not open sign-in page. Please make sure you have a browser installed.',
+                        );
                       });
                     }}
                   >

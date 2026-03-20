@@ -76,7 +76,7 @@ export default function GoalsScreen() {
   const nav = useNavigation<Nav>();
   const { isPremium } = usePremium();
   const { colors } = useTheme();
-  const { trackerState, togglePersonal, toggleGroupAffectsGoal } = useTracker();
+  const { toggleGroupAffectsGoal } = useTracker();
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
@@ -288,11 +288,6 @@ export default function GoalsScreen() {
           createdAt: Date.now(),
         };
     await saveGoal(goal);
-
-    // Auto-enable personal tracking if not already on
-    if (!trackerState.personal) {
-      await togglePersonal();
-    }
 
     resetForm();
     await loadData();

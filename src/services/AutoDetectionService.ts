@@ -84,14 +84,37 @@ const SUBSCRIPTION_MERCHANTS: Record<string, string> = {
   'nordvpn': 'NordVPN',
   'expressvpn': 'ExpressVPN',
   'grammarly': 'Grammarly',
+  // Stripe-based billing (many SaaS products charge through Stripe)
+  'stripe anthropic': 'Claude',
+  'stripe.com anthropic': 'Claude',
+  'anthropic pbc': 'Claude',
+  'stripe openai': 'ChatGPT Plus',
+  'stripe.com openai': 'ChatGPT Plus',
+  'stripe notion': 'Notion',
+  'stripe figma': 'Figma',
 };
 
 /** SMS keywords that indicate a subscription payment */
 const SUBSCRIPTION_KEYWORDS = [
-  'subscription', 'subscribed', 'renewal', 'renewed', 'recurring',
-  'auto-renewal', 'auto renewal', 'auto debit', 'autopay', 'auto pay',
+  'subscription', 'subscribed', 'renewal', 'renewed',
+  'auto-renewal', 'auto renewal',
   'monthly plan', 'annual plan', 'yearly plan', 'membership',
-  'plan renewal', 'recharge',
+  'plan renewal',
+];
+
+/**
+ * Messages matching these patterns are NOT subscriptions even if they match keywords.
+ * Prevents false positives from credit card payments, toll, utility autopay, etc.
+ */
+const SUBSCRIPTION_EXCLUSIONS = [
+  'credit card', 'cc payment', 'card payment', 'card bill', 'cc bill',
+  'minimum amount due', 'total amount due', 'outstanding',
+  'toll', 'fastag', 'nhai', 'betpl', 'netc',
+  'electricity', 'electric bill', 'water bill', 'gas bill',
+  'property tax', 'municipal', 'income tax', 'gst',
+  'loan repayment', 'emi deducted', 'emi debited', // these are EMIs not subs
+  'insurance premium', 'lic premium',
+  'fuel', 'petrol', 'diesel',
 ];
 
 /** SMS keywords that indicate an EMI payment */
@@ -101,6 +124,8 @@ const EMI_KEYWORDS = [
   'personal loan', 'education loan', 'emi deducted',
   'emi debited', 'credit card emi', 'no cost emi',
   'bajaj emi', 'bajaj finserv',
+  'emi processed', 'mandate executed', 'nach debit',
+  'loan', // short keyword — uses word boundary regex to avoid false positives
 ];
 
 /** Known investment/SIP merchants and keywords */
@@ -168,6 +193,9 @@ const INVESTMENT_KEYWORDS = [
   'ppf contribution', 'nps contribution', 'rd installment',
   'recurring deposit', 'sip executed', 'sip processed',
   'mf transaction', 'fund purchase', 'scheme name',
+  'direct growth', 'direct plan', 'regular growth', 'regular plan',
+  'equity fund', 'debt fund', 'hybrid fund', 'index fund',
+  'elss', 'tax saver fund',
 ];
 
 // ─── Transaction Classification ────────────────────────────────────────────
@@ -214,17 +242,24 @@ export function classifyTransaction(parsed: ParsedTransaction): ClassificationRe
     }
   }
 
-  // 4. Check subscription merchants
+  // 4. Check subscription merchants (merchant match is high-confidence, skip exclusion check;
+  //    message-body match uses exclusion check to avoid false positives)
   for (const [key, name] of Object.entries(SUBSCRIPTION_MERCHANTS)) {
-    if (merchant.includes(key) || message.includes(key)) {
+    if (merchant.includes(key)) {
+      return { category: 'subscription', matchedMerchant: name, confidence: 0.9 };
+    }
+    if (message.includes(key) && !SUBSCRIPTION_EXCLUSIONS.some(excl => message.includes(excl))) {
       return { category: 'subscription', matchedMerchant: name, confidence: 0.9 };
     }
   }
 
-  // 5. Check subscription keywords
-  for (const keyword of SUBSCRIPTION_KEYWORDS) {
-    if (message.includes(keyword)) {
-      return { category: 'subscription', matchedMerchant: parsed.merchant || null, confidence: 0.7 };
+  // 5. Check subscription keywords — but only if message does NOT match exclusions
+  const isExcluded = SUBSCRIPTION_EXCLUSIONS.some(excl => message.includes(excl));
+  if (!isExcluded) {
+    for (const keyword of SUBSCRIPTION_KEYWORDS) {
+      if (message.includes(keyword)) {
+        return { category: 'subscription', matchedMerchant: parsed.merchant || null, confidence: 0.7 };
+      }
     }
   }
 

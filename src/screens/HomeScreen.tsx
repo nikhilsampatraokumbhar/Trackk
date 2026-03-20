@@ -349,7 +349,9 @@ export default function HomeScreen() {
             >
               <Text style={[styles.slotAddIcon, { color: colors.primary }]}>+</Text>
               <Text style={[styles.slotAddLabel, { color: colors.primary }]}>Add your first tracker</Text>
-              <Text style={[styles.slotAddHint, { color: colors.textSecondary }]}>Track personal, group, or reimbursement expenses</Text>
+              <Text style={[styles.slotAddHint, { color: colors.textSecondary }]}>
+                Get notified when money leaves your account{'\n'}and route it to Personal, Group, or Reimbursement
+              </Text>
             </TouchableOpacity>
           ) : (
             /* Slot cards row — dimmed when tracking is paused */
@@ -890,11 +892,11 @@ const styles = StyleSheet.create({
   slotAddIconSmall: { fontSize: 28, fontWeight: '300' },
 
   /* Empty state full-width add */
-  slotEmpty: { borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
+  slotEmpty: { borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', paddingVertical: 28, paddingHorizontal: 20 },
   slotEmptyFull: { width: '100%' },
-  slotAddIcon: { fontSize: 32, fontWeight: '300', marginBottom: 4 },
-  slotAddLabel: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  slotAddHint: { fontSize: 11 },
+  slotAddIcon: { fontSize: 32, fontWeight: '300', marginBottom: 6 },
+  slotAddLabel: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
+  slotAddHint: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
 
   /* Tracker Picker Bottom Sheet */
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
