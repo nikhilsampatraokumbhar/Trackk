@@ -328,7 +328,21 @@ export default function HomeScreen() {
               <View ref={toggleRef} collapsable={false}>
                 <Switch
                   value={trackerState.trackingEnabled !== false}
-                  onValueChange={toggleTracking}
+                  onValueChange={() => {
+                    const isPausing = trackerState.trackingEnabled !== false;
+                    if (isPausing && activeGoal) {
+                      Alert.alert(
+                        'Pause Tracking?',
+                        'You have an active savings goal. Pausing tracking means expenses won\'t be counted against your daily budget.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Pause Anyway', style: 'destructive', onPress: toggleTracking },
+                        ],
+                      );
+                    } else {
+                      toggleTracking();
+                    }
+                  }}
                   trackColor={{ false: colors.surfaceHigher, true: `${colors.success}50` }}
                   thumbColor={trackerState.trackingEnabled !== false ? colors.success : colors.textLight}
                   style={styles.masterToggle}
@@ -349,7 +363,9 @@ export default function HomeScreen() {
             >
               <Text style={[styles.slotAddIcon, { color: colors.primary }]}>+</Text>
               <Text style={[styles.slotAddLabel, { color: colors.primary }]}>Add your first tracker</Text>
-              <Text style={[styles.slotAddHint, { color: colors.textSecondary }]}>Track personal, group, or reimbursement expenses</Text>
+              <Text style={[styles.slotAddHint, { color: colors.textSecondary }]}>
+                Get notified when money leaves your account{'\n'}and route it to Personal, Group, or Reimbursement
+              </Text>
             </TouchableOpacity>
           ) : (
             /* Slot cards row — dimmed when tracking is paused */
@@ -380,7 +396,16 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       style={styles.slotRemove}
                       onPress={() => {
-                        if (tracker.type === 'personal') togglePersonal();
+                        if (tracker.type === 'personal' && activeGoal) {
+                          Alert.alert(
+                            'Remove Personal Tracker?',
+                            'You have an active savings goal. Removing this tracker means expenses won\'t be counted against your daily budget.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Remove Anyway', style: 'destructive', onPress: () => togglePersonal() },
+                            ],
+                          );
+                        } else if (tracker.type === 'personal') togglePersonal();
                         else if (tracker.type === 'reimbursement') toggleReimbursement();
                         else toggleGroup(tracker.id);
                       }}
@@ -890,11 +915,11 @@ const styles = StyleSheet.create({
   slotAddIconSmall: { fontSize: 28, fontWeight: '300' },
 
   /* Empty state full-width add */
-  slotEmpty: { borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
+  slotEmpty: { borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', paddingVertical: 28, paddingHorizontal: 20 },
   slotEmptyFull: { width: '100%' },
-  slotAddIcon: { fontSize: 32, fontWeight: '300', marginBottom: 4 },
-  slotAddLabel: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  slotAddHint: { fontSize: 11 },
+  slotAddIcon: { fontSize: 32, fontWeight: '300', marginBottom: 6 },
+  slotAddLabel: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
+  slotAddHint: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
 
   /* Tracker Picker Bottom Sheet */
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },

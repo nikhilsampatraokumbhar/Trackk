@@ -289,7 +289,7 @@ export default function GoalsScreen() {
         };
     await saveGoal(goal);
 
-    // Auto-enable personal tracking if not already on
+    // Auto-enable personal tracking so expenses count against the goal
     if (!trackerState.personal) {
       await togglePersonal();
     }

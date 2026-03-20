@@ -72,9 +72,19 @@ export function getOAuthUrl(provider: EmailProvider, clientId: string): string {
 
 /**
  * Open the OAuth consent screen in the device's browser.
+ * Checks if the URL can be opened first, and provides a clear error if not.
  */
 export async function startOAuthFlow(provider: EmailProvider, clientId: string): Promise<void> {
   const url = getOAuthUrl(provider, clientId);
+
+  // Check if the device can handle this URL before attempting to open it
+  const canOpen = await Linking.canOpenURL(url);
+  if (!canOpen) {
+    throw new Error(
+      'Could not open sign-in page. Please make sure you have a browser installed.'
+    );
+  }
+
   await Linking.openURL(url);
 }
 
