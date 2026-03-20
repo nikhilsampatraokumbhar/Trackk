@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, AppState, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -73,6 +73,9 @@ export default function HomeScreen() {
 
   // Undo toast
   const [undoState, setUndoState] = useState<{ visible: boolean; message: string; txn: Transaction | null }>({ visible: false, message: '', txn: null });
+
+  // Tracker picker bottom sheet
+  const [showTrackerPicker, setShowTrackerPicker] = useState(false);
 
   // Parallax
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -298,73 +301,92 @@ export default function HomeScreen() {
           <Text style={[styles.contextSub, { color: colors.textLight }]}>{contextualSubtext}</Text>
         </View>
 
-        {/* Active Trackers — always visible with mini toggles */}
-        <View style={[styles.trackersCard, { backgroundColor: colors.surface, borderColor: activeTrackers.length > 0 ? `${colors.success}20` : colors.border }]}>
+        {/* Active Trackers — slot cards (max 3) */}
+        <View style={styles.trackersSection}>
           <View style={styles.trackersHeader}>
             <View style={styles.trackersHeaderLeft}>
               <View style={[styles.trackerPulse, { backgroundColor: activeTrackers.length > 0 ? colors.success : colors.textLight }]} />
               <Text style={[styles.trackersTitle, { color: colors.text }]}>Active Trackers</Text>
             </View>
-            {activeTrackers.length > 0 && (
-              <Text style={[styles.trackersCount, { color: colors.success }]}>{activeTrackers.length} on</Text>
-            )}
+            <Text style={[styles.trackersCount, { color: activeTrackers.length > 0 ? colors.success : colors.textLight }]}>
+              {activeTrackers.length}/3
+            </Text>
           </View>
 
-          {/* Personal tracker row */}
-          <View style={[styles.trackerRow, { borderBottomColor: colors.border }]}>
-            <View style={styles.trackerRowLeft}>
-              <Text style={styles.trackerRowEmoji}>💳</Text>
-              <View>
-                <Text style={[styles.trackerRowLabel, { color: colors.text }]}>Personal</Text>
-                <Text style={[styles.trackerRowSub, { color: colors.textLight }]}>Daily spending</Text>
-              </View>
-            </View>
-            <Switch
-              value={trackerState.personal}
-              onValueChange={() => togglePersonal()}
-              trackColor={{ false: colors.surfaceHigher, true: `${colors.personalColor}50` }}
-              thumbColor={trackerState.personal ? colors.personalColor : colors.textLight}
-            />
-          </View>
+          {activeTrackers.length === 0 ? (
+            /* Empty state — single full-width add card */
+            <TouchableOpacity
+              style={[styles.slotEmpty, styles.slotEmptyFull, { borderColor: `${colors.primary}30`, backgroundColor: `${colors.primary}04` }]}
+              onPress={() => setShowTrackerPicker(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.slotAddIcon, { color: colors.primary }]}>+</Text>
+              <Text style={[styles.slotAddLabel, { color: colors.primary }]}>Add your first tracker</Text>
+              <Text style={[styles.slotAddHint, { color: colors.textLight }]}>Tap to start tracking expenses</Text>
+            </TouchableOpacity>
+          ) : (
+            /* Slot cards row */
+            <View style={styles.slotRow}>
+              {activeTrackers.map((tracker) => {
+                const slotColor = tracker.type === 'personal' ? colors.personalColor
+                  : tracker.type === 'reimbursement' ? colors.reimbursementColor
+                  : colors.groupColor;
+                const emoji = tracker.type === 'personal' ? '💳'
+                  : tracker.type === 'reimbursement' ? '🧾' : '👥';
+                const subtitle = tracker.type === 'personal' ? 'Spending'
+                  : tracker.type === 'reimbursement' ? 'Office'
+                  : `${groups.find(g => g.id === tracker.id)?.members.length || 0} members`;
 
-          {/* Group tracker rows */}
-          {groups.map(g => {
-            const isActive = trackerState.activeGroupIds.includes(g.id);
-            return (
-              <View key={g.id} style={[styles.trackerRow, { borderBottomColor: colors.border }]}>
-                <View style={styles.trackerRowLeft}>
-                  <Text style={styles.trackerRowEmoji}>👥</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.trackerRowLabel, { color: colors.text }]} numberOfLines={1}>{g.name}</Text>
-                    <Text style={[styles.trackerRowSub, { color: colors.textLight }]}>{g.members.length} members</Text>
+                return (
+                  <View
+                    key={tracker.id}
+                    style={[
+                      styles.slotCard,
+                      {
+                        flex: activeTrackers.length === 1 ? 2.5 : 1,
+                        backgroundColor: colors.surface,
+                        borderColor: `${slotColor}25`,
+                        borderLeftColor: slotColor,
+                      },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={styles.slotRemove}
+                      onPress={() => {
+                        if (tracker.type === 'personal') togglePersonal();
+                        else if (tracker.type === 'reimbursement') toggleReimbursement();
+                        else toggleGroup(tracker.id);
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.slotRemoveText, { color: colors.textLight }]}>✕</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.slotEmoji}>{emoji}</Text>
+                    <Text style={[styles.slotLabel, { color: colors.text }]} numberOfLines={1}>{tracker.label}</Text>
+                    <Text style={[styles.slotSub, { color: colors.textSecondary }]} numberOfLines={1}>{subtitle}</Text>
                   </View>
-                </View>
-                <Switch
-                  value={isActive}
-                  onValueChange={() => toggleGroup(g.id)}
-                  trackColor={{ false: colors.surfaceHigher, true: `${colors.groupColor}50` }}
-                  thumbColor={isActive ? colors.groupColor : colors.textLight}
-                />
-              </View>
-            );
-          })}
+                );
+              })}
 
-          {/* Reimbursement tracker row */}
-          <View style={[styles.trackerRow, { borderBottomWidth: 0 }]}>
-            <View style={styles.trackerRowLeft}>
-              <Text style={styles.trackerRowEmoji}>🧾</Text>
-              <View>
-                <Text style={[styles.trackerRowLabel, { color: colors.text }]}>Reimbursement</Text>
-                <Text style={[styles.trackerRowSub, { color: colors.textLight }]}>Office expenses</Text>
-              </View>
+              {/* Add button — only when < 3 slots filled */}
+              {activeTrackers.length < 3 && (
+                <TouchableOpacity
+                  style={[
+                    styles.slotAdd,
+                    {
+                      flex: activeTrackers.length === 1 ? 1 : 0.6,
+                      borderColor: `${colors.primary}25`,
+                      backgroundColor: `${colors.primary}04`,
+                    },
+                  ]}
+                  onPress={() => setShowTrackerPicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.slotAddIconSmall, { color: colors.primary }]}>+</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <Switch
-              value={trackerState.reimbursement}
-              onValueChange={() => toggleReimbursement()}
-              trackColor={{ false: colors.surfaceHigher, true: `${colors.reimbursementColor}50` }}
-              thumbColor={trackerState.reimbursement ? colors.reimbursementColor : colors.textLight}
-            />
-          </View>
+          )}
         </View>
 
         {/* Hero card — Total Spent with streak on top-right */}
@@ -730,6 +752,78 @@ export default function HomeScreen() {
         onUndo={handleUndo}
         onDismiss={() => setUndoState({ visible: false, message: '', txn: null })}
       />
+
+      {/* Tracker Picker Bottom Sheet */}
+      <Modal visible={showTrackerPicker} animationType="slide" transparent onRequestClose={() => setShowTrackerPicker(false)}>
+        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowTrackerPicker(false)}>
+          <View style={[styles.pickerSheet, { backgroundColor: colors.surface }]}>
+            <View style={[styles.pickerHandle, { backgroundColor: colors.surfaceHigher }]} />
+            <Text style={[styles.pickerTitle, { color: colors.text }]}>Add Tracker</Text>
+            <Text style={[styles.pickerSub, { color: colors.textSecondary }]}>Choose what to track in notifications</Text>
+
+            {/* Personal option */}
+            {!trackerState.personal && (
+              <TouchableOpacity
+                style={[styles.pickerOption, { borderColor: `${colors.personalColor}20`, backgroundColor: `${colors.personalColor}05` }]}
+                onPress={() => { togglePersonal(); setShowTrackerPicker(false); }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.pickerOptionDot, { backgroundColor: colors.personalColor }]} />
+                <Text style={styles.pickerOptionEmoji}>💳</Text>
+                <View style={styles.pickerOptionText}>
+                  <Text style={[styles.pickerOptionLabel, { color: colors.text }]}>Personal Expenses</Text>
+                  <Text style={[styles.pickerOptionSub, { color: colors.textSecondary }]}>Daily spending</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Reimbursement option */}
+            {!trackerState.reimbursement && (
+              <TouchableOpacity
+                style={[styles.pickerOption, { borderColor: `${colors.reimbursementColor}20`, backgroundColor: `${colors.reimbursementColor}05` }]}
+                onPress={() => { toggleReimbursement(); setShowTrackerPicker(false); }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.pickerOptionDot, { backgroundColor: colors.reimbursementColor }]} />
+                <Text style={styles.pickerOptionEmoji}>🧾</Text>
+                <View style={styles.pickerOptionText}>
+                  <Text style={[styles.pickerOptionLabel, { color: colors.text }]}>Reimbursement</Text>
+                  <Text style={[styles.pickerOptionSub, { color: colors.textSecondary }]}>Office expenses</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Group options */}
+            {groups.filter(g => !trackerState.activeGroupIds.includes(g.id) && !g.archived).length > 0 && (
+              <>
+                <Text style={[styles.pickerSectionTitle, { color: colors.textSecondary }]}>GROUPS</Text>
+                {groups
+                  .filter(g => !trackerState.activeGroupIds.includes(g.id) && !g.archived)
+                  .map(g => (
+                    <TouchableOpacity
+                      key={g.id}
+                      style={[styles.pickerOption, { borderColor: `${colors.groupColor}20`, backgroundColor: `${colors.groupColor}05` }]}
+                      onPress={() => { toggleGroup(g.id); setShowTrackerPicker(false); }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.pickerOptionDot, { backgroundColor: colors.groupColor }]} />
+                      <Text style={styles.pickerOptionEmoji}>👥</Text>
+                      <View style={styles.pickerOptionText}>
+                        <Text style={[styles.pickerOptionLabel, { color: colors.text }]}>{g.name}</Text>
+                        <Text style={[styles.pickerOptionSub, { color: colors.textSecondary }]}>{g.members.length} members</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                }
+              </>
+            )}
+
+            <TouchableOpacity style={styles.pickerCancel} onPress={() => setShowTrackerPicker(false)}>
+              <Text style={[styles.pickerCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -743,18 +837,51 @@ const styles = StyleSheet.create({
   name: { fontSize: 28, fontWeight: '700', marginTop: 2, letterSpacing: -0.3 },
   contextSub: { fontSize: 12, marginTop: 4, letterSpacing: 0.2 },
 
-  /* Active Trackers card with mini toggles */
-  trackersCard: { borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1 },
-  trackersHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  /* Active Trackers — slot cards */
+  trackersSection: { marginBottom: 16 },
+  trackersHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   trackersHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   trackerPulse: { width: 8, height: 8, borderRadius: 4 },
   trackersTitle: { fontSize: 13, fontWeight: '600', letterSpacing: 0.2 },
   trackersCount: { fontSize: 11, fontWeight: '600' },
-  trackerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  trackerRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  trackerRowEmoji: { fontSize: 18, width: 28, textAlign: 'center' },
-  trackerRowLabel: { fontSize: 14, fontWeight: '500' },
-  trackerRowSub: { fontSize: 11, marginTop: 1 },
+
+  /* Slot row */
+  slotRow: { flexDirection: 'row', gap: 8 },
+
+  /* Filled slot card */
+  slotCard: { borderRadius: 14, padding: 14, borderWidth: 1, borderLeftWidth: 3, position: 'relative', minHeight: 100, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1 },
+  slotRemove: { position: 'absolute', top: 8, right: 8, zIndex: 1, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  slotRemoveText: { fontSize: 12, fontWeight: '600' },
+  slotEmoji: { fontSize: 20, marginBottom: 6 },
+  slotLabel: { fontSize: 13, fontWeight: '600', marginBottom: 2, paddingRight: 18 },
+  slotSub: { fontSize: 10 },
+
+  /* Add slot button */
+  slotAdd: { borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', minHeight: 100 },
+  slotAddIconSmall: { fontSize: 28, fontWeight: '300' },
+
+  /* Empty state full-width add */
+  slotEmpty: { borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
+  slotEmptyFull: { width: '100%' },
+  slotAddIcon: { fontSize: 32, fontWeight: '300', marginBottom: 4 },
+  slotAddLabel: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  slotAddHint: { fontSize: 11 },
+
+  /* Tracker Picker Bottom Sheet */
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  pickerSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 40, maxHeight: '70%' },
+  pickerHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  pickerTitle: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  pickerSub: { fontSize: 13, marginBottom: 18 },
+  pickerSectionTitle: { fontSize: 10, fontWeight: '700', letterSpacing: 1.5, marginTop: 14, marginBottom: 10 },
+  pickerOption: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 8, gap: 12 },
+  pickerOptionDot: { width: 8, height: 8, borderRadius: 4 },
+  pickerOptionEmoji: { fontSize: 20 },
+  pickerOptionText: { flex: 1 },
+  pickerOptionLabel: { fontSize: 15, fontWeight: '600', marginBottom: 1 },
+  pickerOptionSub: { fontSize: 12 },
+  pickerCancel: { marginTop: 8, paddingVertical: 14, alignItems: 'center' },
+  pickerCancelText: { fontSize: 14, fontWeight: '500' },
 
   /* Privacy Shield */
   privacyCard: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 16, borderWidth: 1 },

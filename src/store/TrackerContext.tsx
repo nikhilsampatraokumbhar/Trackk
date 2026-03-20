@@ -62,24 +62,10 @@ interface TrackerContextType {
 const TrackerContext = createContext<TrackerContextType>({} as TrackerContextType);
 
 /**
- * Smart routing logic for multiple active trackers:
- * - Single tracker → normal flow
- * - Multiple trackers → use default tracker as primary action
+ * With the 3-slot notification design, each active tracker gets its own
+ * action button in the notification. No "default" routing needed — the
+ * user taps the specific tracker button they want.
  */
-function resolveTrackerRouting(
-  activeTrackers: ActiveTracker[],
-  defaultTrackerId: string,
-): { action: 'default_tracker'; tracker: ActiveTracker; others: ActiveTracker[] } |
-   { action: 'normal'; trackers: ActiveTracker[] } {
-  if (activeTrackers.length <= 1) {
-    return { action: 'normal', trackers: activeTrackers };
-  }
-
-  // Multiple trackers — use default tracker as primary, rest as alternatives
-  const defaultTracker = activeTrackers.find(t => t.id === defaultTrackerId) || activeTrackers[0];
-  const others = activeTrackers.filter(t => t.id !== defaultTracker.id);
-  return { action: 'default_tracker', tracker: defaultTracker, others };
-}
 
 interface Props {
   children: ReactNode;
@@ -347,24 +333,14 @@ export function TrackerProvider({ children, groups, userId }: Props) {
 
   /**
    * Handle an incoming transaction:
-   * - Single tracker → show notification with "Add to <Tracker>" button
-   * - Multiple trackers → show notification with "Add to <Default>" + "Choose Other"
+   * Each active tracker (up to 3) gets its own action button in the notification.
    */
   const handleIncomingTransaction = useCallback(async (
     parsed: ParsedTransaction,
     activeTrackers: ActiveTracker[],
   ) => {
     if (activeTrackers.length === 0) return;
-
-    const routing = resolveTrackerRouting(activeTrackers, trackerStateRef.current.defaultTrackerId);
-
-    if (routing.action === 'default_tracker') {
-      // Multiple trackers — show default tracker as primary action
-      await showTransactionNotification(parsed, activeTrackers, routing.tracker);
-    } else {
-      // Single tracker or normal flow
-      await showTransactionNotification(parsed, routing.trackers);
-    }
+    await showTransactionNotification(parsed, activeTrackers);
   }, []);
 
   // Start/stop SMS listener based on tracker state (Android only)
