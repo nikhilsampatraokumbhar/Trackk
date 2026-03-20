@@ -24,24 +24,27 @@ export interface EmailConnectionStatus {
   connected: boolean;
 }
 
+// Firebase project ID — used to build the Cloud Function redirect URI
+const FIREBASE_PROJECT_ID = 'trackk-dae50';
+const OAUTH_REDIRECT_URI = `https://us-central1-${FIREBASE_PROJECT_ID}.cloudfunctions.net/oauthRedirect`;
+
 // OAuth configuration for each provider
+// All providers redirect to our Cloud Function, which then deep-links back to the app
 const OAUTH_CONFIG = {
   gmail: {
-    // These will be replaced with actual client IDs from Firebase secrets
-    // The auth URL is opened in the browser; the Cloud Function handles the token exchange
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     scope: 'https://www.googleapis.com/auth/gmail.readonly',
-    redirectUri: 'trackk://oauth/gmail',
+    redirectUri: OAUTH_REDIRECT_URI,
   },
   outlook: {
     authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
     scope: 'https://graph.microsoft.com/Mail.Read offline_access',
-    redirectUri: 'trackk://oauth/outlook',
+    redirectUri: OAUTH_REDIRECT_URI,
   },
   yahoo: {
     authUrl: 'https://api.login.yahoo.com/oauth2/request_auth',
     scope: 'mail-r',
-    redirectUri: 'trackk://oauth/yahoo',
+    redirectUri: OAUTH_REDIRECT_URI,
   },
 };
 
@@ -61,6 +64,7 @@ export function getOAuthUrl(provider: EmailProvider, clientId: string): string {
     scope: config.scope,
     access_type: 'offline',
     prompt: 'consent',
+    state: provider, // Cloud Function uses this to build the deep link back to the app
   });
 
   return `${config.authUrl}?${params.toString()}`;

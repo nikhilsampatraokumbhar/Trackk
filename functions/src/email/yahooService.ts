@@ -48,7 +48,7 @@ export async function exchangeYahooCode(
     },
     body: new URLSearchParams({
       code: authCode,
-      redirect_uri: "trackk://oauth/yahoo",
+      redirect_uri: `https://us-central1-${process.env.GCLOUD_PROJECT || ""}.cloudfunctions.net/oauthRedirect`,
       grant_type: "authorization_code",
     }),
   });

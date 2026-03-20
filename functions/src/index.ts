@@ -371,6 +371,41 @@ export const redeemPromoCode = onCall(async (request) => {
   };
 });
 
+// ─── OAuth Redirect Handler ─────────────────────────────────────────────────
+// Google/Outlook/Yahoo redirect here after user consents.
+// We forward the auth code to the mobile app via trackk:// deep link.
+
+export const oauthRedirect = onRequest(async (req, res) => {
+  const code = req.query.code as string | undefined;
+  const state = req.query.state as string | undefined; // provider name
+  const error = req.query.error as string | undefined;
+
+  if (error) {
+    res.status(200).send(`<html><body><h2>Authorization failed</h2><p>${error}</p></body></html>`);
+    return;
+  }
+
+  if (!code || !state) {
+    res.status(400).send("Missing code or state parameter");
+    return;
+  }
+
+  // state = "gmail" | "outlook" | "yahoo"
+  const deepLink = `trackk://oauth/${encodeURIComponent(state)}?code=${encodeURIComponent(code)}`;
+
+  // Redirect to the app via deep link, with a fallback page
+  res.status(200).send(`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>Redirecting to Trackk...</title>
+<meta http-equiv="refresh" content="0;url=${deepLink}">
+</head><body style="font-family:system-ui;text-align:center;padding:60px 20px;background:#111;color:#fff">
+<h2>Opening Trackk...</h2>
+<p>If the app doesn't open automatically, <a href="${deepLink}" style="color:#4FC3F7">tap here</a>.</p>
+<script>window.location.href="${deepLink}";</script>
+</body></html>`);
+});
+
 // ─── 5. Connect Email (Gmail / Outlook / Yahoo) ────────────────────────────
 
 export const connectEmail = onCall(
