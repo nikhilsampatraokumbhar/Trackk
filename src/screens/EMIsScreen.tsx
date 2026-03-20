@@ -442,8 +442,9 @@ export default function EMIsScreen() {
               placeholder="Total months (e.g. 36)" placeholderTextColor={colors.textLight} keyboardType="numeric" selectionColor={colors.primary} />
             <TextInput style={styles.input} value={formMonthsPaid} onChangeText={setFormMonthsPaid}
               placeholder="Months already paid (e.g. 12)" placeholderTextColor={colors.textLight} keyboardType="numeric" selectionColor={colors.primary} />
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>EMI debit day of month</Text>
             <TextInput style={styles.input} value={formDay} onChangeText={setFormDay}
-              placeholder="EMI debit day of month (1-31)" placeholderTextColor={colors.textLight} keyboardType="numeric" selectionColor={colors.primary} />
+              placeholder="e.g. 5" placeholderTextColor={colors.textLight} keyboardType="numeric" selectionColor={colors.primary} />
 
             <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.warning }]} onPress={handleSave} activeOpacity={0.8}>
               <View style={styles.saveBtnGrad}>
@@ -533,6 +534,7 @@ const styles = StyleSheet.create({
   formContainer: { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: COLORS.glassBorder, borderBottomWidth: 0 },
   formHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.surfaceHigher, alignSelf: 'center', marginBottom: 20 },
   formTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, textAlign: 'center', marginBottom: 20 },
+  fieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6, marginLeft: 4 },
   input: { backgroundColor: COLORS.glass, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: COLORS.text, borderWidth: 1, borderColor: COLORS.glassBorder, marginBottom: 12 },
   saveBtn: { borderRadius: 30, overflow: 'hidden', marginTop: 8, marginBottom: 12 },
   saveBtnGrad: { paddingVertical: 16, alignItems: 'center', borderRadius: 30 },

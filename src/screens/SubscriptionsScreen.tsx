@@ -503,11 +503,12 @@ export default function SubscriptionsScreen() {
               </TouchableOpacity>
             </View>
 
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Billing day of month</Text>
             <TextInput
               style={styles.input}
               value={formDay}
               onChangeText={setFormDay}
-              placeholder="Billing day of month (1-31)"
+              placeholder="e.g. 15"
               placeholderTextColor={colors.textLight}
               keyboardType="numeric"
               selectionColor={colors.primary}
@@ -624,6 +625,8 @@ const styles = StyleSheet.create({
   cycleBtnActive: { backgroundColor: `${COLORS.primary}20`, borderColor: COLORS.primary },
   cycleBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
   cycleBtnTextActive: { color: COLORS.primary },
+
+  fieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6, marginLeft: 4 },
 
   sharedToggle: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: COLORS.textSecondary, alignItems: 'center', justifyContent: 'center' },
