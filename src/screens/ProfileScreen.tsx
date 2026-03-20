@@ -18,7 +18,7 @@ import { CURRENCIES, getPreferredCurrency, setPreferredCurrency, getCurrencyInfo
 import { isDevMode, setDevMode, loadDevMode } from '../utils/devMode';
 import {
   EmailProvider, connectEmail, disconnectEmail, parseOAuthRedirect,
-  getProviderDisplayName, getProviderColor,
+  getProviderDisplayName, getProviderColor, startOAuthFlow,
 } from '../services/EmailService';
 import { db } from '../services/FirebaseConfig';
 import { backupAllData, restoreFromBackup } from '../services/BackupService';
@@ -375,11 +375,21 @@ export default function ProfileScreen() {
                   <TouchableOpacity
                     style={[styles.emailConnectBtn, { borderColor: `${color}40` }]}
                     onPress={() => {
-                      Alert.alert(
-                        `Connect ${getProviderDisplayName(provider)}`,
-                        'Email OAuth setup is required before this feature works. See RELEASE_CHECKLIST.md for setup instructions.\n\nOnce configured, tapping Connect will open your browser to sign in.',
-                        [{ text: 'OK' }],
-                      );
+                      const clientIds: Record<EmailProvider, string> = {
+                        gmail: '978145898230-etq6tvk214kqd2jq2t26c8rs6an6eqkl.apps.googleusercontent.com',
+                        outlook: '', // TODO: configure
+                        yahoo: '',   // TODO: configure
+                      };
+                      const clientId = clientIds[provider];
+                      if (!clientId) {
+                        Alert.alert('Not Available', `${getProviderDisplayName(provider)} connection is not yet configured.`);
+                        return;
+                      }
+                      setConnectingProvider(provider);
+                      startOAuthFlow(provider, clientId).catch(() => {
+                        setConnectingProvider(null);
+                        Alert.alert('Error', 'Could not open sign-in page.');
+                      });
                     }}
                   >
                     <Text style={[styles.emailConnectText, { color }]}>Connect</Text>

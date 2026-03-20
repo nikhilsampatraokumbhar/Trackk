@@ -40,6 +40,7 @@ const DEFAULT_STATE: TrackerState = {
   activeGroupIds: [],
   groupAffectsGoal: true,
   defaultTrackerId: 'personal',
+  trackingEnabled: true, // On by default — adding a tracker starts tracking immediately
 };
 
 interface TrackerContextType {
@@ -48,6 +49,7 @@ interface TrackerContextType {
   togglePersonal: () => Promise<void>;
   toggleReimbursement: () => Promise<void>;
   toggleGroup: (groupId: string) => Promise<void>;
+  toggleTracking: () => void;
   setDefaultTracker: (trackerId: string) => void;
   getActiveTrackers: (groups: Group[]) => ActiveTracker[];
   pendingTransaction: ParsedTransaction | null;
@@ -62,24 +64,10 @@ interface TrackerContextType {
 const TrackerContext = createContext<TrackerContextType>({} as TrackerContextType);
 
 /**
- * Smart routing logic for multiple active trackers:
- * - Single tracker → normal flow
- * - Multiple trackers → use default tracker as primary action
+ * With the 3-slot notification design, each active tracker gets its own
+ * action button in the notification. No "default" routing needed — the
+ * user taps the specific tracker button they want.
  */
-function resolveTrackerRouting(
-  activeTrackers: ActiveTracker[],
-  defaultTrackerId: string,
-): { action: 'default_tracker'; tracker: ActiveTracker; others: ActiveTracker[] } |
-   { action: 'normal'; trackers: ActiveTracker[] } {
-  if (activeTrackers.length <= 1) {
-    return { action: 'normal', trackers: activeTrackers };
-  }
-
-  // Multiple trackers — use default tracker as primary, rest as alternatives
-  const defaultTracker = activeTrackers.find(t => t.id === defaultTrackerId) || activeTrackers[0];
-  const others = activeTrackers.filter(t => t.id !== defaultTracker.id);
-  return { action: 'default_tracker', tracker: defaultTracker, others };
-}
 
 interface Props {
   children: ReactNode;
@@ -177,6 +165,8 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       const raw = await AsyncStorage.getItem(TRACKER_STATE_KEY);
       if (raw) {
         const state: TrackerState = JSON.parse(raw);
+        // Backward compat: existing saved state may not have trackingEnabled
+        if (state.trackingEnabled === undefined) state.trackingEnabled = true;
         // Auto-enable personal tracking if goals exist and personal is off
         if (!state.personal) {
           const goals = await getGoals();
@@ -347,28 +337,21 @@ export function TrackerProvider({ children, groups, userId }: Props) {
 
   /**
    * Handle an incoming transaction:
-   * - Single tracker → show notification with "Add to <Tracker>" button
-   * - Multiple trackers → show notification with "Add to <Default>" + "Choose Other"
+   * Each active tracker (up to 3) gets its own action button in the notification.
+   * Skips notification entirely when tracking is paused via master toggle.
    */
   const handleIncomingTransaction = useCallback(async (
     parsed: ParsedTransaction,
     activeTrackers: ActiveTracker[],
   ) => {
     if (activeTrackers.length === 0) return;
-
-    const routing = resolveTrackerRouting(activeTrackers, trackerStateRef.current.defaultTrackerId);
-
-    if (routing.action === 'default_tracker') {
-      // Multiple trackers — show default tracker as primary action
-      await showTransactionNotification(parsed, activeTrackers, routing.tracker);
-    } else {
-      // Single tracker or normal flow
-      await showTransactionNotification(parsed, routing.trackers);
-    }
+    // Don't show notification if tracking is paused
+    if (trackerStateRef.current.trackingEnabled === false) return;
+    await showTransactionNotification(parsed, activeTrackers);
   }, []);
 
-  // Start/stop SMS listener based on tracker state (Android only)
-  // Only listen when user has explicitly turned on a tracker (consent-based)
+  // Start/stop SMS listener based on tracker state + master toggle (Android only)
+  // Only listen when tracking is enabled AND user has at least one active tracker
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
@@ -377,10 +360,12 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       trackerState.reimbursement ||
       trackerState.activeGroupIds.length > 0;
 
-    if (hasActiveTracker && !isListeningRef.current) {
+    const shouldListen = hasActiveTracker && (trackerState.trackingEnabled !== false);
+
+    if (shouldListen && !isListeningRef.current) {
       isListeningRef.current = true;
       startListening();
-    } else if (!hasActiveTracker && isListeningRef.current) {
+    } else if (!shouldListen && isListeningRef.current) {
       isListeningRef.current = false;
       stopSmsListener();
       setIsListening(false);
@@ -435,6 +420,9 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     await AsyncStorage.setItem(TRACKER_STATE_KEY, JSON.stringify(state));
   };
 
+  /** Max 3 active trackers — matches Android's 3-button notification limit */
+  const MAX_ACTIVE_TRACKERS = 3;
+
   /** Count how many trackers are currently active */
   const countActiveTrackers = (state: TrackerState): number => {
     let count = 0;
@@ -447,10 +435,10 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   const togglePersonal = useCallback(async () => {
     setTrackerState(prev => {
       const turningOn = !prev.personal;
-      if (turningOn && !isPremium && countActiveTrackers(prev) >= 1) {
+      if (turningOn && countActiveTrackers(prev) >= MAX_ACTIVE_TRACKERS) {
         Alert.alert(
-          'Upgrade to Premium',
-          'Free plan supports one active tracker. Upgrade to Premium for simultaneous tracking across Personal, Group, and Reimbursement!',
+          'Slot Full',
+          'You can have up to 3 active trackers. Remove one to add another.',
           [{ text: 'OK' }],
         );
         return prev;
@@ -459,16 +447,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       persistState(next);
       return next;
     });
-  }, [isPremium]);
+  }, []);
 
   const toggleReimbursement = useCallback(async () => {
     setTrackerState(prev => {
       const turningOn = !prev.reimbursement;
-      // Free users: only 1 active tracker
-      if (turningOn && !isPremium && countActiveTrackers(prev) >= 1) {
+      if (turningOn && countActiveTrackers(prev) >= MAX_ACTIVE_TRACKERS) {
         Alert.alert(
-          'Upgrade to Premium',
-          'Free plan supports one active tracker. Upgrade to Premium for simultaneous tracking across Personal, Group, and Reimbursement!',
+          'Slot Full',
+          'You can have up to 3 active trackers. Remove one to add another.',
           [{ text: 'OK' }],
         );
         return prev;
@@ -477,16 +464,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       persistState(next);
       return next;
     });
-  }, [isPremium]);
+  }, []);
 
   const toggleGroup = useCallback(async (groupId: string) => {
     setTrackerState(prev => {
       const isCurrentlyActive = prev.activeGroupIds.includes(groupId);
-      // Free users: only 1 active tracker
-      if (!isCurrentlyActive && !isPremium && countActiveTrackers(prev) >= 1) {
+      if (!isCurrentlyActive && countActiveTrackers(prev) >= MAX_ACTIVE_TRACKERS) {
         Alert.alert(
-          'Upgrade to Premium',
-          'Free plan supports one active tracker. Upgrade to Premium for simultaneous tracking across Personal, Group, and Reimbursement!',
+          'Slot Full',
+          'You can have up to 3 active trackers. Remove one to add another.',
           [{ text: 'OK' }],
         );
         return prev;
@@ -500,7 +486,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       persistState(next);
       return next;
     });
-  }, [isPremium]);
+  }, []);
 
   const setDefaultTracker = useCallback((trackerId: string) => {
     setTrackerState(prev => {
@@ -518,6 +504,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     });
   }, []);
 
+  /** Master toggle — pause/resume tracking without losing slot selections */
+  const toggleTracking = useCallback(() => {
+    setTrackerState(prev => {
+      const next = { ...prev, trackingEnabled: !prev.trackingEnabled };
+      persistState(next);
+      return next;
+    });
+  }, []);
+
   function getActiveTrackersFromState(state: TrackerState, gs: Group[]): ActiveTracker[] {
     const trackers: ActiveTracker[] = [];
     if (state.personal) {
@@ -530,6 +525,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       const group = gs.find(g => g.id === gid);
       if (group) {
         trackers.push({ type: 'group', id: gid, label: group.name });
+      }
+    }
+    // Default tracker always comes first (first notification button position)
+    const defaultId = state.defaultTrackerId;
+    if (defaultId && trackers.length > 1) {
+      const idx = trackers.findIndex(t => t.id === defaultId);
+      if (idx > 0) {
+        const [defaultTracker] = trackers.splice(idx, 1);
+        trackers.unshift(defaultTracker);
       }
     }
     return trackers;
@@ -624,6 +628,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     togglePersonal,
     toggleReimbursement,
     toggleGroup,
+    toggleTracking,
     setDefaultTracker,
     getActiveTrackers,
     pendingTransaction,
@@ -633,7 +638,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     addTransactionToTracker,
     transactionVersion,
     toggleGroupAffectsGoal,
-  }), [trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup, setDefaultTracker, getActiveTrackers, pendingQueue, clearPendingTransaction, addTransactionToTracker, transactionVersion, toggleGroupAffectsGoal]);
+  }), [trackerState, isListening, togglePersonal, toggleReimbursement, toggleGroup, toggleTracking, setDefaultTracker, getActiveTrackers, pendingQueue, clearPendingTransaction, addTransactionToTracker, transactionVersion, toggleGroupAffectsGoal]);
 
   return (
     <TrackerContext.Provider value={value}>

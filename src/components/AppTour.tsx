@@ -1,19 +1,22 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity, Animated, Dimensions,
 } from 'react-native';
-import { Button, ProgressBar, Surface } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../store/ThemeContext';
+import { useTour, ElementRect } from '../store/TourContext';
 
 const TOUR_KEY = '@et_app_tour_done';
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const SPOTLIGHT_PADDING = 8;
+const TOOLTIP_MARGIN = 12;
 
 interface TourStep {
   emoji: string;
   title: string;
   description: string;
   highlight: string;
+  spotlightKey?: string; // Key registered via TourContext — if set, spotlight mode is used
 }
 
 const TOUR_STEPS: TourStep[] = [
@@ -21,37 +24,46 @@ const TOUR_STEPS: TourStep[] = [
     emoji: '💳',
     title: 'Personal Expenses',
     description: 'All your daily spends, tracked automatically from SMS & notifications.',
-    highlight: 'Personal tab',
+    highlight: 'Personal tab (bottom bar)',
   },
   {
     emoji: '🟢',
     title: 'Active Trackers',
-    description: 'Switch on a tracker and forget it — we capture every expense for you.',
-    highlight: 'Home screen',
+    description: 'Pick up to 3 trackers — Personal, Group, or Reimbursement. Each gets its own button in the notification.',
+    highlight: 'Home screen (top section)',
+    spotlightKey: 'activeTrackers',
+  },
+  {
+    emoji: '⏸️',
+    title: 'Pause Tracking',
+    description: 'Toggle this switch to pause all tracking without losing your slot selections. Turn it back on to resume instantly.',
+    highlight: 'Home screen (tracker toggle)',
+    spotlightKey: 'trackingToggle',
   },
   {
     emoji: '👥',
     title: 'Groups',
     description: 'Split bills with friends, roommates, or travel buddies instantly.',
-    highlight: 'Groups tab',
+    highlight: 'Groups tab (bottom bar)',
   },
   {
     emoji: '🌙',
     title: 'Review Expenses',
     description: 'Forgot to add something? We collect them here — just tap to add.',
-    highlight: 'Home screen',
+    highlight: 'Home screen (below trackers)',
+    spotlightKey: 'reviewExpenses',
   },
   {
     emoji: '🎯',
     title: 'Savings Goals',
     description: 'Set a target, get a daily budget, and build a saving streak.',
-    highlight: 'Goals screen',
+    highlight: 'Home > Today\'s Jar card',
   },
   {
     emoji: '🔄',
     title: 'Subscriptions, Investments & EMIs',
     description: 'Track renewals, SIPs, and loan payments — everything in one place.',
-    highlight: 'Home screen',
+    highlight: 'Home screen (scroll down)',
   },
   {
     emoji: '🧾',
@@ -68,7 +80,9 @@ interface AppTourProps {
 
 export default function AppTour({ visible, onComplete }: AppTourProps) {
   const { colors, isDark } = useTheme();
+  const { measureElement } = useTour();
   const [step, setStep] = useState(0);
+  const [spotlightRect, setSpotlightRect] = useState<ElementRect | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -76,17 +90,32 @@ export default function AppTour({ visible, onComplete }: AppTourProps) {
   useEffect(() => {
     if (visible) {
       animateIn();
+      measureCurrentStep(0);
     }
   }, [visible]);
 
   useEffect(() => {
     animateIn();
+    measureCurrentStep(step);
     Animated.timing(progressAnim, {
       toValue: (step + 1) / TOUR_STEPS.length,
       duration: 300,
       useNativeDriver: false,
     }).start();
   }, [step]);
+
+  const measureCurrentStep = useCallback(async (idx: number) => {
+    const currentStep = TOUR_STEPS[idx];
+    if (currentStep.spotlightKey) {
+      // Small delay to let layout settle after step transition
+      setTimeout(async () => {
+        const rect = await measureElement(currentStep.spotlightKey!);
+        setSpotlightRect(rect);
+      }, 100);
+    } else {
+      setSpotlightRect(null);
+    }
+  }, [measureElement]);
 
   const animateIn = () => {
     fadeAnim.setValue(0);
@@ -129,15 +158,58 @@ export default function AppTour({ visible, onComplete }: AppTourProps) {
 
   const current = TOUR_STEPS[step];
   const isLast = step === TOUR_STEPS.length - 1;
+  const hasSpotlight = !!spotlightRect && !!current.spotlightKey;
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
   });
 
+  // Calculate tooltip position when spotlight is active
+  const tooltipPosition = hasSpotlight ? getTooltipPosition(spotlightRect!) : null;
+
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View style={[styles.overlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.5)' }]}>
+      <View style={styles.fullOverlay}>
+        {/* Dark overlay with spotlight cutout */}
+        {hasSpotlight ? (
+          <>
+            {/* Four dark rectangles around the spotlight hole */}
+            <View style={[styles.overlayPart, { top: 0, left: 0, right: 0, height: spotlightRect!.y - SPOTLIGHT_PADDING }, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)' }]} />
+            <View style={[styles.overlayPart, { top: spotlightRect!.y - SPOTLIGHT_PADDING, left: 0, width: spotlightRect!.x - SPOTLIGHT_PADDING, height: spotlightRect!.height + SPOTLIGHT_PADDING * 2 }, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)' }]} />
+            <View style={[styles.overlayPart, { top: spotlightRect!.y - SPOTLIGHT_PADDING, left: spotlightRect!.x + spotlightRect!.width + SPOTLIGHT_PADDING, right: 0, height: spotlightRect!.height + SPOTLIGHT_PADDING * 2 }, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)' }]} />
+            <View style={[styles.overlayPart, { top: spotlightRect!.y + spotlightRect!.height + SPOTLIGHT_PADDING, left: 0, right: 0, bottom: 0 }, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)' }]} />
+
+            {/* Spotlight ring around the element */}
+            <View style={[styles.spotlightRing, {
+              top: spotlightRect!.y - SPOTLIGHT_PADDING,
+              left: spotlightRect!.x - SPOTLIGHT_PADDING,
+              width: spotlightRect!.width + SPOTLIGHT_PADDING * 2,
+              height: spotlightRect!.height + SPOTLIGHT_PADDING * 2,
+              borderColor: colors.primary,
+            }]} />
+
+            {/* Arrow pointing from tooltip to spotlight */}
+            <View style={[
+              styles.arrow,
+              tooltipPosition!.arrowOnTop
+                ? {
+                    top: spotlightRect!.y - SPOTLIGHT_PADDING - 10,
+                    left: spotlightRect!.x + spotlightRect!.width / 2 - 8,
+                    borderBottomColor: colors.surface,
+                  }
+                : {
+                    top: spotlightRect!.y + spotlightRect!.height + SPOTLIGHT_PADDING,
+                    left: spotlightRect!.x + spotlightRect!.width / 2 - 8,
+                    borderTopColor: colors.surface,
+                  },
+            ]} />
+          </>
+        ) : (
+          <View style={[styles.fullOverlayBg, { backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.5)' }]} />
+        )}
+
+        {/* Tooltip / Card */}
         <Animated.View
           style={[
             styles.card,
@@ -146,6 +218,12 @@ export default function AppTour({ visible, onComplete }: AppTourProps) {
               borderColor: colors.border,
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
+            },
+            hasSpotlight && tooltipPosition && {
+              position: 'absolute',
+              top: tooltipPosition.top,
+              left: tooltipPosition.left,
+              width: tooltipPosition.width,
             },
           ]}
         >
@@ -173,12 +251,14 @@ export default function AppTour({ visible, onComplete }: AppTourProps) {
           <Text style={[styles.title, { color: colors.text }]}>{current.title}</Text>
           <Text style={[styles.description, { color: colors.textSecondary }]}>{current.description}</Text>
 
-          {/* Location hint */}
-          <View style={[styles.locationBadge, { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}25` }]}>
-            <Text style={[styles.locationText, { color: colors.primary }]}>
-              Find it in: {current.highlight}
-            </Text>
-          </View>
+          {/* Location hint — only when not in spotlight mode */}
+          {!hasSpotlight && (
+            <View style={[styles.locationBadge, { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}25` }]}>
+              <Text style={[styles.locationText, { color: colors.primary }]}>
+                Find it in: {current.highlight}
+              </Text>
+            </View>
+          )}
 
           {/* Navigation */}
           <View style={styles.navRow}>
@@ -220,17 +300,72 @@ export default function AppTour({ visible, onComplete }: AppTourProps) {
   );
 }
 
+/**
+ * Calculate where to position the tooltip relative to the spotlight.
+ * Prefers placing below the element; if not enough space, places above.
+ */
+function getTooltipPosition(rect: ElementRect): {
+  top: number;
+  left: number;
+  width: number;
+  arrowOnTop: boolean;
+} {
+  const cardWidth = SCREEN_WIDTH - 48;
+  const estimatedCardHeight = 340;
+  const left = Math.max(16, (SCREEN_WIDTH - cardWidth) / 2);
+
+  const spaceBelow = SCREEN_HEIGHT - (rect.y + rect.height + SPOTLIGHT_PADDING + TOOLTIP_MARGIN);
+  const spaceAbove = rect.y - SPOTLIGHT_PADDING - TOOLTIP_MARGIN;
+
+  if (spaceBelow >= estimatedCardHeight) {
+    return {
+      top: rect.y + rect.height + SPOTLIGHT_PADDING + TOOLTIP_MARGIN,
+      left,
+      width: cardWidth,
+      arrowOnTop: false,
+    };
+  } else {
+    return {
+      top: Math.max(16, rect.y - SPOTLIGHT_PADDING - TOOLTIP_MARGIN - estimatedCardHeight),
+      left,
+      width: cardWidth,
+      arrowOnTop: true,
+    };
+  }
+}
+
 export async function shouldShowTour(): Promise<boolean> {
   const done = await AsyncStorage.getItem(TOUR_KEY);
   return done !== 'true';
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  fullOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+  },
+  fullOverlayBg: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  overlayPart: {
+    position: 'absolute',
+  },
+  spotlightRing: {
+    position: 'absolute',
+    borderRadius: 12,
+    borderWidth: 2,
+  },
+  arrow: {
+    position: 'absolute',
+    width: 0,
+    height: 0,
+    borderLeftWidth: 8,
+    borderRightWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopWidth: 10,
+    borderBottomWidth: 10,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
   },
   card: {
     width: SCREEN_WIDTH - 48,
@@ -238,6 +373,7 @@ const styles = StyleSheet.create({
     padding: 28,
     borderWidth: 1,
     alignItems: 'center',
+    alignSelf: 'center',
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },

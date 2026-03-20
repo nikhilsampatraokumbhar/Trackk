@@ -15,6 +15,7 @@ export interface TrackerState {
   activeGroupIds: string[];
   groupAffectsGoal: boolean; // Whether group expenses deduct from goal daily budget
   defaultTrackerId: string;  // 'personal' | 'reimbursement' | group ID — last-used tracker
+  trackingEnabled: boolean;  // Master toggle — when off, slots are remembered but tracking/notifications stop
 }
 
 export interface Transaction {

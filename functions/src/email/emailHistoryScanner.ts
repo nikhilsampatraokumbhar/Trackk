@@ -12,7 +12,7 @@
 import { google } from "googleapis";
 import * as admin from "firebase-admin";
 import { EmailConnection, ParsedEmailTransaction } from "./types";
-import { parseTransactionEmail, isBankEmail } from "./emailParser";
+import { parseTransactionEmail } from "./emailParser";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 

@@ -46,10 +46,18 @@ function makeNotificationId(parsed: ParsedTransaction): string {
   return `txn_${parsed.amount}_${merchant}_${roundedTs}`;
 }
 
+/**
+ * Show transaction notification with up to 3 action buttons — one per active tracker slot.
+ * Android supports max 3 action buttons, which maps perfectly to our 3-slot design.
+ *
+ * - 1 tracker  → [Add to Tracker] [Ignore]
+ * - 2 trackers → [Tracker 1] [Tracker 2] [Ignore]
+ * - 3 trackers → [Tracker 1] [Tracker 2] [Tracker 3]  (no ignore — all 3 slots used)
+ */
 export async function showTransactionNotification(
   parsed: ParsedTransaction,
   activeTrackers: ActiveTracker[],
-  defaultTracker?: ActiveTracker,
+  _defaultTracker?: ActiveTracker, // kept for backward compat, no longer used
 ): Promise<void> {
   pendingTransaction = parsed;
 
@@ -61,83 +69,75 @@ export async function showTransactionNotification(
     ? `From ${parsed.bank}`
     : 'Bank transaction detected';
 
-  // Use default tracker as primary when provided (multi-tracker case),
-  // otherwise fall back to single tracker or choose-tracker flow
-  const primaryTracker = defaultTracker || (activeTrackers.length === 1 ? activeTrackers[0] : null);
+  // Build one action button per active tracker (max 3)
+  const trackerSlots = activeTrackers.slice(0, 3);
+  const actions: any[] = trackerSlots.map((tracker, index) => {
+    const emoji = tracker.type === 'personal' ? '💳'
+      : tracker.type === 'reimbursement' ? '🧾' : '👥';
+    return {
+      title: `${emoji} ${tracker.label}`,
+      pressAction: { id: `slot_${index}`, launchActivity: 'default' },
+    };
+  });
 
-  if (primaryTracker) {
-    const actions: any[] = [
-      {
-        title: `✅ Add to ${primaryTracker.label}`,
-        pressAction: { id: 'add_to_tracker', launchActivity: 'default' },
-      },
-    ];
-    // If multiple trackers, add "Choose Other" action
-    if (activeTrackers.length > 1) {
-      actions.push({
-        title: `📋 Other (${activeTrackers.length - 1})`,
-        pressAction: { id: 'choose_tracker', launchActivity: 'default' },
-      });
-    } else {
-      actions.push({
-        title: '❌ Ignore',
-        pressAction: { id: 'ignore' },
-      });
-    }
-
-    await notifee.displayNotification({
-      id: notificationId,
-      title,
-      body,
-      android: {
-        channelId: CHANNEL_ID,
-        category: AndroidCategory.MESSAGE,
-        importance: AndroidImportance.HIGH,
-        pressAction: { id: 'default', launchActivity: 'default' },
-        actions,
-      },
-      data: {
-        trackerId: primaryTracker.id,
-        trackerType: primaryTracker.type,
-        trackerLabel: primaryTracker.label,
-        amount: String(parsed.amount),
-        merchant: parsed.merchant || '',
-        bank: parsed.bank || '',
-        rawMessage: parsed.rawMessage,
-        timestamp: String(parsed.timestamp),
-      },
-    });
-  } else {
-    // No default, multiple trackers — show choose tracker
-    await notifee.displayNotification({
-      id: notificationId,
-      title,
-      body,
-      android: {
-        channelId: CHANNEL_ID,
-        category: AndroidCategory.MESSAGE,
-        importance: AndroidImportance.HIGH,
-        pressAction: { id: 'default', launchActivity: 'default' },
-        actions: [
-          {
-            title: `📋 Choose Tracker (${activeTrackers.length} active)`,
-            pressAction: { id: 'choose_tracker', launchActivity: 'default' },
-          },
-          {
-            title: '❌ Ignore',
-            pressAction: { id: 'ignore' },
-          },
-        ],
-      },
-      data: {
-        amount: String(parsed.amount),
-        merchant: parsed.merchant || '',
-        bank: parsed.bank || '',
-        rawMessage: parsed.rawMessage,
-        timestamp: String(parsed.timestamp),
-      },
+  // If fewer than 3 trackers, add an Ignore button
+  if (trackerSlots.length < 3) {
+    actions.push({
+      title: '❌ Ignore',
+      pressAction: { id: 'ignore' },
     });
   }
+
+  // Encode all slot trackers into notification data so background handler can resolve them
+  const data: Record<string, string> = {
+    amount: String(parsed.amount),
+    merchant: parsed.merchant || '',
+    bank: parsed.bank || '',
+    rawMessage: parsed.rawMessage,
+    timestamp: String(parsed.timestamp),
+    slotCount: String(trackerSlots.length),
+  };
+
+  trackerSlots.forEach((tracker, index) => {
+    data[`slot_${index}_id`] = tracker.id;
+    data[`slot_${index}_type`] = tracker.type;
+    data[`slot_${index}_label`] = tracker.label;
+  });
+
+  // Legacy fields for backward compat (cold-start routing uses these)
+  if (trackerSlots.length > 0) {
+    data.trackerId = trackerSlots[0].id;
+    data.trackerType = trackerSlots[0].type;
+    data.trackerLabel = trackerSlots[0].label;
+  }
+
+  await notifee.displayNotification({
+    id: notificationId,
+    title,
+    body,
+    android: {
+      channelId: CHANNEL_ID,
+      category: AndroidCategory.MESSAGE,
+      importance: AndroidImportance.HIGH,
+      pressAction: { id: 'default', launchActivity: 'default' },
+      actions,
+    },
+    data,
+  });
+}
+
+/**
+ * Resolve a slot action ID (slot_0, slot_1, slot_2) to the tracker from notification data.
+ */
+function resolveSlotTracker(actionId: string, data: Record<string, any>): ActiveTracker | null {
+  const match = actionId.match(/^slot_(\d)$/);
+  if (!match) return null;
+  const index = match[1];
+  const id = data[`slot_${index}_id`];
+  const trackerType = data[`slot_${index}_type`];
+  const label = data[`slot_${index}_label`];
+  if (!id || !trackerType) return null;
+  return { type: trackerType as TrackerType, id, label: label || '' };
 }
 
 export async function handleNotificationEvent(
@@ -149,7 +149,25 @@ export async function handleNotificationEvent(
   if (type === EventType.ACTION_PRESS) {
     const actionId = detail.pressAction?.id;
 
-    if (actionId === 'add_to_tracker' && detail.notification?.data) {
+    // Handle slot-based action buttons (slot_0, slot_1, slot_2)
+    if (actionId?.startsWith('slot_') && detail.notification?.data) {
+      const data = detail.notification.data;
+      const amt = Number(data.amount);
+      if (!amt || amt <= 0 || !isFinite(amt)) return;
+      const tracker = resolveSlotTracker(actionId, data);
+      if (!tracker) return;
+      const parsed: ParsedTransaction = {
+        amount: amt,
+        type: 'debit',
+        merchant: data.merchant || undefined,
+        bank: data.bank || undefined,
+        rawMessage: data.rawMessage,
+        timestamp: Number(data.timestamp) || Date.now(),
+      };
+      if (addToTrackerCallback) addToTrackerCallback(parsed, tracker);
+    }
+    // Legacy: handle old add_to_tracker action (backward compat)
+    else if (actionId === 'add_to_tracker' && detail.notification?.data) {
       const data = detail.notification.data;
       const amt = Number(data.amount);
       if (!amt || amt <= 0 || !isFinite(amt)) return;
@@ -185,7 +203,7 @@ export async function handleNotificationEvent(
     await notifee.cancelAllNotifications();
   } else if (type === EventType.PRESS && detail.notification?.data) {
     // User tapped the notification body (not an action button)
-    // Always show the selection dialog so the user can choose where to route
+    // Show selection dialog so the user can choose where to route
     const data = detail.notification.data;
     const amt = Number(data.amount);
     if (!amt || amt <= 0 || !isFinite(amt)) return;
@@ -229,12 +247,8 @@ export function registerBackgroundHandler(): void {
         timestamp: Number(data.timestamp) || Date.now(),
       };
 
-      // "Other" button or body tap → stash for selection dialog
-      const isChooseTracker =
-        (isActionPress && actionId === 'choose_tracker') ||
-        isBodyPress;
-
-      if (isChooseTracker) {
+      // Body tap → stash for selection dialog
+      if (isBodyPress) {
         await AsyncStorage.setItem(PENDING_CHOOSE_TRACKER_KEY, JSON.stringify({
           transaction: parsed,
         }));
@@ -242,31 +256,33 @@ export function registerBackgroundHandler(): void {
         return;
       }
 
-      // "Add to tracker" button only
-      const shouldAddToTracker = isActionPress && actionId === 'add_to_tracker';
+      // Slot-based action buttons (slot_0, slot_1, slot_2)
+      const slotTracker = actionId ? resolveSlotTracker(actionId, data) : null;
+      // Also support legacy add_to_tracker action
+      const legacyTracker = actionId === 'add_to_tracker' && data.trackerType && data.trackerId
+        ? { type: data.trackerType as TrackerType, id: data.trackerId, label: data.trackerLabel || '' }
+        : null;
+      const tracker = slotTracker || legacyTracker;
 
-      if (shouldAddToTracker) {
-        const trackerType = data.trackerType as TrackerType;
-        const trackerId = data.trackerId;
-
+      if (tracker) {
         // Auto-detect subscriptions/EMIs/investments
         try { await processTransactionForTracking(parsed); } catch {}
 
-        if (trackerType === 'group') {
+        if (tracker.type === 'group') {
           // Don't auto-save group expenses — stash data so the app opens
           // SplitEditor for the user to review and confirm the split
           await AsyncStorage.setItem(PENDING_GROUP_SPLIT_KEY, JSON.stringify({
             transaction: parsed,
-            trackerId,
-            trackerLabel: data.trackerLabel || 'Group',
+            trackerId: tracker.id,
+            trackerLabel: tracker.label || 'Group',
           }));
         } else {
           const user = await getOrCreateUser();
-          await saveTransaction(parsed, trackerType, user.id);
+          await saveTransaction(parsed, tracker.type, user.id);
         }
       }
 
-      // Ignore action — just dismiss
+      // Ignore action or unrecognized — just dismiss
       await notifee.cancelAllNotifications();
     }
   });
