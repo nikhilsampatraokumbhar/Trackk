@@ -17,6 +17,7 @@ import {
   registerNotificationCallbacks, handleNotificationEvent,
   clearNotificationCallbacks,
   PENDING_GROUP_SPLIT_KEY,
+  PENDING_CHOOSE_TRACKER_KEY,
 } from '../services/NotificationService';
 import { saveTransaction, addGroupTransaction, getGroup, getGoals, getOrCreateTodaySpend, getOrCreateUser } from '../services/StorageService';
 import { addGroupTransactionCloud, getGroupCloud } from '../services/SyncService';
@@ -140,15 +141,32 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     } catch {}
   }, []);
 
-  // When app comes back to foreground, check for stashed pending group splits
+  /**
+   * Check AsyncStorage for a pending "choose tracker" stashed by the background handler.
+   * When user taps "Other" button while app is in background, the background handler
+   * stashes the transaction. We pick it up here and show the TrackerSelectionDialog.
+   */
+  const consumePendingChooseTracker = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(PENDING_CHOOSE_TRACKER_KEY);
+      if (!raw) return;
+      await AsyncStorage.removeItem(PENDING_CHOOSE_TRACKER_KEY);
+      const { transaction } = JSON.parse(raw);
+      if (!transaction) return;
+      setPendingQueue(prev => [...prev, { transaction }]);
+    } catch {}
+  }, []);
+
+  // When app comes back to foreground, check for stashed pending data
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         consumePendingGroupSplit();
+        consumePendingChooseTracker();
       }
     });
     return () => sub.remove();
-  }, [consumePendingGroupSplit]);
+  }, [consumePendingGroupSplit, consumePendingChooseTracker]);
 
   // Load state on mount; also recover pending transaction if app was cold-launched
   // from a "Choose Tracker" notification action
@@ -235,6 +253,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       // Check for pending group split stashed by background handler
       // (background handler can't show SplitEditor, so it stashes data for us)
       await consumePendingGroupSplit();
+      await consumePendingChooseTracker();
     })();
   }, []);
 
