@@ -87,10 +87,10 @@ export default function ProfileScreen() {
     });
   }, [user?.id]);
 
-  // Listen for OAuth redirects
+  // Listen for OAuth redirects (both warm and cold start)
   useEffect(() => {
-    const handleUrl = async (event: { url: string }) => {
-      const parsed = parseOAuthRedirect(event.url);
+    const handleUrl = async (url: string) => {
+      const parsed = parseOAuthRedirect(url);
       if (!parsed) return;
 
       setConnectingProvider(parsed.provider);
@@ -105,7 +105,14 @@ export default function ProfileScreen() {
       }
     };
 
-    const subscription = Linking.addEventListener('url', handleUrl);
+    // Handle deep link when app is already running
+    const subscription = Linking.addEventListener('url', (event) => handleUrl(event.url));
+
+    // Handle deep link that cold-started or resumed the app
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl(url);
+    });
+
     return () => subscription.remove();
   }, []);
 

@@ -343,13 +343,13 @@ export default function HomeScreen() {
           {activeTrackers.length === 0 ? (
             /* Empty state — single full-width add card */
             <TouchableOpacity
-              style={[styles.slotEmpty, styles.slotEmptyFull, { borderColor: `${colors.primary}30`, backgroundColor: `${colors.primary}04` }]}
+              style={[styles.slotEmpty, styles.slotEmptyFull, { borderColor: `${colors.primary}50`, backgroundColor: `${colors.primary}08` }]}
               onPress={() => setShowTrackerPicker(true)}
               activeOpacity={0.7}
             >
               <Text style={[styles.slotAddIcon, { color: colors.primary }]}>+</Text>
               <Text style={[styles.slotAddLabel, { color: colors.primary }]}>Add your first tracker</Text>
-              <Text style={[styles.slotAddHint, { color: colors.textLight }]}>Tap to start tracking expenses</Text>
+              <Text style={[styles.slotAddHint, { color: colors.textSecondary }]}>Track personal, group, or reimbursement expenses</Text>
             </TouchableOpacity>
           ) : (
             /* Slot cards row — dimmed when tracking is paused */
