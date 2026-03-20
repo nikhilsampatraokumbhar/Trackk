@@ -435,6 +435,9 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     await AsyncStorage.setItem(TRACKER_STATE_KEY, JSON.stringify(state));
   };
 
+  /** Max 3 active trackers — matches Android's 3-button notification limit */
+  const MAX_ACTIVE_TRACKERS = 3;
+
   /** Count how many trackers are currently active */
   const countActiveTrackers = (state: TrackerState): number => {
     let count = 0;
@@ -447,10 +450,10 @@ export function TrackerProvider({ children, groups, userId }: Props) {
   const togglePersonal = useCallback(async () => {
     setTrackerState(prev => {
       const turningOn = !prev.personal;
-      if (turningOn && !isPremium && countActiveTrackers(prev) >= 1) {
+      if (turningOn && countActiveTrackers(prev) >= MAX_ACTIVE_TRACKERS) {
         Alert.alert(
-          'Upgrade to Premium',
-          'Free plan supports one active tracker. Upgrade to Premium for simultaneous tracking across Personal, Group, and Reimbursement!',
+          'Slot Full',
+          'You can have up to 3 active trackers. Remove one to add another.',
           [{ text: 'OK' }],
         );
         return prev;
@@ -459,16 +462,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       persistState(next);
       return next;
     });
-  }, [isPremium]);
+  }, []);
 
   const toggleReimbursement = useCallback(async () => {
     setTrackerState(prev => {
       const turningOn = !prev.reimbursement;
-      // Free users: only 1 active tracker
-      if (turningOn && !isPremium && countActiveTrackers(prev) >= 1) {
+      if (turningOn && countActiveTrackers(prev) >= MAX_ACTIVE_TRACKERS) {
         Alert.alert(
-          'Upgrade to Premium',
-          'Free plan supports one active tracker. Upgrade to Premium for simultaneous tracking across Personal, Group, and Reimbursement!',
+          'Slot Full',
+          'You can have up to 3 active trackers. Remove one to add another.',
           [{ text: 'OK' }],
         );
         return prev;
@@ -477,16 +479,15 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       persistState(next);
       return next;
     });
-  }, [isPremium]);
+  }, []);
 
   const toggleGroup = useCallback(async (groupId: string) => {
     setTrackerState(prev => {
       const isCurrentlyActive = prev.activeGroupIds.includes(groupId);
-      // Free users: only 1 active tracker
-      if (!isCurrentlyActive && !isPremium && countActiveTrackers(prev) >= 1) {
+      if (!isCurrentlyActive && countActiveTrackers(prev) >= MAX_ACTIVE_TRACKERS) {
         Alert.alert(
-          'Upgrade to Premium',
-          'Free plan supports one active tracker. Upgrade to Premium for simultaneous tracking across Personal, Group, and Reimbursement!',
+          'Slot Full',
+          'You can have up to 3 active trackers. Remove one to add another.',
           [{ text: 'OK' }],
         );
         return prev;
@@ -500,7 +501,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       persistState(next);
       return next;
     });
-  }, [isPremium]);
+  }, []);
 
   const setDefaultTracker = useCallback((trackerId: string) => {
     setTrackerState(prev => {
