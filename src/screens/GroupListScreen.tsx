@@ -8,10 +8,8 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useGroups } from '../store/GroupContext';
-import { useTracker } from '../store/TrackerContext';
 import { usePremium } from '../store/PremiumContext';
 import { useTheme } from '../store/ThemeContext';
-import TrackerToggle from '../components/TrackerToggle';
 import EmptyState from '../components/EmptyState';
 import { getColorForId, formatCurrency } from '../utils/helpers';
 import {
@@ -37,7 +35,6 @@ export default function GroupListScreen() {
   const nav = useNavigation<Nav>();
   const { user } = useAuth();
   const { groups, loading, refreshGroups } = useGroups();
-  const { trackerState, toggleGroup } = useTracker();
   const { isPremium } = usePremium();
   const { colors, isDark } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
@@ -250,7 +247,6 @@ export default function GroupListScreen() {
         keyExtractor={item => item.id}
         renderItem={({ item }) => {
           const color = getColorForId(item.id);
-          const isActive = trackerState.activeGroupIds.includes(item.id);
           const stats = groupStats[item.id];
           const netOwed = stats?.netOwed || 0;
 
@@ -258,7 +254,7 @@ export default function GroupListScreen() {
             <TouchableOpacity
               style={[styles.groupCard, {
                 backgroundColor: colors.surface,
-                borderColor: isActive ? `${colors.groupColor}40` : colors.border,
+                borderColor: colors.border,
                 shadowColor: '#000',
               }]}
               onPress={() => nav.navigate('GroupDetail', { groupId: item.id })}
@@ -328,7 +324,7 @@ export default function GroupListScreen() {
                 </View>
               )}
 
-              {/* Action row: Settle Up + Tracker toggle */}
+              {/* Action row: Settle Up */}
               <View style={styles.groupActionRow}>
                 <TouchableOpacity
                   style={[styles.settleUpBtn, {
@@ -339,20 +335,6 @@ export default function GroupListScreen() {
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.settleUpText, { color: colors.text }]}>Settle Up</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.trackBtn, {
-                    borderColor: isActive ? `${colors.groupColor}50` : colors.border,
-                    backgroundColor: isActive ? `${colors.groupColor}15` : 'transparent',
-                  }]}
-                  onPress={() => toggleGroup(item.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.trackBtnText, {
-                    color: isActive ? colors.groupColor : colors.textSecondary,
-                  }]}>
-                    {isActive ? 'Tracking' : 'Track'}
-                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -673,16 +655,6 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
 
-  trackBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  trackBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
   memberCount: {
     fontSize: 11,
   },

@@ -16,7 +16,6 @@ import EmptyState from '../components/EmptyState';
 import PressableScale from '../components/PressableScale';
 import { getTransactions, saveTransaction, deleteTransaction } from '../services/StorageService';
 import { Transaction, ParsedTransaction } from '../models/types';
-import TrackerToggle from '../components/TrackerToggle';
 import TransactionCard from '../components/TransactionCard';
 import SuccessOverlay from '../components/SuccessOverlay';
 import { HeroCardSkeleton, TransactionListSkeleton } from '../components/SkeletonLoader';
@@ -35,7 +34,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function PersonalExpenseScreen() {
   const nav = useNavigation<Nav>();
   const { user } = useAuth();
-  const { trackerState, togglePersonal, isListening, transactionVersion } = useTracker();
+  const { trackerState, isListening, transactionVersion } = useTracker();
   const { colors, isDark } = useTheme();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -438,14 +437,6 @@ export default function PersonalExpenseScreen() {
         }}
         ListHeaderComponent={
           <>
-            <TrackerToggle
-              label="Personal Expenses"
-              subtitle="Track daily spending automatically"
-              isActive={trackerState.personal}
-              onToggle={() => { hapticLight(); togglePersonal(); }}
-              color={colors.personalColor}
-            />
-
             {Platform.OS === 'ios' && (
               <TouchableOpacity style={dynamicStyles.iosSetupBanner} onPress={() => nav.navigate('IOSSetup' as any)} activeOpacity={0.7}>
                 <Text style={styles.iosSetupEmoji}>📱</Text>
@@ -604,8 +595,8 @@ export default function PersonalExpenseScreen() {
             {transactions.length === 0 && (
               <EmptyState
                 icon="💳"
-                title={trackerState.personal ? 'No expenses yet' : 'Start tracking'}
-                subtitle={trackerState.personal ? 'Your expenses will show up here automatically' : 'Enable the tracker above or add manually'}
+                title="No expenses yet"
+                subtitle="Your expenses will show up here automatically"
                 accent={colors.personalColor}
               />
             )}

@@ -823,8 +823,19 @@ export async function setEMIsOnboarded(): Promise<void> {
 
 // ─── Clear all data ──────────────────────────────────────────────────────────
 
-export async function clearAllData(): Promise<void> {
+export async function clearAllData(deleteCloudGroups?: (groupIds: string[]) => Promise<void>): Promise<void> {
   const groups = await getGroups();
+  const groupIds = groups.map(g => g.id);
+
+  // Delete cloud group data if callback provided
+  if (deleteCloudGroups && groupIds.length > 0) {
+    try {
+      await deleteCloudGroups(groupIds);
+    } catch {
+      // Continue with local cleanup even if cloud deletion fails
+    }
+  }
+
   const keys = [
     KEYS.USER, KEYS.TRANSACTIONS, KEYS.GROUPS, KEYS.GOALS, KEYS.DAILY_SPENDS, KEYS.SAVINGS_JAR, KEYS.SHARED_FINANCES, KEYS.REIMBURSEMENT_TRIPS,
     KEYS.SUBSCRIPTIONS, KEYS.INVESTMENTS, KEYS.EMIS, KEYS.SUBSCRIPTIONS_ONBOARDED, KEYS.INVESTMENTS_ONBOARDED, KEYS.EMIS_ONBOARDED,

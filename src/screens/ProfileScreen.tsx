@@ -23,6 +23,7 @@ import {
 import { db } from '../services/FirebaseConfig';
 import { backupAllData, restoreFromBackup } from '../services/BackupService';
 import { clearAllData } from '../services/StorageService';
+import { deleteGroupCloud } from '../services/SyncService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -655,7 +656,9 @@ export default function ProfileScreen() {
                           style: 'destructive',
                           onPress: async () => {
                             try {
-                              await clearAllData();
+                              await clearAllData(async (groupIds) => {
+                                await Promise.all(groupIds.map(id => deleteGroupCloud(id)));
+                              });
                               await signOut();
                             } catch (err: any) {
                               Alert.alert('Error', err?.message || 'Failed to delete account.');
