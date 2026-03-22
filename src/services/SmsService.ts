@@ -209,6 +209,53 @@ export async function readRecentSms(
 }
 
 /**
+ * Scan today's SMS from midnight to now. Used by Review Expenses refresh
+ * to catch transactions missed while tracker was off or due to SMS delays.
+ * Returns all parsed bank transactions from today (caller handles dedup).
+ */
+export async function scanTodaySms(): Promise<ParsedTransaction[]> {
+  if (Platform.OS !== 'android') return [];
+
+  const granted = await checkSmsPermission();
+  if (!granted) return [];
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const sinceTimestamp = todayStart.getTime();
+
+  let messages: Array<{ body: string; address: string; date: string }> = [];
+
+  if (NativeModules.SmsReaderModule) {
+    try {
+      messages = await NativeModules.SmsReaderModule.readSms(200, sinceTimestamp);
+    } catch {
+      return [];
+    }
+  } else if (NativeModules.SmsAndroid) {
+    messages = await new Promise<Array<{ body: string; address: string; date: string }>>((resolve) => {
+      NativeModules.SmsAndroid.list(
+        JSON.stringify({ box: 'inbox', maxCount: 200, minDate: sinceTimestamp }),
+        () => resolve([]),
+        (_count: number, smsList: string) => {
+          try { resolve(JSON.parse(smsList)); } catch { resolve([]); }
+        },
+      );
+    });
+  } else {
+    return [];
+  }
+
+  const results: ParsedTransaction[] = [];
+  for (const sms of messages) {
+    if (isBankSender(sms.address)) {
+      const parsed = parseTransactionSms(sms.body, sms.address);
+      if (parsed) results.push(parsed);
+    }
+  }
+  return results;
+}
+
+/**
  * Returns whether the app is using the battery-efficient native listener
  * vs the polling fallback.
  */

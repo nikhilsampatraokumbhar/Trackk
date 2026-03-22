@@ -91,7 +91,16 @@ export default function PersonalExpenseScreen() {
     setTimeout(() => setHasAnimated(true), 800);
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load, transactionVersion]));
+  // Increment on each focus to replay AnimatedAmount animations
+  const [focusCount, setFocusCount] = useState(0);
+
+  useFocusEffect(useCallback(() => {
+    // Reset animation state so items animate in every time screen is opened
+    setHasAnimated(false);
+    itemAnims.current.clear();
+    setFocusCount(c => c + 1);
+    load();
+  }, [load, transactionVersion]));
 
   const appState = useRef(AppState.currentState);
   useEffect(() => {
@@ -563,13 +572,13 @@ export default function PersonalExpenseScreen() {
               <View style={styles.statsRow}>
                 <View style={styles.stat}>
                   <Text style={dynamicStyles.statLabel}>THIS MONTH</Text>
-                  <AnimatedAmount value={totalMonthly} style={[dynamicStyles.statValue, { color: colors.personalColor }]} />
+                  <AnimatedAmount value={totalMonthly} style={[dynamicStyles.statValue, { color: colors.personalColor }]} replayKey={focusCount} />
                   <Text style={dynamicStyles.statCount}>{thisMonth.length} transactions</Text>
                 </View>
                 <View style={dynamicStyles.statDivider} />
                 <View style={styles.stat}>
                   <Text style={dynamicStyles.statLabel}>ALL TIME</Text>
-                  <AnimatedAmount value={totalAll} style={[dynamicStyles.statValue, { color: colors.text }]} />
+                  <AnimatedAmount value={totalAll} style={[dynamicStyles.statValue, { color: colors.text }]} replayKey={focusCount} />
                   <Text style={dynamicStyles.statCount}>{transactions.length} total</Text>
                 </View>
               </View>

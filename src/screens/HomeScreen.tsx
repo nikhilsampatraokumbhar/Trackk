@@ -183,7 +183,11 @@ export default function HomeScreen() {
     setLoading(false);
   }, []);
 
+  // Increment on each focus to replay animations
+  const [focusCount, setFocusCount] = useState(0);
+
   useFocusEffect(useCallback(() => {
+    setFocusCount(c => c + 1);
     loadTransactions();
   }, [loadTransactions, transactionVersion]));
 
@@ -456,7 +460,7 @@ export default function HomeScreen() {
               )}
 
               <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>TOTAL SPENT</Text>
-              <AnimatedAmount value={totalSpent} style={[styles.heroAmount, { color: colors.text }]} />
+              <AnimatedAmount value={totalSpent} style={[styles.heroAmount, { color: colors.text }]} replayKey={focusCount} />
               <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
                 {monthCount > 0
                   ? `${monthCount} transactions this month`

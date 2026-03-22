@@ -14,7 +14,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, SectionList, TouchableOpacity,
-  Alert,
+  Alert, ActivityIndicator, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../store/ThemeContext';
@@ -30,10 +30,12 @@ import {
   getPendingReviewTransactions,
   markAsReviewed,
   cleanupOldPending,
+  addToPendingReview,
 } from '../services/TransactionSignalEngine';
 import { classifyTransaction } from '../services/AutoDetectionService';
 import { saveTransaction } from '../services/StorageService';
 import { buildDescription } from '../services/TransactionParser';
+import { scanTodaySms } from '../services/SmsService';
 import { ParsedTransaction, TrackerType, ActiveTracker } from '../models/types';
 import { COLORS, formatCurrency, getColorForId } from '../utils/helpers';
 import BottomSheet from '../components/BottomSheet';
@@ -97,6 +99,9 @@ export default function NightlyReviewScreen() {
   // Per-item tracker selection (keyed by item id, defaults to defaultTrackerId)
   const [itemTrackerMap, setItemTrackerMap] = useState<Record<string, string>>({});
 
+  // Refresh state
+  const [refreshing, setRefreshing] = useState(false);
+
   const activeTrackers = useMemo(() => getActiveTrackers(groups), [getActiveTrackers, groups]);
 
   const loadPending = useCallback(async () => {
@@ -122,6 +127,66 @@ export default function NightlyReviewScreen() {
   }, []);
 
   useEffect(() => { loadPending(); }, [loadPending, transactionVersion]);
+
+  /**
+   * Refresh: scan today's SMS to catch transactions missed while tracker was off,
+   * due to SMS delays, or notifications the user missed while travelling/offline.
+   */
+  const handleRefresh = useCallback(async () => {
+    if (Platform.OS !== 'android') {
+      Alert.alert('Not Available', 'SMS scanning is only available on Android.');
+      return;
+    }
+
+    setRefreshing(true);
+    hapticLight();
+
+    try {
+      // Read all today's bank SMS
+      const todayTransactions = await scanTodaySms();
+
+      if (todayTransactions.length === 0) {
+        Alert.alert('No New Transactions', 'No bank SMS found for today.');
+        setRefreshing(false);
+        return;
+      }
+
+      // Get existing pending items to avoid adding duplicates
+      const existing = await getPendingReviewTransactions();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const existingToday = existing.filter(p => p.receivedAt >= todayStart.getTime());
+
+      // Build fingerprints of existing pending items for dedup
+      const existingFingerprints = new Set(
+        existingToday.map(p => `${Math.round(p.parsed.amount * 100)}_${(p.parsed.merchant || '').toLowerCase().replace(/\s+/g, '')}`),
+      );
+
+      // Add transactions that aren't already in pending review
+      let newCount = 0;
+      for (const parsed of todayTransactions) {
+        const fp = `${Math.round(parsed.amount * 100)}_${(parsed.merchant || '').toLowerCase().replace(/\s+/g, '')}`;
+        if (!existingFingerprints.has(fp)) {
+          await addToPendingReview(parsed, 'sms');
+          existingFingerprints.add(fp); // prevent duplicates within same batch
+          newCount++;
+        }
+      }
+
+      // Reload
+      await loadPending();
+
+      if (newCount > 0) {
+        Alert.alert('Found Transactions', `${newCount} new transaction${newCount > 1 ? 's' : ''} added for review.`);
+      } else {
+        Alert.alert('All Caught Up', 'No new transactions found beyond what you already have.');
+      }
+    } catch {
+      Alert.alert('Scan Failed', 'Could not scan SMS. Please check SMS permissions.');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadPending]);
 
   // Build sections grouped by active trackers
   const sections: ReviewSection[] = useMemo(() => {
@@ -536,6 +601,19 @@ export default function NightlyReviewScreen() {
         ListHeaderComponent={
           <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: `rgba(138,120,240,0.15)` }]}>
             <View style={styles.headerAccent} />
+            {/* Refresh button — top right */}
+            <TouchableOpacity
+              style={styles.refreshBtn}
+              onPress={handleRefresh}
+              disabled={refreshing}
+              activeOpacity={0.7}
+            >
+              {refreshing ? (
+                <ActivityIndicator size="small" color="#8A78F0" />
+              ) : (
+                <Text style={styles.refreshIcon}>↻</Text>
+              )}
+            </TouchableOpacity>
             <Text style={styles.headerEmoji}>🌙</Text>
             <Text style={styles.headerTitle}>Review Expenses</Text>
             <Text style={styles.headerSub}>
@@ -645,6 +723,14 @@ const styles = StyleSheet.create({
     alignItems: 'center', overflow: 'hidden',
   },
   headerAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: '#8A78F0' },
+  refreshBtn: {
+    position: 'absolute', top: 14, right: 14,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(138,120,240,0.1)',
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 1,
+  },
+  refreshIcon: { fontSize: 20, color: '#8A78F0', fontWeight: '700' },
   headerEmoji: { fontSize: 36, marginBottom: 8 },
   headerTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, marginBottom: 6 },
   headerSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center' },

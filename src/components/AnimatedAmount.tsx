@@ -6,13 +6,15 @@ interface Props {
   value: number;
   style?: TextStyle | TextStyle[];
   duration?: number;
+  /** Change this to force the animation to replay from 0 */
+  replayKey?: number;
 }
 
 /**
  * Animates a currency amount from its previous value to the new value.
  * Creates a smooth counting-up/down effect.
  */
-export default function AnimatedAmount({ value, style, duration = 600 }: Props) {
+export default function AnimatedAmount({ value, style, duration = 600, replayKey }: Props) {
   const animatedValue = useRef(new Animated.Value(0)).current;
   const previousValue = useRef(0);
   const displayValue = useRef('₹0.00');
@@ -45,6 +47,18 @@ export default function AnimatedAmount({ value, style, duration = 600 }: Props) 
       useNativeDriver: false,
     }).start();
   }, [value]);
+
+  // Replay animation from 0 when replayKey changes (e.g. on screen focus)
+  useEffect(() => {
+    if (replayKey === undefined) return;
+    previousValue.current = 0;
+    currentDisplay.setValue(0);
+    Animated.timing(currentDisplay, {
+      toValue: value,
+      duration,
+      useNativeDriver: false,
+    }).start();
+  }, [replayKey]);
 
   // Map the animated value to formatted text
   const animatedText = currentDisplay.interpolate({
