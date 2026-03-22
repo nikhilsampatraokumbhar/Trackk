@@ -350,8 +350,9 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     await showTransactionNotification(parsed, activeTrackers);
   }, []);
 
-  // Start/stop SMS listener based on tracker state + master toggle (Android only)
-  // Only listen when tracking is enabled AND user has at least one active tracker
+  // Start/stop SMS listener based on tracker state (Android only)
+  // Keep SMS listener running even when tracking is paused — we still capture
+  // transactions into pending review. Only notifications are skipped when paused.
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
@@ -360,12 +361,10 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       trackerState.reimbursement ||
       trackerState.activeGroupIds.length > 0;
 
-    const shouldListen = hasActiveTracker && (trackerState.trackingEnabled !== false);
-
-    if (shouldListen && !isListeningRef.current) {
+    if (hasActiveTracker && !isListeningRef.current) {
       isListeningRef.current = true;
       startListening();
-    } else if (!shouldListen && isListeningRef.current) {
+    } else if (!hasActiveTracker && isListeningRef.current) {
       isListeningRef.current = false;
       stopSmsListener();
       setIsListening(false);

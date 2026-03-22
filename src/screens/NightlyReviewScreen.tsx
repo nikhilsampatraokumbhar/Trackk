@@ -105,9 +105,8 @@ export default function NightlyReviewScreen() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    // Show all unreviewed items (not just today) so ignored expenses still appear
     const todayItems: ReviewItem[] = pending
-      .filter(p => !p.reviewed)
+      .filter(p => !p.reviewed && p.receivedAt >= todayStart.getTime())
       .map(p => {
         const classification = classifyTransaction(p.parsed);
         return {
