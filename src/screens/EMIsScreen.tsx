@@ -117,7 +117,7 @@ export default function EMIsScreen() {
       if (result.emis.length > 0) {
         setScanResultText(`Found ${result.emis.length} EMI${result.emis.length > 1 ? 's' : ''}`);
       } else {
-        setScanResultText('No EMIs found. Connect your email in Profile for better detection.');
+        setScanResultText('No EMIs found from SMS. Tap + to add manually.');
         setShowAddModal(true);
       }
       await load();
@@ -404,7 +404,7 @@ export default function EMIsScreen() {
             <Text style={styles.onboardingSub}>
               We'll scan your transaction history to find all EMI payments automatically.
               {'\n\n'}Track loan repayments, auto EMIs, and never miss a payment.
-              {'\n\n'}Tip: Connect your email in Profile for best results!
+              {'\n\n'}Tip: Make sure SMS permissions are granted for best results!
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>

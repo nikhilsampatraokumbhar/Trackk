@@ -105,6 +105,13 @@ export default function GroupDetailScreen() {
     if (!g && isAuthenticated) {
       try { g = await getGroupCloud(groupId); } catch {}
     }
+    if (!g) {
+      // Group no longer exists (deleted or data cleared)
+      Alert.alert('Group Not Found', 'This group no longer exists or has been deleted.', [
+        { text: 'OK', onPress: () => nav.goBack() },
+      ]);
+      return;
+    }
     setGroup(g);
     await loadGroupTransactions(groupId);
     if (isAuthenticated) {
@@ -114,7 +121,7 @@ export default function GroupDetailScreen() {
       const s = await getSettlements(groupId);
       setSettlements(s);
     }
-  }, [groupId, loadGroupTransactions, isAuthenticated]);
+  }, [groupId, loadGroupTransactions, isAuthenticated, nav]);
 
   useEffect(() => {
     if (!isAuthenticated) return;

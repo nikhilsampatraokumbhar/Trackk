@@ -100,7 +100,13 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   // Load cached groups instantly on mount, THEN refresh from cloud
   useEffect(() => {
     if (!user) {
+      setGroups([]);
+      setActiveGroupId(null);
+      setActiveGroupTransactions([]);
+      setActiveGroupDebts([]);
       setLoading(false);
+      // Clear cached groups so stale data doesn't reappear on next login
+      AsyncStorage.removeItem(CACHE_KEYS.GROUPS).catch(() => {});
       return;
     }
 

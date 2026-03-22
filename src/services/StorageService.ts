@@ -841,7 +841,7 @@ export async function clearAllData(deleteCloudGroups?: (groupIds: string[]) => P
     KEYS.SUBSCRIPTIONS, KEYS.INVESTMENTS, KEYS.EMIS, KEYS.SUBSCRIPTIONS_ONBOARDED, KEYS.INVESTMENTS_ONBOARDED, KEYS.EMIS_ONBOARDED,
     ...groups.map(g => KEYS.GROUP_TRANSACTIONS(g.id)),
     ...groups.map(g => KEYS.SETTLEMENTS(g.id)),
-    // Also clear cache, tracker state, and premium data
+    // Also clear cache, tracker state, premium data, and pending review
     '@et_cache_groups',
     ...groups.map(g => `@et_cache_gtxns_${g.id}`),
     '@et_tracker_state',
@@ -849,6 +849,13 @@ export async function clearAllData(deleteCloudGroups?: (groupIds: string[]) => P
     '@et_referrals',
     '@et_referral_code',
     '@et_budgets',
+    '@et_pending_review',
+    '@et_pending_group_split',
+    '@et_pending_choose_tracker',
+    '@et_onboarding_done',
+    '@et_exchange_rates',
+    '@et_preferred_currency',
+    '@et_language',
   ];
   await Promise.all(keys.map(key => AsyncStorage.removeItem(key)));
 }

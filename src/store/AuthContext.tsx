@@ -157,6 +157,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clean up persisted state so next user starts fresh
     await AsyncStorage.removeItem(STORAGE_KEY);
     await AsyncStorage.removeItem('@et_tracker_state');
+    await AsyncStorage.removeItem('@et_pending_review');
+    await AsyncStorage.removeItem('@et_pending_group_split');
+    await AsyncStorage.removeItem('@et_pending_choose_tracker');
     await clearReminderState();
 
     setUser(null);

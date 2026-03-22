@@ -134,7 +134,7 @@ export default function SubscriptionsScreen() {
       if (result.subscriptions.length > 0) {
         setScanResultText(`Found ${result.subscriptions.length} subscription${result.subscriptions.length > 1 ? 's' : ''}`);
       } else {
-        setScanResultText('No subscriptions found. Connect your email in Profile for better detection.');
+        setScanResultText('No subscriptions found from SMS. Tap + to add manually.');
         setShowAddModal(true);
       }
       await load();
@@ -440,7 +440,7 @@ export default function SubscriptionsScreen() {
             <Text style={styles.onboardingSub}>
               We'll scan your transaction history to find all recurring subscriptions automatically.
               {'\n\n'}Netflix, Spotify, YouTube Premium — we'll catch them all.
-              {'\n\n'}Tip: Connect your email in Profile for best results!
+              {'\n\n'}Tip: Make sure SMS permissions are granted for best results!
             </Text>
             {scanning ? (
               <View style={styles.scanningContainer}>

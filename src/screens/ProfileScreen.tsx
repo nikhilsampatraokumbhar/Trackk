@@ -20,7 +20,7 @@ import {
   EmailProvider, connectEmail, disconnectEmail, parseOAuthRedirect,
   getProviderDisplayName, getProviderColor, startOAuthFlow,
 } from '../services/EmailService';
-import { db } from '../services/FirebaseConfig';
+import { db, auth } from '../services/FirebaseConfig';
 import { backupAllData, restoreFromBackup } from '../services/BackupService';
 import { clearAllData } from '../services/StorageService';
 import { deleteGroupCloud } from '../services/SyncService';
@@ -685,6 +685,14 @@ export default function ProfileScreen() {
                               await clearAllData(async (groupIds) => {
                                 await Promise.all(groupIds.map(id => deleteGroupCloud(id)));
                               });
+                              // Delete Firestore user profile
+                              try {
+                                if (user?.id) await db.user(user.id).delete();
+                              } catch {}
+                              // Delete Firebase Auth account so user gets fresh UID on re-signup
+                              try {
+                                await auth().currentUser?.delete();
+                              } catch {}
                               await signOut();
                             } catch (err: any) {
                               Alert.alert('Error', err?.message || 'Failed to delete account.');
