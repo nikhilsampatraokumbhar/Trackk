@@ -14,7 +14,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, SectionList, TouchableOpacity,
-  Alert,
+  Alert, Platform, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../store/ThemeContext';
@@ -30,10 +30,13 @@ import {
   getPendingReviewTransactions,
   markAsReviewed,
   cleanupOldPending,
+  ingestTransaction,
+  addToPendingReview,
 } from '../services/TransactionSignalEngine';
-import { classifyTransaction } from '../services/AutoDetectionService';
+import { classifyTransaction, processTransactionForTracking } from '../services/AutoDetectionService';
 import { saveTransaction } from '../services/StorageService';
 import { buildDescription } from '../services/TransactionParser';
+import { requestSmsPermission, checkSmsPermission, scanSmsSince } from '../services/SmsService';
 import { ParsedTransaction, TrackerType, ActiveTracker } from '../models/types';
 import { COLORS, formatCurrency, getColorForId } from '../utils/helpers';
 import BottomSheet from '../components/BottomSheet';
@@ -97,30 +100,130 @@ export default function NightlyReviewScreen() {
   // Per-item tracker selection (keyed by item id, defaults to defaultTrackerId)
   const [itemTrackerMap, setItemTrackerMap] = useState<Record<string, string>>({});
 
+  const [refreshing, setRefreshing] = useState(false);
+  const [scanStatus, setScanStatus] = useState<string | null>(null);
+
   const activeTrackers = useMemo(() => getActiveTrackers(groups), [getActiveTrackers, groups]);
 
+  /** Load already-pending review items from AsyncStorage */
   const loadPending = useCallback(async () => {
     await cleanupOldPending();
     const pending = await getPendingReviewTransactions();
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
 
-    const todayItems: ReviewItem[] = pending
-      .filter(p => !p.reviewed && p.receivedAt >= todayStart.getTime())
-      .map(p => {
-        const classification = classifyTransaction(p.parsed);
-        return {
-          ...p,
-          autoCategory: classification.category,
-          autoMerchant: classification.matchedMerchant,
-          autoConfidence: classification.confidence,
-        };
+    const todayPending = pending
+      .filter(p => !p.reviewed && p.receivedAt >= todayStart.getTime());
+
+    const todayItems: ReviewItem[] = [];
+    const autoRoutedIds: string[] = [];
+
+    for (const p of todayPending) {
+      const classification = classifyTransaction(p.parsed);
+      // High-confidence subscription/EMI/investment → auto-route silently
+      if (classification.category && classification.confidence >= 0.7) {
+        // Process and save to the appropriate section (subscriptions/EMIs/investments)
+        try {
+          await processTransactionForTracking(p.parsed);
+        } catch {}
+        autoRoutedIds.push(p.id);
+        continue;
+      }
+      todayItems.push({
+        ...p,
+        autoCategory: classification.category,
+        autoMerchant: classification.matchedMerchant,
+        autoConfidence: classification.confidence,
       });
+    }
+
+    // Mark auto-routed items as reviewed so they don't reappear
+    if (autoRoutedIds.length > 0) {
+      await markAsReviewed(autoRoutedIds);
+    }
 
     setAllItems(todayItems);
     setLoading(false);
   }, []);
 
+  /**
+   * Active refresh: scan SMS inbox (Android) for today's transactions.
+   * - If SMS permission not granted, prompt for it
+   * - Each parsed transaction goes through dedup → auto-detection → pending review
+   * - Subscriptions/EMIs/investments are auto-routed to their sections (not shown in review)
+   * - Then reload pending items to show new detections
+   */
+  const refreshFromSources = useCallback(async () => {
+    setRefreshing(true);
+    let scannedCount = 0;
+    let autoRoutedCount = 0;
+
+    // ── SMS scan (Android) ──
+    if (Platform.OS === 'android') {
+      const hasPermission = await checkSmsPermission();
+      if (!hasPermission) {
+        const granted = await requestSmsPermission();
+        if (!granted) {
+          setScanStatus('SMS permission required to detect expenses');
+          // Still continue to load existing pending items
+        }
+      }
+
+      const smsPermitted = await checkSmsPermission();
+      if (smsPermitted) {
+        setScanStatus('Scanning SMS...');
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        // Collect all parsed transactions first, then process sequentially
+        const parsedTransactions: ParsedTransaction[] = [];
+        await scanSmsSince(todayStart.getTime(), (parsed) => {
+          parsedTransactions.push(parsed);
+        });
+
+        // Process each transaction: dedup → auto-detect → add to review
+        for (const parsed of parsedTransactions) {
+          const signal = ingestTransaction(parsed, 'sms');
+          if (!signal) continue; // already known
+
+          scannedCount++;
+
+          // Auto-detect subscriptions/EMIs/investments — route them silently
+          try {
+            const detection = await processTransactionForTracking(parsed);
+            if (detection.matched && detection.type) {
+              autoRoutedCount++;
+              continue;
+            }
+          } catch {}
+
+          // Regular expense — add to pending review
+          await addToPendingReview(parsed, 'sms');
+        }
+      }
+    }
+
+    // ── iOS: app shortcuts are handled via deep links already, nothing to scan ──
+
+    // ── Email: handled by Firebase Cloud Functions push, nothing to actively scan client-side ──
+    // When email OAuth is connected, FCM pushes arrive and are already added to pending review
+    // via TrackerContext's FCM handler. No client-side email scan needed.
+
+    if (scannedCount > 0 || autoRoutedCount > 0) {
+      const parts: string[] = [];
+      if (scannedCount > 0) parts.push(`${scannedCount} new`);
+      if (autoRoutedCount > 0) parts.push(`${autoRoutedCount} auto-tracked`);
+      setScanStatus(`Found ${parts.join(', ')}`);
+    } else {
+      setScanStatus(null);
+    }
+
+    // Reload pending items (will pick up newly added ones)
+    await loadPending();
+    setRefreshing(false);
+  }, [loadPending]);
+
+  // Initial load
   useEffect(() => { loadPending(); }, [loadPending, transactionVersion]);
 
   // Build sections grouped by active trackers
@@ -533,6 +636,14 @@ export default function NightlyReviewScreen() {
         renderSectionHeader={renderSectionHeader}
         stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refreshFromSources}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
         ListHeaderComponent={
           <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: `rgba(138,120,240,0.15)` }]}>
             <View style={styles.headerAccent} />
@@ -543,9 +654,28 @@ export default function NightlyReviewScreen() {
                 ? `${unreviewedCount} transaction${unreviewedCount > 1 ? 's' : ''} detected today`
                 : 'All caught up! No transactions to review.'}
             </Text>
+            {scanStatus && (
+              <Text style={[styles.scanStatus, { color: colors.textSecondary }]}>{scanStatus}</Text>
+            )}
             {unreviewedCount > 0 && (
               <Text style={styles.headerTotal}>{formatCurrency(totalAmount)}</Text>
             )}
+
+            {/* Refresh button */}
+            <TouchableOpacity
+              style={[styles.refreshBtn, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}30` }]}
+              onPress={refreshFromSources}
+              activeOpacity={0.7}
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={[styles.refreshBtnText, { color: colors.primary }]}>
+                  {Platform.OS === 'android' ? 'Scan SMS for expenses' : 'Refresh'}
+                </Text>
+              )}
+            </TouchableOpacity>
             {activeTrackers.length > 0 && unreviewedCount > 0 && (
               <View style={styles.activeTrackerRow}>
                 {activeTrackers.map(t => (
@@ -568,12 +698,16 @@ export default function NightlyReviewScreen() {
         }
         ListEmptyComponent={
           !loading ? (
-            <EmptyState
-              icon="🎉"
-              title="All caught up!"
-              subtitle="Detected transactions will appear here for review"
-              accent={COLORS.success}
-            />
+            <View style={styles.emptyContainer}>
+              <EmptyState
+                icon="🎉"
+                title="All caught up!"
+                subtitle={Platform.OS === 'android'
+                  ? 'Pull down or tap "Scan SMS" to check for new expenses'
+                  : 'Expenses detected via Shortcuts or email will appear here'}
+                accent={COLORS.success}
+              />
+            </View>
           ) : null
         }
         ListFooterComponent={<View style={{ height: 80 }} />}
@@ -648,6 +782,10 @@ const styles = StyleSheet.create({
   headerEmoji: { fontSize: 36, marginBottom: 8 },
   headerTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text, marginBottom: 6 },
   headerSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center' },
+  scanStatus: { fontSize: 12, marginTop: 6, textAlign: 'center', fontStyle: 'italic' },
+  refreshBtn: { marginTop: 14, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40 },
+  refreshBtnText: { fontSize: 14, fontWeight: '600' },
+  emptyContainer: { paddingTop: 20 },
   headerTotal: { fontSize: 28, fontWeight: '800', color: '#8A78F0', marginTop: 12 },
   activeTrackerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14, justifyContent: 'center' },
   activeTrackerChip: {

@@ -209,6 +209,53 @@ export async function readRecentSms(
 }
 
 /**
+ * Scan SMS inbox since a given timestamp. Used by Review screen refresh
+ * to scan today's SMS on demand (independent of the real-time listener).
+ */
+export async function scanSmsSince(
+  sinceTimestamp: number,
+  callback: SmsCallback,
+  maxCount: number = 500,
+): Promise<number> {
+  let messages: Array<{ body: string; address: string; date: string }> = [];
+  let scannedCount = 0;
+
+  if (NativeModules.SmsReaderModule) {
+    try {
+      messages = await NativeModules.SmsReaderModule.readSms(maxCount, sinceTimestamp);
+    } catch (e) {
+      console.log('[Trackk] SMS scan error:', e);
+      return 0;
+    }
+  } else if (NativeModules.SmsAndroid) {
+    messages = await new Promise<Array<{ body: string; address: string; date: string }>>((resolve) => {
+      NativeModules.SmsAndroid.list(
+        JSON.stringify({ box: 'inbox', maxCount, minDate: sinceTimestamp }),
+        (fail: string) => { console.log('SMS scan error:', fail); resolve([]); },
+        (_count: number, smsList: string) => {
+          try { resolve(JSON.parse(smsList)); } catch { resolve([]); }
+        },
+      );
+    });
+  } else {
+    return 0;
+  }
+
+  for (const sms of messages) {
+    const msgDate = parseInt(sms.date, 10);
+    if (msgDate >= sinceTimestamp && isBankSender(sms.address)) {
+      const parsed = parseTransactionSms(sms.body, sms.address);
+      if (parsed) {
+        scannedCount++;
+        callback(parsed);
+      }
+    }
+  }
+
+  return scannedCount;
+}
+
+/**
  * Returns whether the app is using the battery-efficient native listener
  * vs the polling fallback.
  */
