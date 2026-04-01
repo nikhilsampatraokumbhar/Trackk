@@ -456,13 +456,37 @@ export default function ReimbursementScreen() {
         )}
 
         {trips.length === 0 && !loading && (
-          <View style={styles.emptyTrips}>
-            <Text style={styles.emptyTripsEmoji}>✈️</Text>
-            <Text style={styles.emptyTripsTitle}>No Expense Logs Yet</Text>
-            <Text style={styles.emptyTripsText}>
-              Create an expense log for your next trip or business visit. Track expenses, attach receipts, and export when done.
-            </Text>
-          </View>
+          <>
+            {/* Example trip card */}
+            <View style={{ opacity: 0.35, paddingHorizontal: 0 }} pointerEvents="none">
+              <View style={{
+                backgroundColor: colors.surface,
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${colors.reimbursementColor}15`, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                    <Text style={{ fontSize: 18 }}>✈️</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Mumbai Client Visit</Text>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary }}>5 expenses · Active</Text>
+                  </View>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{formatCurrency(8450)}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.emptyTrips}>
+              <Text style={styles.emptyTripsEmoji}>✈️</Text>
+              <Text style={styles.emptyTripsTitle}>No Expense Logs Yet</Text>
+              <Text style={styles.emptyTripsText}>
+                Create an expense log for your next trip or business visit. Track expenses, attach receipts, and export when done.
+              </Text>
+            </View>
+          </>
         )}
       </ScrollView>
 

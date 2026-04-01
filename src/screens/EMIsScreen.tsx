@@ -336,12 +336,44 @@ export default function EMIsScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           !loading ? (
-            <EmptyState
-              icon="🏦"
-              title="No EMIs yet"
-              subtitle="Tap + to add your first EMI"
-              accent={COLORS.warning}
-            />
+            <>
+              {/* Example EMI cards */}
+              <View style={{ opacity: 0.35, paddingHorizontal: 16 }} pointerEvents="none">
+                {[
+                  { name: 'Home Loan - SBI', amount: 28500, paid: 36, total: 240, emoji: '🏠', days: 3 },
+                  { name: 'Car Loan - HDFC', amount: 12400, paid: 18, total: 60, emoji: '🚗', days: 15 },
+                ].map((ex, i) => (
+                  <View key={i} style={{
+                    backgroundColor: colors.surface,
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${COLORS.warning}15`, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                        <Text style={{ fontSize: 18 }}>{ex.emoji}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{ex.name}</Text>
+                        <Text style={{ fontSize: 11, color: colors.textSecondary }}>Next in {ex.days} days · {ex.paid}/{ex.total} paid</Text>
+                      </View>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{formatCurrency(ex.amount)}/mo</Text>
+                    </View>
+                    <View style={{ height: 4, borderRadius: 2, backgroundColor: `${colors.border}`, overflow: 'hidden' }}>
+                      <View style={{ height: '100%', width: `${(ex.paid / ex.total) * 100}%`, backgroundColor: COLORS.warning, borderRadius: 2 }} />
+                    </View>
+                  </View>
+                ))}
+              </View>
+              <EmptyState
+                icon="🏦"
+                title="No EMIs yet"
+                subtitle="Add manually or let Trackk auto-detect from your bank SMS"
+                accent={COLORS.warning}
+              />
+            </>
           ) : null
         }
       />

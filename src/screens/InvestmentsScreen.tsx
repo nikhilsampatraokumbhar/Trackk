@@ -323,12 +323,41 @@ export default function InvestmentsScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           !loading ? (
-            <EmptyState
-              icon="📈"
-              title="No investments yet"
-              subtitle="Tap + to add your first investment"
-              accent={COLORS.success}
-            />
+            <>
+              {/* Example investment cards */}
+              <View style={{ opacity: 0.35, paddingHorizontal: 16 }} pointerEvents="none">
+                {[
+                  { name: 'Axis Bluechip SIP', amount: 5000, cycle: 'monthly', emoji: '📊', days: 8 },
+                  { name: 'PPF', amount: 12500, cycle: 'monthly', emoji: '🏛️', days: 1 },
+                ].map((ex, i) => (
+                  <View key={i} style={{
+                    backgroundColor: colors.surface,
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${COLORS.success}15`, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                      <Text style={{ fontSize: 18 }}>{ex.emoji}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{ex.name}</Text>
+                      <Text style={{ fontSize: 11, color: colors.textSecondary }}>{ex.cycle} · Next in {ex.days} days</Text>
+                    </View>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{formatCurrency(ex.amount)}/mo</Text>
+                  </View>
+                ))}
+              </View>
+              <EmptyState
+                icon="📈"
+                title="No investments yet"
+                subtitle="Add manually or let Trackk auto-detect SIPs and mutual funds from bank SMS"
+                accent={COLORS.success}
+              />
+            </>
           ) : null
         }
       />

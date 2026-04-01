@@ -388,12 +388,42 @@ export default function SubscriptionsScreen() {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           !loading ? (
-            <EmptyState
-              icon="🔄"
-              title="No subscriptions yet"
-              subtitle="Tap + to add your first subscription"
-              accent={colors.personalColor}
-            />
+            <>
+              {/* Example subscription cards */}
+              <View style={{ opacity: 0.35, paddingHorizontal: 16 }} pointerEvents="none">
+                {[
+                  { name: 'Netflix', amount: 649, cycle: 'monthly', emoji: '🎬', days: 12 },
+                  { name: 'Spotify', amount: 119, cycle: 'monthly', emoji: '🎵', days: 5 },
+                  { name: 'iCloud+', amount: 75, cycle: 'monthly', emoji: '☁️', days: 22 },
+                ].map((ex, i) => (
+                  <View key={i} style={{
+                    backgroundColor: colors.surface,
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${colors.personalColor}15`, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                      <Text style={{ fontSize: 18 }}>{ex.emoji}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>{ex.name}</Text>
+                      <Text style={{ fontSize: 11, color: colors.textSecondary }}>{ex.cycle} · Next in {ex.days} days</Text>
+                    </View>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{formatCurrency(ex.amount)}</Text>
+                  </View>
+                ))}
+              </View>
+              <EmptyState
+                icon="🔄"
+                title="No subscriptions yet"
+                subtitle="Add manually or let Trackk auto-detect from your bank SMS"
+                accent={colors.personalColor}
+              />
+            </>
           ) : null
         }
       />

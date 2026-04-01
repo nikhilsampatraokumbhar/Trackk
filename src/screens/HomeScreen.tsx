@@ -324,49 +324,68 @@ export default function HomeScreen() {
                 {activeTrackers.length}/3
               </Text>
             </View>
-            {activeTrackers.length > 0 && (
-              <View ref={toggleRef} collapsable={false}>
-                <Switch
-                  value={trackerState.trackingEnabled !== false}
-                  onValueChange={() => {
-                    const isPausing = trackerState.trackingEnabled !== false;
-                    if (isPausing && activeGoal) {
-                      Alert.alert(
-                        'Pause Tracking?',
-                        'You have an active savings goal. Pausing tracking means expenses won\'t be counted against your daily budget.',
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          { text: 'Pause Anyway', style: 'destructive', onPress: toggleTracking },
-                        ],
-                      );
-                    } else {
-                      toggleTracking();
-                    }
-                  }}
-                  trackColor={{ false: colors.surfaceHigher, true: `${colors.success}50` }}
-                  thumbColor={trackerState.trackingEnabled !== false ? colors.success : colors.textLight}
-                  style={styles.masterToggle}
-                />
-              </View>
-            )}
+            <View ref={toggleRef} collapsable={false} style={{ opacity: activeTrackers.length === 0 ? 0.4 : 1 }}>
+              <Switch
+                value={activeTrackers.length > 0 && trackerState.trackingEnabled !== false}
+                disabled={activeTrackers.length === 0}
+                onValueChange={() => {
+                  const isPausing = trackerState.trackingEnabled !== false;
+                  if (isPausing && activeGoal) {
+                    Alert.alert(
+                      'Pause Tracking?',
+                      'You have an active savings goal. Pausing tracking means expenses won\'t be counted against your daily budget.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Pause Anyway', style: 'destructive', onPress: toggleTracking },
+                      ],
+                    );
+                  } else {
+                    toggleTracking();
+                  }
+                }}
+                trackColor={{ false: colors.surfaceHigher, true: `${colors.success}50` }}
+                thumbColor={activeTrackers.length > 0 && trackerState.trackingEnabled !== false ? colors.success : colors.textLight}
+                style={styles.masterToggle}
+              />
+            </View>
           </View>
           {activeTrackers.length > 0 && trackerState.trackingEnabled === false && (
             <Text style={[styles.pausedHint, { color: colors.warning }]}>Tracking paused — slots remembered</Text>
           )}
 
           {activeTrackers.length === 0 ? (
-            /* Empty state — single full-width add card */
-            <TouchableOpacity
-              style={[styles.slotEmpty, styles.slotEmptyFull, { borderColor: `${colors.primary}50`, backgroundColor: `${colors.primary}08` }]}
-              onPress={() => setShowTrackerPicker(true)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.slotAddIcon, { color: colors.primary }]}>+</Text>
-              <Text style={[styles.slotAddLabel, { color: colors.primary }]}>Add your first tracker</Text>
-              <Text style={[styles.slotAddHint, { color: colors.textSecondary }]}>
-                Get notified when money leaves your account{'\n'}and route it to Personal, Group, or Reimbursement
-              </Text>
-            </TouchableOpacity>
+            /* Empty state — example tracker cards + add CTA */
+            <>
+              {/* Example cards to show what trackers look like */}
+              <View style={[styles.slotRow, { opacity: 0.35 }]} pointerEvents="none">
+                <View style={[styles.slotCard, { flex: 1, backgroundColor: colors.surface, borderColor: `${colors.personalColor}25`, borderLeftColor: colors.personalColor }]}>
+                  <Text style={styles.slotEmoji}>💳</Text>
+                  <Text style={[styles.slotLabel, { color: colors.text }]} numberOfLines={1}>Personal</Text>
+                  <Text style={[styles.slotSub, { color: colors.textSecondary }]} numberOfLines={1}>Spending</Text>
+                </View>
+                <View style={[styles.slotCard, { flex: 1, backgroundColor: colors.surface, borderColor: `${colors.groupColor}25`, borderLeftColor: colors.groupColor }]}>
+                  <Text style={styles.slotEmoji}>👥</Text>
+                  <Text style={[styles.slotLabel, { color: colors.text }]} numberOfLines={1}>Flatmates</Text>
+                  <Text style={[styles.slotSub, { color: colors.textSecondary }]} numberOfLines={1}>3 members</Text>
+                </View>
+                <View style={[styles.slotCard, { flex: 0.6, backgroundColor: colors.surface, borderColor: `${colors.reimbursementColor}25`, borderLeftColor: colors.reimbursementColor }]}>
+                  <Text style={styles.slotEmoji}>🧾</Text>
+                  <Text style={[styles.slotLabel, { color: colors.text }]} numberOfLines={1}>Office</Text>
+                  <Text style={[styles.slotSub, { color: colors.textSecondary }]} numberOfLines={1}>Trips</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.slotEmpty, styles.slotEmptyFull, { borderColor: `${colors.primary}50`, backgroundColor: `${colors.primary}08`, marginTop: 8 }]}
+                onPress={() => setShowTrackerPicker(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.slotAddIcon, { color: colors.primary }]}>+</Text>
+                <Text style={[styles.slotAddLabel, { color: colors.primary }]}>Add your first tracker</Text>
+                <Text style={[styles.slotAddHint, { color: colors.textSecondary }]}>
+                  Get notified when money leaves your account{'\n'}and route it to Personal, Group, or Reimbursement
+                </Text>
+              </TouchableOpacity>
+            </>
           ) : (
             /* Slot cards row — dimmed when tracking is paused */
             <View style={[styles.slotRow, trackerState.trackingEnabled === false && { opacity: 0.45 }]}>
@@ -607,7 +626,7 @@ export default function HomeScreen() {
               <Text style={[styles.financeSub, { color: colors.textSecondary }]}>
                 {subscriptions.length > 0
                   ? `${subscriptions.length} active · ${formatCurrency(subsMonthly)}/mo`
-                  : 'Track your subscriptions'}
+                  : 'e.g. Netflix, Spotify, iCloud — auto-detected'}
               </Text>
             </View>
           </View>
@@ -626,7 +645,7 @@ export default function HomeScreen() {
               <Text style={[styles.financeSub, { color: colors.textSecondary }]}>
                 {investments.length > 0
                   ? `${investments.length} active · ${formatCurrency(investMonthly)}/mo`
-                  : 'Track your investments'}
+                  : 'e.g. SIP, Mutual Funds — auto-detected'}
               </Text>
             </View>
           </View>
@@ -645,7 +664,7 @@ export default function HomeScreen() {
               <Text style={[styles.financeSub, { color: colors.textSecondary }]}>
                 {emis.length > 0
                   ? `${emis.length} active · ${formatCurrency(emiMonthly)}/mo`
-                  : 'Track your EMIs'}
+                  : 'e.g. Home Loan, Car Loan — auto-detected'}
               </Text>
             </View>
           </View>

@@ -593,12 +593,55 @@ export default function PersonalExpenseScreen() {
             </View>
 
             {transactions.length === 0 && (
-              <EmptyState
-                icon="💳"
-                title="No expenses yet"
-                subtitle="Your expenses will show up here automatically"
-                accent={colors.personalColor}
-              />
+              <>
+                {/* Example transaction cards to show what real data looks like */}
+                <View style={{ opacity: 0.35 }} pointerEvents="none">
+                  <View style={[{
+                    backgroundColor: colors.surface,
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }]}>
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${colors.personalColor}15`, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                      <Text style={{ fontSize: 18 }}>🛒</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Groceries at BigBasket</Text>
+                      <Text style={{ fontSize: 11, color: colors.textSecondary }}>Today, 10:30 AM · HDFC Bank</Text>
+                    </View>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: colors.danger }}>{formatCurrency(1250)}</Text>
+                  </View>
+                  <View style={[{
+                    backgroundColor: colors.surface,
+                    borderRadius: 12,
+                    padding: 16,
+                    marginBottom: 10,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }]}>
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${colors.personalColor}15`, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                      <Text style={{ fontSize: 18 }}>☕</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: colors.text }}>Starbucks</Text>
+                      <Text style={{ fontSize: 11, color: colors.textSecondary }}>Yesterday, 4:15 PM · ICICI Bank</Text>
+                    </View>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: colors.danger }}>{formatCurrency(450)}</Text>
+                  </View>
+                </View>
+                <EmptyState
+                  icon="💳"
+                  title="No expenses yet"
+                  subtitle="Your expenses will show up here automatically when detected from bank SMS"
+                  accent={colors.personalColor}
+                />
+              </>
             )}
           </>
         }

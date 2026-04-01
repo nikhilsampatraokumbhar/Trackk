@@ -236,12 +236,36 @@ export default function GroupListScreen() {
           </>
         }
         ListEmptyComponent={
-          <EmptyState
-            icon="👥"
-            title="No groups yet"
-            subtitle="Create a group to split expenses with friends"
-            accent={colors.groupColor}
-          />
+          <>
+            {/* Example group card to show what it looks like */}
+            <View style={[styles.groupCard, { backgroundColor: colors.surface, borderColor: colors.border, opacity: 0.4 }]} pointerEvents="none">
+              <View style={styles.groupTopRow}>
+                <View style={[styles.groupIcon, { backgroundColor: `${colors.groupColor}18` }]}>
+                  <Text style={[styles.groupInitial, { color: colors.groupColor }]}>F</Text>
+                </View>
+                <View style={styles.groupTextWrap}>
+                  <Text style={[styles.groupName, { color: colors.text }]}>Flatmates</Text>
+                  <Text style={[styles.groupMeta, { color: colors.textSecondary }]}>3 members · 12 txns</Text>
+                </View>
+                <View style={styles.groupStatsRight}>
+                  <Text style={[styles.groupTotal, { color: colors.text }]}>{formatCurrency(15400)}</Text>
+                  <Text style={[styles.groupSettled, { color: colors.textSecondary }]}>Settled 67%</Text>
+                </View>
+              </View>
+              <View style={styles.netRow}>
+                <Text style={[styles.netLabel, { color: colors.textSecondary }]}>Net</Text>
+                <Text style={[styles.netValue, { color: colors.success }]}>You are owed {formatCurrency(2300)}</Text>
+              </View>
+            </View>
+            <EmptyState
+              icon="👥"
+              title="No groups yet"
+              subtitle="Create a group to split expenses with friends"
+              accent={colors.groupColor}
+              actionLabel="Create Group"
+              onAction={() => nav.navigate('CreateGroup')}
+            />
+          </>
         }
         data={activeGroups}
         keyExtractor={item => item.id}

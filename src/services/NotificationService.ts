@@ -6,7 +6,7 @@ import notifee, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ParsedTransaction, ActiveTracker, TrackerType } from '../models/types';
 import { formatCurrency } from '../utils/helpers';
-import { saveTransaction, addGroupTransaction, getOrCreateUser } from './StorageService';
+import { saveTransaction, addGroupTransaction, getOrCreateUser, getReimbursementTrips, createReimbursementTrip, saveReimbursementExpense } from './StorageService';
 import { processTransactionForTracking } from './AutoDetectionService';
 
 export const PENDING_GROUP_SPLIT_KEY = '@et_pending_group_split';
@@ -276,6 +276,14 @@ export function registerBackgroundHandler(): void {
             trackerId: tracker.id,
             trackerLabel: tracker.label || 'Group',
           }));
+        } else if (tracker.type === 'reimbursement') {
+          const user = await getOrCreateUser();
+          let trips = await getReimbursementTrips();
+          let activeTrip = trips.find(t => t.status === 'active');
+          if (!activeTrip) {
+            activeTrip = await createReimbursementTrip('General');
+          }
+          await saveReimbursementExpense(parsed, activeTrip.id, user.id);
         } else {
           const user = await getOrCreateUser();
           await saveTransaction(parsed, tracker.type, user.id);

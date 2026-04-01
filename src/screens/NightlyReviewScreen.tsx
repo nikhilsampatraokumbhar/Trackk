@@ -725,6 +725,30 @@ export default function NightlyReviewScreen() {
         ListEmptyComponent={
           !loading ? (
             <View style={styles.emptyContainer}>
+              {/* Example review items to show what expenses look like here */}
+              <View style={{ opacity: 0.3, marginBottom: 8 }} pointerEvents="none">
+                {[
+                  { desc: 'Swiggy Order', amount: 385, time: '2:30 PM', bank: 'HDFC' },
+                  { desc: 'Amazon Pay', amount: 1299, time: '11:15 AM', bank: 'ICICI' },
+                ].map((ex, i) => (
+                  <View key={i} style={{
+                    backgroundColor: COLORS.surface,
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 8,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }}>{ex.desc}</Text>
+                      <Text style={{ fontSize: 11, color: COLORS.textSecondary }}>{ex.time} · {ex.bank}</Text>
+                    </View>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.text }}>{formatCurrency(ex.amount)}</Text>
+                  </View>
+                ))}
+              </View>
               <EmptyState
                 icon="🎉"
                 title="All caught up!"
