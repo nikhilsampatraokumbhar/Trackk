@@ -245,7 +245,7 @@ export interface Settlement {
   toUserId: string;
   toName: string;
   amount: number;
-  method: 'upi' | 'cash';
+  method: 'upi' | 'cash' | 'online';
   note?: string;
   timestamp: number;
 }

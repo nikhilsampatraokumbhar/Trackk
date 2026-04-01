@@ -212,7 +212,8 @@ export default function GroupDetailScreen() {
     const payeeMember = group.members.find(m => m.userId === settleTarget.debt.toUserId);
     const payeePhone = payeeMember?.phone?.replace(/\D/g, '').slice(-10) || '';
     const upiId = payeePhone ? `${payeePhone}@upi` : '';
-    const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(settleTarget.debt.toName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(`Settlement - ${group.name}`)}`;
+    const currency = settleTarget.debt.currency || 'INR';
+    const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(settleTarget.debt.toName)}&am=${amount.toFixed(2)}&cu=${currency}&tn=${encodeURIComponent(`Settlement - ${group.name}`)}`;
     try {
       const canOpen = await Linking.canOpenURL(upiUrl);
       if (canOpen) {
@@ -235,6 +236,20 @@ export default function GroupDetailScreen() {
 
   const handleUPIConfirmNotDone = () => { setConfirmModalVisible(false); setPendingUPISettle(null); };
 
+  const handleOnlineSettle = () => {
+    if (!settleTarget) return;
+    const amount = getSettleAmountValue();
+    if (amount <= 0) { Alert.alert('Invalid Amount', 'Please enter a valid amount.'); return; }
+    Alert.alert(
+      'Mark as settled?',
+      `Confirm ${formatCurrency(amount)} settled via online transfer to ${settleTarget.debt.toName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Yes, Mark Settled', onPress: async () => { await settleForAmount(settleTarget!.debt, amount, 'online'); } },
+      ],
+    );
+  };
+
   const handleCashSettle = () => {
     if (!settleTarget) return;
     const amount = getSettleAmountValue();
@@ -249,20 +264,25 @@ export default function GroupDetailScreen() {
     );
   };
 
-  const settleForAmount = async (debt: Debt, amount: number, method: 'upi' | 'cash') => {
+  const settleForAmount = async (debt: Debt, amount: number, method: 'upi' | 'cash' | 'online') => {
     const isFullSettlement = amount >= debt.amount;
     let remaining = amount;
 
-    for (const txn of activeGroupTransactions) {
+    // Sort transactions so smallest splits are settled first (greedy: maximize # of fully settled splits)
+    const relevantTxns = activeGroupTransactions
+      .filter(txn => txn.addedBy === debt.toUserId)
+      .map(txn => ({
+        txn,
+        split: txn.splits.find(s => s.userId === debt.fromUserId && !s.settled),
+      }))
+      .filter(item => item.split)
+      .sort((a, b) => a.split!.amount - b.split!.amount);
+
+    for (const { txn, split } of relevantTxns) {
       if (remaining <= 0) break;
-      if (txn.addedBy === debt.toUserId) {
-        const split = txn.splits.find(s => s.userId === debt.fromUserId && !s.settled);
-        if (split) {
-          if (remaining >= split.amount) {
-            await settleSplit(groupId, txn.id, debt.fromUserId);
-            remaining -= split.amount;
-          } else { break; }
-        }
+      if (split && remaining >= split.amount) {
+        await settleSplit(groupId, txn.id, debt.fromUserId);
+        remaining -= split.amount;
       }
     }
 
@@ -279,9 +299,10 @@ export default function GroupDetailScreen() {
     setSettleNote('');
     await load();
 
+    const methodLabel = method === 'upi' ? 'UPI' : method === 'online' ? 'Online Transfer' : 'Cash';
     Alert.alert(
       isFullSettlement ? 'Fully Settled' : 'Partially Settled',
-      `${formatCurrency(amount)} to ${debt.toName} via ${method === 'upi' ? 'UPI' : 'Cash'}.${
+      `${formatCurrency(amount)} to ${debt.toName} via ${methodLabel}.${
         !isFullSettlement ? `\n\nRemaining: ${formatCurrency(debt.amount - amount)}` : ''
       }`,
     );
@@ -511,13 +532,22 @@ export default function GroupDetailScreen() {
               const { deleteSettlement } = require('../services/StorageService');
               await deleteSettlement(groupId, s.id);
             }
-            // Unsettle splits that were settled by this settlement
-            for (const txn of activeGroupTransactions) {
-              if (txn.addedBy === s.toUserId) {
-                const split = txn.splits.find(sp => sp.userId === s.fromUserId && sp.settled);
-                if (split) {
-                  await unsettleSplit(groupId, txn.id, s.fromUserId);
-                }
+            // Unsettle splits that were settled by this settlement (up to settlement amount)
+            let reverseRemaining = s.amount;
+            const settledTxns = activeGroupTransactions
+              .filter(txn => txn.addedBy === s.toUserId)
+              .map(txn => ({
+                txn,
+                split: txn.splits.find(sp => sp.userId === s.fromUserId && sp.settled),
+              }))
+              .filter(item => item.split)
+              .sort((a, b) => a.split!.amount - b.split!.amount);
+
+            for (const { txn, split } of settledTxns) {
+              if (reverseRemaining <= 0) break;
+              if (split && reverseRemaining >= split.amount) {
+                await unsettleSplit(groupId, txn.id, s.fromUserId);
+                reverseRemaining -= split.amount;
               }
             }
             await load();
@@ -542,7 +572,7 @@ export default function GroupDetailScreen() {
           <Text style={styles.dateDay}>{day}</Text>
         </View>
         <View style={[styles.rowIcon, { backgroundColor: `${colors.success}18` }]}>
-          <Text style={styles.rowIconText}>{s.method === 'upi' ? '📱' : '💵'}</Text>
+          <Text style={styles.rowIconText}>{s.method === 'upi' ? '📱' : s.method === 'online' ? '🏦' : '💵'}</Text>
         </View>
         <View style={styles.rowInfo}>
           <Text style={styles.rowSub}>
@@ -763,8 +793,18 @@ export default function GroupDetailScreen() {
               <Text style={styles.payOptionEmoji}>📱</Text>
             </View>
             <View style={styles.payOptionInfo}>
-              <Text style={styles.payOptionTitle}>Pay via UPI / Card</Text>
-              <Text style={styles.payOptionSub}>Opens your payment app</Text>
+              <Text style={styles.payOptionTitle}>Pay via UPI</Text>
+              <Text style={styles.payOptionSub}>Opens your UPI app</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.payOption} onPress={handleOnlineSettle} activeOpacity={0.7}>
+            <View style={[styles.payOptionIcon, { backgroundColor: `${colors.primaryLight}18` }]}>
+              <Text style={styles.payOptionEmoji}>🏦</Text>
+            </View>
+            <View style={styles.payOptionInfo}>
+              <Text style={styles.payOptionTitle}>Online Transfer</Text>
+              <Text style={styles.payOptionSub}>Bank transfer, card, or wallet</Text>
             </View>
           </TouchableOpacity>
 
