@@ -34,7 +34,7 @@ import {
   addToPendingReview,
 } from '../services/TransactionSignalEngine';
 import { classifyTransaction, processTransactionForTracking } from '../services/AutoDetectionService';
-import { saveTransaction } from '../services/StorageService';
+import { saveTransaction, getReimbursementTrips, createReimbursementTrip, saveReimbursementExpense } from '../services/StorageService';
 import { buildDescription } from '../services/TransactionParser';
 import { requestSmsPermission, checkSmsPermission, scanSmsSince } from '../services/SmsService';
 import { ParsedTransaction, TrackerType, ActiveTracker } from '../models/types';
@@ -320,8 +320,19 @@ export default function NightlyReviewScreen() {
           description: buildDescription(item.parsed),
           merchant: item.parsed.merchant,
         });
+      } else if (trackerType === 'reimbursement') {
+        // Reimbursement → save to active trip (or create one)
+        let trips = await getReimbursementTrips();
+        let activeTrip = trips.find(t => t.status === 'active');
+        if (!activeTrip) {
+          activeTrip = await createReimbursementTrip('General');
+        }
+        await saveReimbursementExpense(item.parsed, activeTrip.id, user.id);
+        const ids = [item.id];
+        await markAsReviewed(ids);
+        setReviewedIds(prev => new Set([...prev, ...ids]));
       } else {
-        // Personal / Reimbursement → save directly
+        // Personal → save directly
         await saveTransaction(item.parsed, trackerType, user.id);
         const ids = [item.id];
         await markAsReviewed(ids);
@@ -375,9 +386,24 @@ export default function NightlyReviewScreen() {
     const itemsToAdd = section.data.filter(i => !reviewedIds.has(i.id));
     const ids: string[] = [];
 
+    // For reimbursement, ensure we have an active trip
+    let reimbursementTripId: string | null = null;
+    if (section.trackerType === 'reimbursement') {
+      let trips = await getReimbursementTrips();
+      let activeTrip = trips.find(t => t.status === 'active');
+      if (!activeTrip) {
+        activeTrip = await createReimbursementTrip('General');
+      }
+      reimbursementTripId = activeTrip.id;
+    }
+
     for (const item of itemsToAdd) {
       try {
-        await saveTransaction(item.parsed, section.trackerType, user.id);
+        if (section.trackerType === 'reimbursement' && reimbursementTripId) {
+          await saveReimbursementExpense(item.parsed, reimbursementTripId, user.id);
+        } else {
+          await saveTransaction(item.parsed, section.trackerType, user.id);
+        }
         ids.push(item.id);
       } catch {}
     }

@@ -19,7 +19,7 @@ import {
   PENDING_GROUP_SPLIT_KEY,
   PENDING_CHOOSE_TRACKER_KEY,
 } from '../services/NotificationService';
-import { saveTransaction, addGroupTransaction, getGroup, getGoals, getOrCreateTodaySpend, getOrCreateUser } from '../services/StorageService';
+import { saveTransaction, addGroupTransaction, getGroup, getGoals, getOrCreateTodaySpend, getOrCreateUser, getReimbursementTrips, createReimbursementTrip, saveReimbursementExpense } from '../services/StorageService';
 import { addGroupTransactionCloud, getGroupCloud } from '../services/SyncService';
 import { initDeepLinkListener } from '../services/DeepLinkService';
 import {
@@ -609,7 +609,13 @@ export function TrackerProvider({ children, groups, userId }: Props) {
 
       // Group data stays in group storage — no personal sync needed
     } else if (trackerType === 'reimbursement') {
-      await saveTransaction(parsed, trackerType, uid);
+      // Reimbursement needs a trip — get or create active one
+      let trips = await getReimbursementTrips();
+      let activeTrip = trips.find(t => t.status === 'active');
+      if (!activeTrip) {
+        activeTrip = await createReimbursementTrip('General');
+      }
+      await saveReimbursementExpense(parsed, activeTrip.id, uid);
       // Reimbursements do NOT affect goal budget
     } else {
       await saveTransaction(parsed, trackerType, uid);
