@@ -9,6 +9,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../store/AuthContext';
+import { useGroups } from '../store/GroupContext';
 import { usePremium } from '../store/PremiumContext';
 import { COLORS, formatDate } from '../utils/helpers';
 import { useTheme } from '../store/ThemeContext';
@@ -30,6 +31,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function ProfileScreen() {
   const nav = useNavigation<Nav>();
   const { user, updateProfile, signOut } = useAuth();
+  const { resetGroups } = useGroups();
   const { colors, isDark, toggleTheme } = useTheme();
   // Premium UI hidden during free launch — set to true to re-enable
   const SHOW_PREMIUM_UI = false;
@@ -679,6 +681,7 @@ export default function ProfileScreen() {
                               await clearAllData(async (groupIds) => {
                                 await Promise.all(groupIds.map(id => deleteGroupCloud(id)));
                               });
+                              resetGroups();
                               await signOut();
                             } catch (err: any) {
                               Alert.alert('Error', err?.message || 'Failed to delete account.');

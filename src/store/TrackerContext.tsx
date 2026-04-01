@@ -28,11 +28,12 @@ import {
   markMatchingPendingAsReviewed,
   TransactionSource,
 } from '../services/TransactionSignalEngine';
-import { processTransactionForTracking, checkEMICompletions } from '../services/AutoDetectionService';
+import { processTransactionForTracking, checkEMICompletions, scanHistoricalSMS } from '../services/AutoDetectionService';
 import { useGroups } from './GroupContext';
 import { usePremium } from './PremiumContext';
 
 const TRACKER_STATE_KEY = '@et_tracker_state';
+const HISTORICAL_SCAN_DONE_KEY = '@et_historical_sms_scan_done';
 
 const DEFAULT_STATE: TrackerState = {
   personal: false,
@@ -158,7 +159,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
 
   // Load state on mount; also recover pending transaction if app was cold-launched
   // from a "Choose Tracker" notification action
-  // Also auto-enable personal tracking if a goal exists
+  // Auto-enable personal tracking on first launch so SMS detection works immediately
   useEffect(() => {
     (async () => {
       await setupNotificationChannel();
@@ -177,13 +178,11 @@ export function TrackerProvider({ children, groups, userId }: Props) {
         }
         setTrackerState(state);
       } else {
-        // First launch — check for goals
-        const goals = await getGoals();
-        if (goals.length > 0) {
-          const state = { ...DEFAULT_STATE, personal: true };
-          await AsyncStorage.setItem(TRACKER_STATE_KEY, JSON.stringify(state));
-          setTrackerState(state);
-        }
+        // First launch — auto-enable personal tracker so SMS detection works immediately
+        // Users can add group/reimbursement trackers later
+        const state = { ...DEFAULT_STATE, personal: true };
+        await AsyncStorage.setItem(TRACKER_STATE_KEY, JSON.stringify(state));
+        setTrackerState(state);
       }
 
       // Check for completed EMIs on startup
@@ -387,6 +386,12 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     const granted = await requestSmsPermission();
     if (!granted) {
       isListeningRef.current = false;
+      // Show feedback so user knows why detection won't work
+      Alert.alert(
+        'SMS Permission Required',
+        'Trackk needs SMS access to automatically detect your expenses from bank messages. You can grant it later from Settings.',
+        [{ text: 'OK' }],
+      );
       return;
     }
     await requestNotificationPermission();
@@ -403,6 +408,7 @@ export function TrackerProvider({ children, groups, userId }: Props) {
       }
 
       // Always add to pending review so Review Expenses can show all today's transactions
+      // This works even if no active trackers — transactions are queued for review
       await addToPendingReview(parsed, 'sms');
 
       const currentState = trackerStateRef.current;
@@ -414,6 +420,18 @@ export function TrackerProvider({ children, groups, userId }: Props) {
     });
 
     setIsListening(true);
+
+    // On first-ever listen, trigger historical SMS scan (1 year) to bootstrap
+    // subscriptions, EMIs, and investments from existing bank messages
+    try {
+      const scanDone = await AsyncStorage.getItem(HISTORICAL_SCAN_DONE_KEY);
+      if (!scanDone && Platform.OS === 'android') {
+        // Run in background — don't block the listener startup
+        scanHistoricalSMS('all').then(() => {
+          AsyncStorage.setItem(HISTORICAL_SCAN_DONE_KEY, 'true').catch(() => {});
+        }).catch(() => {});
+      }
+    } catch {}
   };
 
   const persistState = async (state: TrackerState) => {

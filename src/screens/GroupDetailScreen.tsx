@@ -124,7 +124,16 @@ export default function GroupDetailScreen() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const unsub = onGroupChanged(groupId, (g) => { if (g) setGroup(g); });
+    const unsub = onGroupChanged(groupId, (g) => {
+      if (g) {
+        setGroup(g);
+      } else {
+        // Group was deleted (e.g. by another member) — navigate away safely
+        Alert.alert('Group Deleted', 'This group no longer exists.', [
+          { text: 'OK', onPress: () => nav.goBack() },
+        ]);
+      }
+    });
     return () => unsub();
   }, [groupId, isAuthenticated]);
 
@@ -196,14 +205,14 @@ export default function GroupDetailScreen() {
   };
 
   const handleUPISettle = async () => {
-    if (!settleTarget) return;
+    if (!settleTarget || !group) return;
     const amount = getSettleAmountValue();
     if (amount <= 0) { Alert.alert('Invalid Amount', 'Please enter a valid amount.'); return; }
     // Try to find the payee's phone number for UPI ID
-    const payeeMember = group!.members.find(m => m.userId === settleTarget.debt.toUserId);
+    const payeeMember = group.members.find(m => m.userId === settleTarget.debt.toUserId);
     const payeePhone = payeeMember?.phone?.replace(/\D/g, '').slice(-10) || '';
     const upiId = payeePhone ? `${payeePhone}@upi` : '';
-    const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(settleTarget.debt.toName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(`Settlement - ${group!.name}`)}`;
+    const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(settleTarget.debt.toName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(`Settlement - ${group.name}`)}`;
     try {
       const canOpen = await Linking.canOpenURL(upiUrl);
       if (canOpen) {
@@ -284,7 +293,7 @@ export default function GroupDetailScreen() {
       txn, amount: String(txn.amount), description: txn.description,
       note: txn.note || '', category: txn.category || '',
       paidBy: txn.addedBy,
-      members: group!.members.map(m => ({
+      members: (group?.members || []).map(m => ({
         userId: m.userId,
         displayName: m.userId === userId ? 'You' : m.displayName,
         included: txn.splits.some(s => s.userId === m.userId),
@@ -415,7 +424,7 @@ export default function GroupDetailScreen() {
     const d = new Date(txn.timestamp);
     const monthShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
     const day = d.getDate().toString().padStart(2, '0');
-    const payer = group!.members.find(m => m.userId === txn.addedBy);
+    const payer = group?.members.find(m => m.userId === txn.addedBy);
     const payerName = txn.addedBy === userId ? 'You' : (payer?.displayName || 'Someone');
     const userSplit = txn.splits.find(s => s.userId === userId);
     const isNotInvolved = !userSplit;

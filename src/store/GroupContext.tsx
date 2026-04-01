@@ -49,6 +49,8 @@ interface GroupContextType {
   deleteGroup: (groupId: string) => Promise<void>;
   addGroupMember: (groupId: string, member: GroupMember) => Promise<void>;
   removeGroupMember: (groupId: string, memberUserId: string) => Promise<void>;
+  /** Reset all group state — call after clearAllData to prevent zombie groups */
+  resetGroups: () => void;
 }
 
 const GroupContext = createContext<GroupContextType>({
@@ -68,6 +70,7 @@ const GroupContext = createContext<GroupContextType>({
   deleteGroup: async () => {},
   addGroupMember: async () => {},
   removeGroupMember: async () => {},
+  resetGroups: () => {},
 });
 
 export function GroupProvider({ children }: { children: ReactNode }) {
@@ -262,9 +265,19 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       AsyncStorage.setItem(CACHE_KEYS.GROUPS, JSON.stringify(updated)).catch(() => {});
       return updated;
     });
+    // Reset active group state if the deleted group was active
+    if (activeGroupId === groupId) {
+      setActiveGroupId(null);
+      setActiveGroupTransactions([]);
+      setActiveGroupDebts([]);
+      if (unsubscribe) {
+        unsubscribe();
+        setUnsubscribe(null);
+      }
+    }
     // Clean transaction cache
     AsyncStorage.removeItem(CACHE_KEYS.GROUP_TXNS(groupId)).catch(() => {});
-  }, [isAuthenticated]);
+  }, [isAuthenticated, activeGroupId, unsubscribe]);
 
   const addGroupMember = useCallback(async (groupId: string, member: GroupMember) => {
     if (isAuthenticated) {
@@ -291,6 +304,18 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     await refreshGroups();
   }, [isAuthenticated, refreshGroups]);
 
+  /** Reset all group state — call after clearAllData to prevent zombie groups in UI */
+  const resetGroups = useCallback(() => {
+    setGroups([]);
+    setActiveGroupId(null);
+    setActiveGroupTransactions([]);
+    setActiveGroupDebts([]);
+    if (unsubscribe) {
+      unsubscribe();
+      setUnsubscribe(null);
+    }
+  }, [unsubscribe]);
+
   const value = useMemo(() => ({
     groups,
     loading,
@@ -308,7 +333,8 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     deleteGroup,
     addGroupMember,
     removeGroupMember,
-  }), [groups, loading, refreshGroups, createGroup, activeGroupId, activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit, unsettleSplit, deleteGroupTransaction, updateGroupTransaction, updateGroup, deleteGroup, addGroupMember, removeGroupMember]);
+    resetGroups,
+  }), [groups, loading, refreshGroups, createGroup, activeGroupId, activeGroupTransactions, activeGroupDebts, loadGroupTransactions, settleSplit, unsettleSplit, deleteGroupTransaction, updateGroupTransaction, updateGroup, deleteGroup, addGroupMember, removeGroupMember, resetGroups]);
 
   return (
     <GroupContext.Provider value={value}>

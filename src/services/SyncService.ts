@@ -180,21 +180,27 @@ export function onGroupChanged(
   groupId: string,
   callback: (group: Group | null) => void,
 ) {
-  return db.group(groupId).onSnapshot(snapshot => {
-    if (!snapshot.exists) {
+  return db.group(groupId).onSnapshot(
+    snapshot => {
+      if (!snapshot.exists) {
+        callback(null);
+        return;
+      }
+      const data = snapshot.data()!;
+      callback({
+        id: data.id,
+        name: data.name,
+        members: data.members,
+        createdBy: data.createdBy,
+        createdAt: data.createdAt,
+        isTrip: data.isTrip,
+      });
+    },
+    error => {
+      console.warn(`[SyncService] Group listener error for ${groupId}:`, error.message);
       callback(null);
-      return;
-    }
-    const data = snapshot.data()!;
-    callback({
-      id: data.id,
-      name: data.name,
-      members: data.members,
-      createdBy: data.createdBy,
-      createdAt: data.createdAt,
-      isTrip: data.isTrip,
-    });
-  });
+    },
+  );
 }
 
 /** Fetch a single group from Firestore by ID */
@@ -349,10 +355,17 @@ export function onGroupTransactionsChanged(
 ) {
   return db.groupTransactions(groupId)
     .orderBy('timestamp', 'desc')
-    .onSnapshot(snapshot => {
-      const txns = snapshot.docs.map(doc => doc.data() as GroupTransaction);
-      callback(txns);
-    });
+    .onSnapshot(
+      snapshot => {
+        const txns = snapshot.docs.map(doc => doc.data() as GroupTransaction);
+        callback(txns);
+      },
+      error => {
+        console.warn(`[SyncService] Group transactions listener error for ${groupId}:`, error.message);
+        // Return empty array on error (e.g. deleted group, permission denied)
+        callback([]);
+      },
+    );
 }
 
 /** Settle a split in a group transaction (in Firestore) */
@@ -483,8 +496,14 @@ export function onSettlementsChanged(
 ) {
   return db.settlements(groupId)
     .orderBy('timestamp', 'desc')
-    .onSnapshot(snapshot => {
-      const settlements = snapshot.docs.map(doc => doc.data() as Settlement);
-      callback(settlements);
-    });
+    .onSnapshot(
+      snapshot => {
+        const settlements = snapshot.docs.map(doc => doc.data() as Settlement);
+        callback(settlements);
+      },
+      error => {
+        console.warn(`[SyncService] Settlements listener error for ${groupId}:`, error.message);
+        callback([]);
+      },
+    );
 }
