@@ -595,6 +595,11 @@ export async function checkSharedSubscriptionStatus(subscriptionId: string): Pro
 const LAST_SCAN_KEY = '@et_last_scan_ts';
 const SCAN_OVERLAP_DAYS = 10; // buffer overlap to catch late-arriving messages
 
+/** Per-category scan keys so each category gets its own full initial scan */
+function getCategoryScanKey(filter: 'all' | 'subscriptions' | 'investments' | 'emis'): string {
+  return filter === 'all' ? LAST_SCAN_KEY : `${LAST_SCAN_KEY}_${filter}`;
+}
+
 export interface ScanResult {
   subscriptions: UserSubscriptionItem[];
   investments: InvestmentItem[];
@@ -793,8 +798,9 @@ export async function scanEmailHistory(
 export async function scanAllSources(
   filter: 'all' | 'subscriptions' | 'investments' | 'emis' = 'all',
 ): Promise<ScanResult> {
-  // Determine scan window: first run = 365 days, subsequent = (lastScan - 10 day buffer)
-  const lastScanRaw = await AsyncStorage.getItem(LAST_SCAN_KEY);
+  // Determine scan window per category: first run = 365 days, subsequent = (lastScan - 10 day buffer)
+  const scanKey = getCategoryScanKey(filter);
+  const lastScanRaw = await AsyncStorage.getItem(scanKey);
   const since = lastScanRaw
     ? parseInt(lastScanRaw, 10) - (SCAN_OVERLAP_DAYS * 24 * 60 * 60 * 1000)
     : undefined; // undefined = full 365 day scan (first time)
@@ -823,13 +829,13 @@ export async function scanAllSources(
     // Only save scan timestamp if we actually scanned SMS (had permission / native module)
     // This prevents a failed scan from blocking future full scans
     if ((sms?.totalSmsScanned || 0) > 0 || (email?.totalSmsScanned || 0) > 0) {
-      await AsyncStorage.setItem(LAST_SCAN_KEY, String(Date.now()));
+      await AsyncStorage.setItem(scanKey, String(Date.now()));
     }
     return storedResult;
   }
 
   // Save scan timestamp only after a successful scan that read messages
-  await AsyncStorage.setItem(LAST_SCAN_KEY, String(Date.now()));
+  await AsyncStorage.setItem(scanKey, String(Date.now()));
   return merged;
 }
 
@@ -975,11 +981,16 @@ export async function reconcileExistingItems(): Promise<{
 }> {
   const stats = { subsUpdated: 0, emisUpdated: 0, investmentsUpdated: 0 };
 
-  // Use same scan timestamp as scanAllSources — with 10-day overlap buffer
+  // Use latest scan timestamp across all categories — with 10-day overlap buffer
   // On first run (no prior scan), look back 45 days
-  const lastRaw = await AsyncStorage.getItem(LAST_SCAN_KEY);
-  const lastReconcile = lastRaw
-    ? parseInt(lastRaw, 10) - (SCAN_OVERLAP_DAYS * 24 * 60 * 60 * 1000)
+  const allScanKeys = [LAST_SCAN_KEY, getCategoryScanKey('subscriptions'), getCategoryScanKey('emis'), getCategoryScanKey('investments')];
+  let latestScan = 0;
+  for (const key of allScanKeys) {
+    const raw = await AsyncStorage.getItem(key);
+    if (raw) latestScan = Math.max(latestScan, parseInt(raw, 10));
+  }
+  const lastReconcile = latestScan > 0
+    ? latestScan - (SCAN_OVERLAP_DAYS * 24 * 60 * 60 * 1000)
     : Date.now() - (45 * 24 * 60 * 60 * 1000);
   const now = Date.now();
 
