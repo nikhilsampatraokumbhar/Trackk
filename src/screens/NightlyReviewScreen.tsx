@@ -157,6 +157,7 @@ export default function NightlyReviewScreen() {
     setRefreshing(true);
     let scannedCount = 0;
     let autoRoutedCount = 0;
+    let alreadyKnownCount = 0;
 
     // ── SMS scan (Android) ──
     if (Platform.OS === 'android') {
@@ -165,7 +166,9 @@ export default function NightlyReviewScreen() {
         const granted = await requestSmsPermission();
         if (!granted) {
           setScanStatus('SMS permission required to detect expenses');
-          // Still continue to load existing pending items
+          await loadPending();
+          setRefreshing(false);
+          return;
         }
       }
 
@@ -175,16 +178,37 @@ export default function NightlyReviewScreen() {
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
 
+        // Load existing pending items to deduplicate against them
+        const existingPending = await getPendingReviewTransactions();
+        const existingFingerprints = new Set(
+          existingPending.map(p => `${Math.round(p.parsed.amount * 100)}_${(p.parsed.merchant || '').toLowerCase().replace(/\s+/g, '')}`)
+        );
+
         // Collect all parsed transactions first, then process sequentially
         const parsedTransactions: ParsedTransaction[] = [];
-        await scanSmsSince(todayStart.getTime(), (parsed) => {
+        const smsCount = await scanSmsSince(todayStart.getTime(), (parsed) => {
           parsedTransactions.push(parsed);
         });
 
+        if (smsCount === 0 && parsedTransactions.length === 0) {
+          setScanStatus('No bank SMS found today');
+        }
+
         // Process each transaction: dedup → auto-detect → add to review
         for (const parsed of parsedTransactions) {
+          // Check against existing pending items first (persistent dedup)
+          const fp = `${Math.round(parsed.amount * 100)}_${(parsed.merchant || '').toLowerCase().replace(/\s+/g, '')}`;
+          if (existingFingerprints.has(fp)) {
+            alreadyKnownCount++;
+            continue;
+          }
+
+          // Also check in-memory dedup (catches items from live listener within 60s)
           const signal = ingestTransaction(parsed, 'sms');
-          if (!signal) continue; // already known
+          if (!signal) {
+            alreadyKnownCount++;
+            continue;
+          }
 
           scannedCount++;
 
@@ -199,7 +223,10 @@ export default function NightlyReviewScreen() {
 
           // Regular expense — add to pending review
           await addToPendingReview(parsed, 'sms');
+          existingFingerprints.add(fp); // Prevent adding same one twice within this scan
         }
+      } else {
+        setScanStatus('SMS permission denied');
       }
     }
 
@@ -209,11 +236,16 @@ export default function NightlyReviewScreen() {
     // When email OAuth is connected, FCM pushes arrive and are already added to pending review
     // via TrackerContext's FCM handler. No client-side email scan needed.
 
-    if (scannedCount > 0 || autoRoutedCount > 0) {
+    if (scannedCount > 0 || autoRoutedCount > 0 || alreadyKnownCount > 0) {
       const parts: string[] = [];
       if (scannedCount > 0) parts.push(`${scannedCount} new`);
       if (autoRoutedCount > 0) parts.push(`${autoRoutedCount} auto-tracked`);
+      if (alreadyKnownCount > 0 && scannedCount === 0 && autoRoutedCount === 0) {
+        parts.push(`${alreadyKnownCount} already in review`);
+      }
       setScanStatus(`Found ${parts.join(', ')}`);
+    } else if (Platform.OS === 'android') {
+      setScanStatus('No new expenses found in SMS');
     } else {
       setScanStatus(null);
     }

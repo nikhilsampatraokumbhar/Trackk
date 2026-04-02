@@ -12,7 +12,7 @@ import { NetworkProvider } from './src/store/NetworkContext';
 import { ThemeProvider, useTheme, LIGHT_COLORS, DARK_COLORS } from './src/store/ThemeContext';
 import { TourProvider } from './src/store/TourContext';
 import { AppNavigator } from './src/navigation/AppNavigator';
-import { registerBackgroundHandler } from './src/services/NotificationService';
+import { registerBackgroundHandler, setupNotificationChannel } from './src/services/NotificationService';
 import { setupReminderChannel, checkAndSendReminders } from './src/services/DebtReminderService';
 import { getGroupTransactions } from './src/services/StorageService';
 import { calculateDebts } from './src/services/DebtCalculator';
@@ -90,11 +90,12 @@ function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
   const [authReady, setAuthReady] = useState(false);
 
-  // Load saved language and currency on app start
+  // Load saved language and currency on app start + set up notification channel
   useEffect(() => {
     loadSavedLanguage();
     loadSavedCurrency();
     fetchExchangeRates();
+    setupNotificationChannel();
   }, []);
 
   // Track when auth is done loading
